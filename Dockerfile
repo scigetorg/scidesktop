@@ -378,9 +378,6 @@ RUN rm /tmp/skipcache \
     && bash install.sh \
     && ln -s /home/${NB_USER}/neurodesktop-storage/containers /neurocommand/local/containers
 
-# TEST - Disable sudo
-# RUN rm /etc/sudoers.d/notebook
-
 USER ${NB_UID}
 
 WORKDIR "${HOME}"
