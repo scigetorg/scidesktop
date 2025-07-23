@@ -1,5 +1,5 @@
 docker stop scidesktop
 docker rm scidesktop
 
-# docker stop neurodeskapp
-# docker rm neurodeskapp
+# docker stop scideskapp
+# docker rm scideskapp

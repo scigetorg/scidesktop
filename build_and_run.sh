@@ -2,8 +2,8 @@
 set -e
 
 if docker ps --all | grep scidesktop; then
-    if docker ps --all | grep neurodeskapp; then
-        echo "detected a Neurodeskapp container and ignoring it!"
+    if docker ps --all | grep scideskapp; then
+        echo "detected a scideskapp container and ignoring it!"
     else
         bash stop_and_clean.sh
     fi
