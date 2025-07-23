@@ -23,29 +23,29 @@ docker build . -t scidesktop:latest
 #     scidesktop:latest
 
 # Test with persistent home directory
-# docker volume create neurodesk-home
+# docker volume create scidesk-home
 # docker run --shm-size=1gb -it --privileged --user=root \
 #     --device=/dev/fuse --name scidesktop -v ~/scidesktop-storage:/scidesktop-storage \
-#     --mount source=neurodesk-home,target=/home/jovyan \
+#     --mount source=scidesk-home,target=/home/jovyan \
 #     -p 8888:8888 \
 #     -e NB_UID="$(id -u)" -e NB_GID="$(id -g)" \
 #     scidesktop:latest
 
 # Test Offline mode with CVMFS disabled
-# docker volume create neurodesk-home
+# docker volume create scidesk-home
 # docker run --shm-size=1gb -it --privileged --user=root \
 #     --device=/dev/fuse --name scidesktop -v ~/scidesktop-storage:/scidesktop-storage \
-#     --mount source=neurodesk-home,target=/home/jovyan \
+#     --mount source=scidesk-home,target=/home/jovyan \
 #     -e CVMFS_DISABLE=true \
 #     -p 8888:8888 \
 #     -e NB_UID="$(id -u)" -e NB_GID="$(id -g)" \
 #     scidesktop:latest
 
 # # Test Offline mode with CVMFS disabled without --device=/dev/fuse
-# docker volume create neurodesk-home
+# docker volume create scidesk-home
 # docker run --shm-size=1gb -it --privileged --user=root \
 #     --name scidesktop -v ~/scidesktop-storage:/scidesktop-storage \
-#     --mount source=neurodesk-home,target=/home/jovyan \
+#     --mount source=scidesk-home,target=/home/jovyan \
 #     -e CVMFS_DISABLE=true \
 #     -p 8888:8888 \
 #     -e NB_UID="$(id -u)" -e NB_GID="$(id -g)" \
@@ -56,31 +56,31 @@ docker build . -t scidesktop:latest
 
 
 # Test Online mode with CVMFS enabled without --device=/dev/fuse
-docker volume create neurodesk-home
+docker volume create scidesk-home
 docker run --shm-size=1gb -it --privileged --user=root \
     --name scidesktop -v ~/scidesktop-storage:/scidesktop-storage \
-    --mount source=neurodesk-home,target=/home/jovyan \
+    --mount source=scidesk-home,target=/home/jovyan \
     -e CVMFS_DISABLE=false \
     -p 8888:8888 \
     -e NB_UID="$(id -u)" -e NB_GID="$(id -g)" \
     scidesktop:latest
 
 
-# podman volume create neurodesk-home &&
+# podman volume create scidesk-home &&
 # sudo podman run \
 #   --shm-size=1gb -it --privileged --user=root --name scidesktop \
 #   -v ~/scidesktop-storage:/scidesktop-storage \
-#   --mount type=volume,source=neurodesk-home,target=/home/jovyan \
+#   --mount type=volume,source=scidesk-home,target=/home/jovyan \
 #   -e NB_UID="$(id -u)" -e NB_GID="$(id -g)" \
 #   -p 8888:8888 \
 #   -e scidesktop_VERSION=development scidesktop:latest
 
 
 # Test normal mode without --device=/dev/fuse
-# docker volume create neurodesk-home
+# docker volume create scidesk-home
 # docker run --shm-size=1gb -it --privileged --user=root \
 #     --name scidesktop -v ~/scidesktop-storage:/scidesktop-storage \
-#     --mount source=neurodesk-home,target=/home/jovyan \
+#     --mount source=scidesk-home,target=/home/jovyan \
 #     -p 8888:8888 \
 #     -e NB_UID="$(id -u)" -e NB_GID="$(id -g)" \
 #     scidesktop:latest
@@ -95,7 +95,7 @@ docker run --shm-size=1gb -it --privileged --user=root \
 # launch with custom token
 # docker run --shm-size=1gb -it --cap-add SYS_ADMIN --security-opt apparmor:unconfined \
 #     --device=/dev/fuse --name scidesktop -v ~/scidesktop-storage:/scidesktop-storage \
-#     --mount source=neurodesk-home,target=/home/jovyan \
+#     --mount source=scidesk-home,target=/home/jovyan \
 #     -p 8888:8888 \
 #     --user=root -e NB_UID="$(id -u)" -e NB_GID="$(id -g)" \
 #     scidesktop:latest start.sh jupyter lab --ServerApp.password="" --no-browser --expose-app-in-browser --ServerApp.token="jlab:srvr:123" --ServerApp.port=33163 --LabApp.quit_button=False
