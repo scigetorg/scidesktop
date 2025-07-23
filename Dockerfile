@@ -262,15 +262,15 @@ COPY config/jupyter/before_notebook.sh /usr/local/bin/before-notebook.d/
 
 # Add jupyter notebook and startup scripts for system-wide configuration
 COPY --chown=root:users config/jupyter/jupyter_notebook_config.py /etc/jupyter/jupyter_notebook_config.py
-COPY --chown=root:users config/jupyter/jupyterlab_startup.sh /opt/neurodesktop/jupyterlab_startup.sh
-COPY --chown=root:users config/guacamole/guacamole.sh /opt/neurodesktop/guacamole.sh
-COPY --chown=root:users config/jupyter/environment_variables.sh /opt/neurodesktop/environment_variables.sh
+COPY --chown=root:users config/jupyter/jupyterlab_startup.sh /opt/scidesktop/jupyterlab_startup.sh
+COPY --chown=root:users config/guacamole/guacamole.sh /opt/scidesktop/guacamole.sh
+COPY --chown=root:users config/jupyter/environment_variables.sh /opt/scidesktop/environment_variables.sh
 # COPY --chown=root:users config/guacamole/user-mapping.xml /etc/guacamole/user-mapping.xml
 
 RUN chmod +x /etc/jupyter/jupyter_notebook_config.py \
-    /opt/neurodesktop/jupyterlab_startup.sh \
-    /opt/neurodesktop/guacamole.sh \
-    /opt/neurodesktop/environment_variables.sh
+    /opt/scidesktop/jupyterlab_startup.sh \
+    /opt/scidesktop/guacamole.sh \
+    /opt/scidesktop/environment_variables.sh
 
 # Create Guacamole configurations (user-mapping.xml gets filled in the startup.sh script)
 RUN mkdir -p /etc/guacamole \
@@ -328,7 +328,7 @@ RUN touch /home/${NB_USER}/.sudo_as_admin_successful
 ENV DONT_PROMPT_WSL_INSTALL=1
 ENV LMOD_CMD=/usr/share/lmod/lmod/libexec/lmod
 
-# Add startup and config files for neurodesktop, jupyter, guacamole, vnc
+# Add startup and config files for scidesktop, jupyter, guacamole, vnc
 RUN mkdir /home/${NB_USER}/.vnc \
     && chown ${NB_USER} /home/${NB_USER}/.vnc \
     && /usr/bin/printf '%s\n%s\n%s\n' 'password' 'password' 'n' | vncpasswd
@@ -365,9 +365,9 @@ COPY config/cvmfs/default.local /etc/cvmfs/default.local
 RUN cp -rp /home/${NB_USER} /tmp/
 
 # Set up data directory so it exists in the container for the SINGULARITY_BINDPATH
-RUN mkdir -p /data /neurodesktop-storage
-RUN chown ${NB_UID}:${NB_GID} /neurodesktop-storage \
-    && chmod 770 /neurodesktop-storage
+RUN mkdir -p /data /scidesktop-storage
+RUN chown ${NB_UID}:${NB_GID} /scidesktop-storage \
+    && chmod 770 /scidesktop-storage
 
 # Install neurocommand
 ADD "https://api.github.com/repos/neurodesk/neurocommand/git/refs/heads/main" /tmp/skipcache
@@ -376,7 +376,7 @@ RUN rm /tmp/skipcache \
     && cd /neurocommand \
     && bash build.sh --lxde --edit \
     && bash install.sh \
-    && ln -s /home/${NB_USER}/neurodesktop-storage/containers /neurocommand/local/containers
+    && ln -s /home/${NB_USER}/scidesktop-storage/containers /neurocommand/local/containers
 
 USER ${NB_UID}
 

@@ -1,9 +1,9 @@
-Neurodesktop is a plug-and-play, browser-accessible, containerised data analysis environment
+scidesktop is a plug-and-play, browser-accessible, containerised data analysis environment
 
 _Information on the **Neurodesk** project is available at [neurodesk.org](https://neurodesk.org)_
 
-_Information on **Neurodesktop** is available at [neurodesk.org/docs/neurodesktop](https://neurodesk.org/docs/neurodesktop)_
+_Information on **scidesktop** is available at [neurodesk.org/docs/scidesktop](https://neurodesk.org/docs/scidesktop)_
 
 Container Registries:
-- Docker [vnmd/neurodesktop](https://hub.docker.com/r/vnmd/neurodesktop)
-- GitHub [ghcr.io/neurodesk/neurodesktop/neurodesktop](https://github.com/NeuroDesk/neurodesktop/pkgs/container/neurodesktop%2Fneurodesktop)
+- Docker [vnmd/scidesktop](https://hub.docker.com/r/vnmd/scidesktop)
+- GitHub [ghcr.io/neurodesk/scidesktop/scidesktop](https://github.com/NeuroDesk/scidesktop/pkgs/container/scidesktop%2Fscidesktop)

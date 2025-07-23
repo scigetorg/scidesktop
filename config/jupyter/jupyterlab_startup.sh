@@ -78,27 +78,27 @@ if mountpoint -q /data; then
     fi
 fi
 
-# Create a symlink to /neurodesktop-storage in home if it is mounted
-if mountpoint -q /neurodesktop-storage/; then
-    if [ ! -L "/home/${NB_USER}/neurodesktop-storage" ]; then
-        ln -s /neurodesktop-storage/ /home/${NB_USER}/
+# Create a symlink to /scidesktop-storage in home if it is mounted
+if mountpoint -q /scidesktop-storage/; then
+    if [ ! -L "/home/${NB_USER}/scidesktop-storage" ]; then
+        ln -s /scidesktop-storage/ /home/${NB_USER}/
     fi
 else
-    if [ ! -L "/neurodesktop-storage" ]; then
-        if [ ! -d "/home/${NB_USER}/neurodesktop-storage/" ]; then
-            mkdir -p /home/${NB_USER}/neurodesktop-storage/containers
+    if [ ! -L "/scidesktop-storage" ]; then
+        if [ ! -d "/home/${NB_USER}/scidesktop-storage/" ]; then
+            mkdir -p /home/${NB_USER}/scidesktop-storage/containers
         fi
-        if [ ! -L "/neurodesktop-storage" ]; then
+        if [ ! -L "/scidesktop-storage" ]; then
             if sudo -n true 2>/dev/null; then
-                sudo ln -s /home/${NB_USER}/neurodesktop-storage/ /neurodesktop-storage
+                sudo ln -s /home/${NB_USER}/scidesktop-storage/ /scidesktop-storage
             fi
         fi
     fi
 fi
 
-# Create a symlink to the neurodesktop-storage directory if it doesn't exist yet:
+# Create a symlink to the scidesktop-storage directory if it doesn't exist yet:
 if [ ! -L "/neurocommand/local/containers" ]; then
-  ln -s "/home/${NB_USER}/neurodesktop-storage/containers" "/neurocommand/local/containers"
+  ln -s "/home/${NB_USER}/scidesktop-storage/containers" "/neurocommand/local/containers"
 fi
 
 # Create a cpufino file with a valid CPU Mhz entry for ARM cpus

@@ -207,7 +207,7 @@ if [ "$EUID" -eq 0 ]; then
     fi
 fi
 
-source /opt/neurodesktop/environment_variables.sh
+source /opt/scidesktop/environment_variables.sh
 
 # Set default value for START_LOCAL_LLMS
 if [ -v START_LOCAL_LLMS ] && [ "$START_LOCAL_LLMS" -eq 1 ]; then

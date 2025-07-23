@@ -9,11 +9,11 @@ if [[ -z "${USER}" ]]; then
     export USER=${NB_USER}
 fi
 
-export MODULEPATH=/neurodesktop-storage/containers/modules/:/cvmfs/neurodesk.ardc.edu.au/containers/modules/
+export MODULEPATH=/scidesktop-storage/containers/modules/:/cvmfs/neurodesk.ardc.edu.au/containers/modules/
 
 # Only setup MODULEPATH if a module system is installed
 if [ -f '/usr/share/module.sh' ]; then
-        export OFFLINE_MODULES=/neurodesktop-storage/containers/modules/
+        export OFFLINE_MODULES=/scidesktop-storage/containers/modules/
         export CVMFS_MODULES=/cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/
 
         if [ ! -d $CVMFS_MODULES ]; then
@@ -30,19 +30,19 @@ if [ -f '/usr/share/module.sh' ]; then
                 fi
         fi
 
-        echo 'Neuroimaging tools are accessible via the Neurodesktop Applications menu and running them through the menu will provide help and setup instructions. If you are familiar with the tools and you want to combine multiple tools in one script, you can run "ml av" to see which tools are available and then use "ml <tool>/<version>" to load them. '
+        echo 'Neuroimaging tools are accessible via the scidesktop Applications menu and running them through the menu will provide help and setup instructions. If you are familiar with the tools and you want to combine multiple tools in one script, you can run "ml av" to see which tools are available and then use "ml <tool>/<version>" to load them. '
         
         # check if $CVMFS_DISABLE is set to true
         if [[ "$CVMFS_DISABLE" == "true" ]]; then
                 echo "CVMFS is disabled. Using local containers stored in $MODULEPATH"
                 if [ ! -d $MODULEPATH ]; then
-                        echo 'Neurodesk tools not yet downloaded. Choose tools to install from the Neurodesktop Application menu.'
+                        echo 'Neurodesk tools not yet downloaded. Choose tools to install from the scidesktop Application menu.'
                 fi
         fi
 fi
 
 # This also needs to be set in the Dockerfile, so it is available in a jupyter notebook
-export APPTAINER_BINDPATH=/data,/mnt,/neurodesktop-storage,/tmp,/cvmfs
+export APPTAINER_BINDPATH=/data,/mnt,/scidesktop-storage,/tmp,/cvmfs
 # This also needs to be set in the Dockerfile, so it is available in a jupyter notebook
 
 export APPTAINERENV_SUBJECTS_DIR=/home/${NB_USER}/freesurfer-subjects-dir
@@ -70,6 +70,6 @@ export neurodesk_singularity_opts=" --overlay /tmp/apptainer_overlay "
 # fi
 # THIS IS CURRENTLY DISABLED BECAUSE IT CAUSES PROBLEMS ON UBUNTU 24.04 HOSTS WHERE THIS LEADS TO A GLIBC VERSION ERROR
 
-export PS1='\u@neurodesktop-$NEURODESKTOP_VERSION:\w$ '
+export PS1='\u@scidesktop-$scidesktop_VERSION:\w$ '
 
 alias ll='ls -la'

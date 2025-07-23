@@ -1,2 +1,2 @@
-docker stop neurodesktop
-docker rm neurodesktop
+docker stop scidesktop
+docker rm scidesktop

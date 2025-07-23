@@ -1,5 +1,5 @@
 
-webpage=$(curl -L -s https://raw.githubusercontent.com/NeuroDesk/neurodesk.github.io/hugo-docsy/data/neurodesktop.toml  | head -n 1)
+webpage=$(curl -L -s https://raw.githubusercontent.com/NeuroDesk/neurodesk.github.io/hugo-docsy/data/scidesktop.toml  | head -n 1)
 user=$(cat /etc/hostname)
 
 echo

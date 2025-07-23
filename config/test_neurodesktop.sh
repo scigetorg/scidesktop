@@ -2,13 +2,13 @@
 
 ###############################
 #
-#   test_neurodesktop.sh
+#   test_scidesktop.sh
 #   ====================
 #
 #   Usage: /usr/share/test_neurodesk.sh
 #
 #   Synopsis:
-#      Tests all containers and Neurodesktop itself
+#      Tests all containers and scidesktop itself
 #
 #   Output:
 #      Generates a ./test_containers_output/PACKAGE_VERSION_BUILDDATE folder for each package, and run app_test.sh within that folder
@@ -16,7 +16,7 @@
 #
 #      Prints out the command used to run each test, the stderr of each test and the result of each test
 #      Prints the summary of how many containers passed the test and how many don't have a test
-#      Prints the result of tests of neurodesktop
+#      Prints the result of tests of scidesktop
 #
 ####################################
 
@@ -124,9 +124,9 @@ echo 'Passed test: '"$passed_test"' packages'
 echo 'Failed test: '"$failed_test"' packages (search for "==> test_containers: FAIL" in log)'
 echo 'Notice: the containers tested are those returned by running ./containers.sh in /neurocommand'
 echo
-echo 'NEURODESKTOP TESTS'
-echo 'Testing the existence of /neurodesktop-storage ...'
-if [ -d /neurodesktop-storage ]
+echo 'scidesktop TESTS'
+echo 'Testing the existence of /scidesktop-storage ...'
+if [ -d /scidesktop-storage ]
 then
 	echo 'Test passed'
 else

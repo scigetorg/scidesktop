@@ -1,8 +1,8 @@
 set -e
 
 
-docker build . -t neurodesktop:latest
-dive neurodesktop --ci > wasted_space.txt
-dive neurodesktop 
+docker build . -t scidesktop:latest
+dive scidesktop --ci > wasted_space.txt
+dive scidesktop 
 
 rm wasted_space.txt
