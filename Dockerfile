@@ -241,7 +241,7 @@ COPY config/lmod/module.sh /usr/share/
 COPY ./config/lxde/rc.xml /etc/xdg/openbox
 
 # Allow the root user to access the sshfs mount
-# https://github.com/neurodesk/neurodesk/issues/47
+# https://github.com/scigetorg/neurodesk/issues/47
 RUN sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf
 
 # Fetch singularity bind mount list and create placeholder mountpoints
@@ -372,7 +372,7 @@ RUN chown ${NB_UID}:${NB_GID} /scidesktop-storage \
 # Install neurocommand
 ADD "https://api.github.com/repos/neurodesk/neurocommand/git/refs/heads/main" /tmp/skipcache
 RUN rm /tmp/skipcache \
-    && git clone https://github.com/neurodesk/neurocommand.git /neurocommand \
+    && git clone https://github.com/scigetorg/neurocommand.git /neurocommand \
     && cd /neurocommand \
     && bash build.sh --lxde --edit \
     && bash install.sh \
@@ -385,4 +385,4 @@ WORKDIR "${HOME}"
 # Install example notebooks
 ADD "https://api.github.com/repos/neurodesk/example-notebooks/git/refs/heads/main" /home/${NB_USER}/skipcache
 RUN rm /home/${NB_USER}/skipcache \
-    && git clone --depth 1 https://github.com/neurodesk/example-notebooks
+    && git clone --depth 1 https://github.com/scigetorg/example-notebooks

@@ -1,10 +1,10 @@
 name: Build scidesktop-dev
 
 # Scheduled production builds at 17:00 UTC every day.
-# Build manually from here: https://github.com/NeuroDesk/scidesktop/actions/workflows/build-scidesktop.yml
+# Build manually from here: https://github.com/scigetorg/scidesktop/actions/workflows/build-scidesktop.yml
 
 # DockerHub: https://hub.docker.com/r/vnmd/scidesktop
-# Github Packages: https://github.com/NeuroDesk/scidesktop/pkgs/container/scidesktop%2Fscidesktop
+# Github Packages: https://github.com/scigetorg/scidesktop/pkgs/container/scidesktop%2Fscidesktop
 
 on:
   workflow_dispatch:

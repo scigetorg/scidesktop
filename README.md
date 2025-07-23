@@ -6,4 +6,4 @@ _Information on **scidesktop** is available at [neurodesk.org/docs/scidesktop](h
 
 Container Registries:
 - Docker [vnmd/scidesktop](https://hub.docker.com/r/vnmd/scidesktop)
-- GitHub [ghcr.io/neurodesk/scidesktop/scidesktop](https://github.com/NeuroDesk/scidesktop/pkgs/container/scidesktop%2Fscidesktop)
+- GitHub [ghcr.io/neurodesk/scidesktop/scidesktop](https://github.com/scigetorg/scidesktop/pkgs/container/scidesktop%2Fscidesktop)
