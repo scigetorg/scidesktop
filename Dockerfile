@@ -369,20 +369,20 @@ RUN mkdir -p /data /scidesktop-storage
 RUN chown ${NB_UID}:${NB_GID} /scidesktop-storage \
     && chmod 770 /scidesktop-storage
 
-# Install neurocommand
-ADD "https://api.github.com/repos/neurodesk/neurocommand/git/refs/heads/main" /tmp/skipcache
-RUN rm /tmp/skipcache \
-    && git clone https://github.com/scigetorg/neurocommand.git /neurocommand \
-    && cd /neurocommand \
-    && bash build.sh --lxde --edit \
-    && bash install.sh \
-    && ln -s /home/${NB_USER}/scidesktop-storage/containers /neurocommand/local/containers
+# # Install neurocommand
+# ADD "https://api.github.com/repos/neurodesk/neurocommand/git/refs/heads/main" /tmp/skipcache
+# RUN rm /tmp/skipcache \
+#     && git clone https://github.com/scigetorg/neurocommand.git /neurocommand \
+#     && cd /neurocommand \
+#     && bash build.sh --lxde --edit \
+#     && bash install.sh \
+#     && ln -s /home/${NB_USER}/scidesktop-storage/containers /neurocommand/local/containers
 
 USER ${NB_UID}
 
 WORKDIR "${HOME}"
 
-# Install example notebooks
-ADD "https://api.github.com/repos/neurodesk/example-notebooks/git/refs/heads/main" /home/${NB_USER}/skipcache
-RUN rm /home/${NB_USER}/skipcache \
-    && git clone --depth 1 https://github.com/scigetorg/example-notebooks
+# # Install example notebooks
+# ADD "https://api.github.com/repos/neurodesk/example-notebooks/git/refs/heads/main" /home/${NB_USER}/skipcache
+# RUN rm /home/${NB_USER}/skipcache \
+#     && git clone --depth 1 https://github.com/scigetorg/example-notebooks
