@@ -353,11 +353,16 @@ RUN mkdir -p /home/${NB_USER}/Desktop/
 # Switch to root user
 USER root
 
-
-# Create cvmfs keys
+# Create cvmfs keys for neurodesk.ardc.edu.au
 RUN mkdir -p /etc/cvmfs/keys/ardc.edu.au
 COPY config/cvmfs/neurodesk.ardc.edu.au.pub /etc/cvmfs/keys/ardc.edu.au/neurodesk.ardc.edu.au.pub
 COPY config/cvmfs/neurodesk.ardc.edu.au.conf* /etc/cvmfs/config.d/
+
+# Create cvmfs keys for software.eessi.io
+RUN mkdir -p /etc/cvmfs/keys/eessi.io
+COPY config/cvmfs/software.eessi.io.pub /etc/cvmfs/keys/eessi.io/eessi.io.pub
+COPY config/cvmfs/software.eessi.io.conf* /etc/cvmfs/config.d/
+
 COPY config/cvmfs/default.local /etc/cvmfs/default.local
 
 # Save a backup copy of startup home dir into /tmp
