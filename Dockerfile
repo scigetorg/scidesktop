@@ -346,8 +346,8 @@ RUN chmod +x /home/${NB_USER}/.vnc/xstartup
 # Set up working directories and symlinks
 RUN mkdir -p /home/${NB_USER}/Desktop/
 
-RUN /opt/conda/bin/pip install prefect \
-    && rm -rf /home/${NB_USER}/.cache
+# RUN /opt/conda/bin/pip install prefect \
+#     && rm -rf /home/${NB_USER}/.cache
 
 #========================================#
 # Finalise build
