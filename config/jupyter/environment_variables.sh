@@ -9,37 +9,40 @@ if [[ -z "${USER}" ]]; then
     export USER=${NB_USER}
 fi
 
-export MODULEPATH=/scidesktop-storage/containers/modules/:/cvmfs/neurodesk.ardc.edu.au/containers/modules/
+# export MODULEPATH=/scidesktop-storage/containers/modules/:/cvmfs/neurodesk.ardc.edu.au/containers/modules/
 
-# Only setup MODULEPATH if a module system is installed
-if [ -f '/usr/share/module.sh' ]; then
-        export OFFLINE_MODULES=/scidesktop-storage/containers/modules/
-        export CVMFS_MODULES=/cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/
+# # Only setup MODULEPATH if a module system is installed
+# if [ -f '/usr/share/module.sh' ]; then
+#         export OFFLINE_MODULES=/scidesktop-storage/containers/modules/
+#         export CVMFS_MODULES=/cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/
 
-        if [ ! -d $CVMFS_MODULES ]; then
-                MODULEPATH=${OFFLINE_MODULES}
-                export CVMFS_DISABLE=true
-        else
-                MODULEPATH=${CVMFS_MODULES}*
-                export MODULEPATH=`echo $MODULEPATH | sed 's/ /:/g'`
+#         if [ ! -d $CVMFS_MODULES ]; then
+#                 MODULEPATH=${OFFLINE_MODULES}
+#                 export CVMFS_DISABLE=true
+#         else
+#                 MODULEPATH=${CVMFS_MODULES}*
+#                 export MODULEPATH=`echo $MODULEPATH | sed 's/ /:/g'`
 
-                # if the offline modules directory exists, we can use it and will prefer it over cvmfs
-                if [ -d ${OFFLINE_MODULES} ]; then
-                        echo "Found local container installations in $OFFLINE_MODULES. Using installed containers with a higher priority over CVMFS."
-                        export MODULEPATH=${OFFLINE_MODULES}:$MODULEPATH
-                fi
-        fi
+#                 # if the offline modules directory exists, we can use it and will prefer it over cvmfs
+#                 if [ -d ${OFFLINE_MODULES} ]; then
+#                         echo "Found local container installations in $OFFLINE_MODULES. Using installed containers with a higher priority over CVMFS."
+#                         export MODULEPATH=${OFFLINE_MODULES}:$MODULEPATH
+#                 fi
+#         fi
 
-        echo 'Neuroimaging tools are accessible via the scidesktop Applications menu and running them through the menu will provide help and setup instructions. If you are familiar with the tools and you want to combine multiple tools in one script, you can run "ml av" to see which tools are available and then use "ml <tool>/<version>" to load them. '
+#         echo 'Neuroimaging tools are accessible via the scidesktop Applications menu and running them through the menu will provide help and setup instructions. If you are familiar with the tools and you want to combine multiple tools in one script, you can run "ml av" to see which tools are available and then use "ml <tool>/<version>" to load them. '
         
-        # check if $CVMFS_DISABLE is set to true
-        if [[ "$CVMFS_DISABLE" == "true" ]]; then
-                echo "CVMFS is disabled. Using local containers stored in $MODULEPATH"
-                if [ ! -d $MODULEPATH ]; then
-                        echo 'Neurodesk tools not yet downloaded. Choose tools to install from the scidesktop Application menu.'
-                fi
-        fi
-fi
+#         # check if $CVMFS_DISABLE is set to true
+#         if [[ "$CVMFS_DISABLE" == "true" ]]; then
+#                 echo "CVMFS is disabled. Using local containers stored in $MODULEPATH"
+#                 if [ ! -d $MODULEPATH ]; then
+#                         echo 'Neurodesk tools not yet downloaded. Choose tools to install from the scidesktop Application menu.'
+#                 fi
+#         fi
+# fi
+
+# Initialise ESSII software share by default
+source /cvmfs/software.eessi.io/versions/2023.06/init/bash
 
 # This also needs to be set in the Dockerfile, so it is available in a jupyter notebook
 export APPTAINER_BINDPATH=/data,/mnt,/scidesktop-storage,/tmp,/cvmfs
