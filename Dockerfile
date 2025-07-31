@@ -228,9 +228,9 @@ RUN /opt/conda/bin/pip install jupyter-server-proxy \
 
 USER root
 
-# # Customise logo, wallpaper, terminal
-COPY config/jupyter/neurodesk_brain_logo.svg /opt/neurodesk_brain_logo.svg
-COPY config/jupyter/neurodesk_brain_icon.svg /opt/neurodesk_brain_icon.svg
+# Customise logo, wallpaper, terminal
+# COPY config/jupyter/neurodesk_brain_logo.svg /opt/neurodesk_brain_logo.svg
+COPY config/jupyter/sciget_logo.svg /opt/sciget_logo.svg
 
 COPY config/lxde/background.png /usr/share/lxde/wallpapers/desktop_wallpaper.png
 COPY config/lxde/pcmanfm.conf /etc/xdg/pcmanfm/LXDE/pcmanfm.conf
@@ -346,6 +346,9 @@ RUN chmod +x /home/${NB_USER}/.vnc/xstartup
 # Set up working directories and symlinks
 RUN mkdir -p /home/${NB_USER}/Desktop/
 
+RUN /opt/conda/bin/pip install prefect \
+    && rm -rf /home/${NB_USER}/.cache
+
 #========================================#
 # Finalise build
 #========================================#
@@ -377,7 +380,7 @@ RUN chown ${NB_UID}:${NB_GID} /scidesktop-storage \
 # # Install neurocommand
 # ADD "https://api.github.com/repos/neurodesk/neurocommand/git/refs/heads/main" /tmp/skipcache
 # RUN rm /tmp/skipcache \
-#     && git clone https://github.com/scigetorg/neurocommand.git /neurocommand \
+#     && git clone https://github.com/neurodesk/neurocommand.git /neurocommand \
 #     && cd /neurocommand \
 #     && bash build.sh --lxde --edit \
 #     && bash install.sh \

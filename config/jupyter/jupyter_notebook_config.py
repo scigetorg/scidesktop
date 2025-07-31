@@ -12,7 +12,7 @@ c.ServerProxy.servers = {
       'launcher_entry': {
         'path_info' : 'scidesktop',
         'title': 'scidesktop',
-        'icon_path': '/opt/neurodesk_brain_logo.svg'
+        'icon_path': '/opt/sciget_logo.svg'
       }
     }
 }
@@ -21,3 +21,6 @@ c.ServerApp.preferred_dir = os.getcwd()
 c.FileContentsManager.allow_hidden = True
 
 before_notebook = subprocess.call("/opt/scidesktop/jupyterlab_startup.sh")
+
+# prefect config set PREFECT_UI_SERVE_BASE="/prefect/"
+# prefect config set PREFECT_API_URL=http://127.0.0.1:4200/prefect/api
