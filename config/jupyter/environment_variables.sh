@@ -44,7 +44,7 @@ fi
 # Initialise EESSI software share by default, if not already initialised
 if [ -z "$EESSI_PILOT_VERSION" ]; then
   source /cvmfs/software.eessi.io/versions/2023.06/init/bash
-
+fi
 # This also needs to be set in the Dockerfile, so it is available in a jupyter notebook
 export APPTAINER_BINDPATH=/data,/mnt,/scidesktop-storage,/tmp,/cvmfs
 # This also needs to be set in the Dockerfile, so it is available in a jupyter notebook
