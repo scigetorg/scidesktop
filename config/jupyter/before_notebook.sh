@@ -189,9 +189,9 @@ if [ "$EUID" -eq 0 ]; then
                     ls /cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/ 2>/dev/null && echo "CVMFS is ready after autofs mount" || echo "AutoFS not working!"
                 else
                     echo "autofs is NOT running - attempting to mount manually:"
-                    # mkdir -p /cvmfs/neurodesk.ardc.edu.au
-                    # mount -t cvmfs neurodesk.ardc.edu.au /cvmfs/neurodesk.ardc.edu.au
-                    # ls /cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/ 2>/dev/null && echo "CVMFS is ready after manual mount" || echo "Manual CVMFS mount not successful"
+                    mkdir -p /cvmfs/neurodesk.ardc.edu.au
+                    mount -t cvmfs neurodesk.ardc.edu.au /cvmfs/neurodesk.ardc.edu.au
+                    ls /cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/ 2>/dev/null && echo "CVMFS is ready after manual mount" || echo "Manual CVMFS mount not successful"
 
                     mkdir -p /cvmfs/software.eessi.io
                     mount -t cvmfs software.eessi.io /cvmfs/software.eessi.io
