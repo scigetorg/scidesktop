@@ -390,10 +390,11 @@ USER ${NB_UID}
 
 # Install scigetup
 RUN mkdir -p ${HOME}/.config/sciget
+COPY config/sciget/software.json ${HOME}/.config/sciget
 ADD "https://api.github.com/repos/scigetorg/scigetup/git/refs/heads/main" ${HOME}/.config/sciget/version.json
 RUN rm ${HOME}/.config/sciget/version.json \
     && pip install git+https://github.com/scigetorg/scigetup.git \
-    && scigetup install
+    && scigetup install ${HOME}/.config/sciget/software.json
 
 WORKDIR "${HOME}"
 

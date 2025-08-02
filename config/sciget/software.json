@@ -1,0 +1,63 @@
+{
+  "Bioinformatics & Life Sciences": {
+    "description": "Tools for genomics, molecular dynamics, and computational biology.",
+    "software": [
+      { "name": "GROMACS", "executable": "gmx", "gui": false },
+      { "name": "AlphaFold", "executable": "alphafold", "gui": false },
+      { "name": "BLAST+", "executable": "bash", "gui": false, "notes": "Loads BLAST suite (blastp, blastn, etc.)" },
+      { "name": "Samtools", "executable": "samtools", "gui": false },
+      { "name": "BCFtools", "executable": "bcftools", "gui": false },
+      { "name": "VCFtools", "executable": "vcftools", "gui": false },
+      { "name": "Bowtie2", "executable": "bowtie2", "gui": false },
+      { "name": "BWA", "executable": "bwa", "gui": false },
+      { "name": "VMD", "executable": "vmd", "gui": true, "notes": "Visual Molecular Dynamics" },
+      { "name": "GATK", "executable": "gatk", "gui": false },
+      { "name": "HMMER", "executable": "hmmsearch", "gui": false },
+      { "name": "HTSlib", "executable": "bash", "gui": false, "notes": "Provides bgzip, htsfile, tabix" },
+      { "name": "IQ-TREE", "executable": "iqtree", "gui": false },
+      { "name": "MAFFT", "executable": "mafft", "gui": false },
+      { "name": "MEGAHIT", "executable": "megahit", "gui": false },
+      { "name": "MUSCLE", "executable": "muscle", "gui": false },
+      { "name": "OrthoFinder", "executable": "orthofinder", "gui": false },
+      { "name": "RAxML", "executable": "raxmlHPC", "gui": false },
+      { "name": "Biopython", "executable": "python3", "gui": false, "notes": "Loads Python with Biopython" }
+    ]
+  },
+  "Data Science & Programming": {
+    "description": "Programming languages and environments for data analysis.",
+    "software": [
+      { "name": "Python", "executable": "python3", "gui": false, "notes": "Loads a feature-rich Python environment" },
+      { "name": "R", "executable": "R", "gui": false },
+      { "name": "JupyterLab", "executable": "jupyter-lab", "gui": true, "notes": "Launches Jupyter in your browser" },
+      { "name": "Octave", "executable": "octave --gui", "gui": true, "notes": "GNU Octave, a MATLAB alternative" },
+      { "name": "Julia", "executable": "julia", "gui": false }
+    ]
+  },
+  "Engineering, Physics & Chemistry": {
+    "description": "Tools for simulation and analysis in physical sciences.",
+    "software": [
+      { "name": "OpenFOAM", "executable": "bash", "gui": false, "notes": "Loads OpenFOAM environment" },
+      { "name": "QuantumESPRESSO", "executable": "bash", "gui": false, "notes": "Loads suite (pw.x, etc.)" },
+      { "name": "LAMMPS", "executable": "lmp", "gui": false },
+      { "name": "CP2K", "executable": "cp2k.psmp", "gui": false },
+      { "name": "Siesta", "executable": "siesta", "gui": false }
+    ]
+  },
+  "Data Visualization": {
+    "description": "Graphical tools for data visualization and analysis.",
+    "software": [
+      { "name": "ParaView", "executable": "paraview", "gui": true },
+      { "name": "gnuplot", "executable": "gnuplot", "gui": false }
+    ]
+  },
+  "Workflow & Development": {
+    "description": "Tools for building pipelines, managing code, and compiling.",
+    "software": [
+      { "name": "Nextflow", "executable": "nextflow", "gui": false },
+      { "name": "snakemake", "executable": "snakemake", "gui": false },
+      { "name": "Git", "executable": "bash", "gui": false, "notes": "Git is usually pre-installed, but this ensures the EESSI version" },
+      { "name": "CMake", "executable": "cmake-gui", "gui": true },
+      { "name": "tmux", "executable": "tmux", "gui": false, "notes": "Terminal multiplexer" }
+    ]
+  }
+}
