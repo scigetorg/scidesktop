@@ -49,7 +49,7 @@ jobs:
       run: |
         IMAGENAME="scidesktop-test"
         BUILDDATE=`date +%Y-%m-%d`
-        IMAGEID=ghcr.io/$IMAGENAME
+        IMAGEID=ghcr.io/$GITHUB_REPOSITORY_OWNER /$IMAGENAME
         IMAGEID=$(echo $IMAGEID | tr '[A-Z]' '[a-z]')
 
         echo "BUILDDATE=$BUILDDATE"
@@ -152,7 +152,7 @@ jobs:
         run: |
           IMAGENAME="scidesktop-test"
           BUILDDATE=`date +%Y-%m-%d`
-          IMAGEID=ghcr.io/$IMAGENAME
+          IMAGEID=ghcr.io/$GITHUB_REPOSITORY_OWNER /$IMAGENAME
           IMAGEID=$(echo $IMAGEID | tr '[A-Z]' '[a-z]')
 
           echo "BUILDDATE=$BUILDDATE"
