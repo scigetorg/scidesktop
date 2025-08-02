@@ -388,6 +388,13 @@ RUN chown ${NB_UID}:${NB_GID} /scidesktop-storage \
 
 USER ${NB_UID}
 
+# Install scigetup
+RUN mkdir -p ${HOME}/.config/sciget
+ADD "https://api.github.com/repos/scigetorg/scigetup/git/refs/heads/main" ${HOME}/.config/sciget/version.json
+RUN rm ${HOME}/.config/sciget/version.json \
+    && pip install git+https://github.com/scigetorg/scigetup.git \
+    && scigetup install
+
 WORKDIR "${HOME}"
 
 # # Install example notebooks
