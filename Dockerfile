@@ -373,8 +373,9 @@ COPY config/cvmfs/default.local /etc/cvmfs/default.local
 RUN cp -rp /home/${NB_USER} /tmp/
 
 # Set up data directory so it exists in the container for the SINGULARITY_BINDPATH
-RUN mkdir -p /data /scidesktop-storage
-RUN chown ${NB_UID}:${NB_GID} /scidesktop-storage \
+RUN mkdir -p /data /scidesktop-storage /scigetup 
+RUN chown ${NB_UID}:${NB_GID} /scidesktop-storage /scigetup \
+    && chmod 770 /scigetup \
     && chmod 770 /scidesktop-storage
 
 # # Install neurocommand
@@ -389,12 +390,11 @@ RUN chown ${NB_UID}:${NB_GID} /scidesktop-storage \
 USER ${NB_UID}
 
 # Install scigetup
-RUN mkdir -p ${HOME}/.config/sciget
-COPY config/sciget/software.json ${HOME}/.config/sciget
-ADD "https://api.github.com/repos/scigetorg/scigetup/git/refs/heads/main" ${HOME}/.config/sciget/version.json
-RUN rm ${HOME}/.config/sciget/version.json \
+COPY config/sciget/software.json /scigetup/
+ADD "https://api.github.com/repos/scigetorg/scigetup/git/refs/heads/main" /scigetup/version.json
+RUN rm /scigetup/version.json \
     && pip install git+https://github.com/scigetorg/scigetup.git \
-    && scigetup install ${HOME}/.config/sciget/software.json
+    && scigetup install --json /scigetup/software.json --path /scigetup
 
 WORKDIR "${HOME}"
 
