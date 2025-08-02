@@ -23,6 +23,9 @@ env:
 jobs:
   build-image:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
     steps:
     - name: Fetch github api rate limit
       run: |
@@ -121,6 +124,8 @@ jobs:
   scan-image:
     needs: build-image
     runs-on: ubuntu-22.04
+    permissions:
+      packages: read
     steps:
       - name: Set environment variables
         run: |
