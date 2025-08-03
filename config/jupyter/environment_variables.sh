@@ -54,10 +54,10 @@ export MPLCONFIGDIR=/home/${NB_USER}/.config/matplotlib-mpldir
 
 export PATH=$PATH:/home/${NB_USER}/.local/bin:/opt/conda/bin:/opt/conda/condabin
 
-# Symlink the scigetup app dir to desktop if the link doesn't already exist
-if [ ! -L "/home/${NB_USER}/Desktop/Software-Applications" ]; then
-    ln -s /scigetup/Software-Applications /home/${NB_USER}/Desktop/Software-Applications
-fi
+# # Symlink the scigetup app dir to desktop if the link doesn't already exist
+# if [ ! -e "/home/${NB_USER}/Desktop/Software-Applications" ]; then
+#     ln -s /scigetup/Software-Applications /home/${NB_USER}/Desktop/Software-Applications
+# fi
 
 # This is needed to make containers writable as a workaround for macos with Apple Silicon. We need to do it here for the desktop
 # and in the dockerfile for the jupyter notebook
