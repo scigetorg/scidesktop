@@ -32,7 +32,7 @@ RUN apt-get update --yes \
         tigervnc-tools \
         xorgxrdp \
         xrdp \
-        lxde \
+        lxqt \
         acl \
         wget \
         curl \
@@ -232,13 +232,13 @@ USER root
 # COPY config/jupyter/neurodesk_brain_logo.svg /opt/neurodesk_brain_logo.svg
 COPY config/jupyter/sciget_logo.svg /opt/sciget_logo.svg
 
-COPY config/lxde/background.png /usr/share/lxde/wallpapers/desktop_wallpaper.png
-COPY config/lxde/pcmanfm.conf /etc/xdg/pcmanfm/LXDE/pcmanfm.conf
-COPY config/lxde/lxterminal.conf /usr/share/lxterminal/lxterminal.conf
+# COPY config/lxde/background.png /usr/share/lxde/wallpapers/desktop_wallpaper.png
+# COPY config/lxde/pcmanfm.conf /etc/xdg/pcmanfm/LXDE/pcmanfm.conf
+# COPY config/lxde/lxterminal.conf /usr/share/lxterminal/lxterminal.conf
 COPY config/lmod/module.sh /usr/share/
 
 # Configure tiling of windows SHIFT-ALT-CTR-{Left,right,top,Bottom} and other openbox desktop mods
-COPY ./config/lxde/rc.xml /etc/xdg/openbox
+# COPY ./config/lxde/rc.xml /etc/xdg/openbox
 
 # Allow the root user to access the sshfs mount
 # https://github.com/scigetorg/neurodesk/issues/47
@@ -248,7 +248,7 @@ RUN sed -i 's/#user_allow_other/user_allow_other/g' /etc/fuse.conf
 # RUN mkdir -p `curl https://raw.githubusercontent.com/NeuroDesk/neurocontainers/master/recipes/globalMountPointList.txt`
 
 # Fix "No session for pid prompt"
-RUN rm /usr/bin/lxpolkit
+# RUN rm /usr/bin/lxpolkit
 
 # enable rootless mounts: 
 RUN chmod +x /usr/bin/fusermount
@@ -301,9 +301,9 @@ USER ${NB_USER}
 RUN mkdir -p /home/${NB_USER}/.itksnap.org/ITK-SNAP \
     && chown ${NB_USER} /home/${NB_USER}/.itksnap.org -R
 COPY --chown=${NB_UID}:${NB_GID} ./config/itksnap/UserPreferences.xml /home/${NB_USER}/.itksnap.org
-COPY --chown=${NB_UID}:${NB_GID} ./config/lxde/mimeapps.list /home/${NB_USER}/.config/mimeapps.list
+# COPY --chown=${NB_UID}:${NB_GID} ./config/lxde/mimeapps.list /home/${NB_USER}/.config/mimeapps.list
 
-COPY --chown=${NB_UID}:${NB_GID} config/lxde/panel /home/${NB_USER}/.config/lxpanel/LXDE/panels/panel
+# COPY --chown=${NB_UID}:${NB_GID} config/lxde/panel /home/${NB_USER}/.config/lxpanel/LXDE/panels/panel
 COPY --chown=${NB_UID}:${NB_GID} config/lxde/.bashrc /home/${NB_USER}/tmp_bashrc
 RUN cat /home/${NB_USER}/tmp_bashrc >> /home/${NB_USER}/.bashrc \
      && rm /home/${NB_USER}/tmp_bashrc
@@ -333,7 +333,7 @@ RUN mkdir /home/${NB_USER}/.vnc \
     && chown ${NB_USER} /home/${NB_USER}/.vnc \
     && /usr/bin/printf '%s\n%s\n%s\n' 'password' 'password' 'n' | vncpasswd
 
-COPY --chown=${NB_UID}:${NB_GID} config/lxde/xstartup /home/${NB_USER}/.vnc
+# COPY --chown=${NB_UID}:${NB_GID} config/lxde/xstartup /home/${NB_USER}/.vnc
 COPY --chown=${NB_UID}:${NB_GID} config/conda/conda-readme.md /home/${NB_USER}/
 
 RUN mkdir -p /home/${NB_USER}/.ssh \
@@ -341,7 +341,7 @@ RUN mkdir -p /home/${NB_USER}/.ssh \
     && setfacl -dRm u::rwx,g::0,o::0 /home/${NB_USER}/.ssh
 COPY --chown=${NB_UID}:${NB_GID} config/ssh/sshd_config /home/${NB_USER}/.ssh/sshd_config
 
-RUN chmod +x /home/${NB_USER}/.vnc/xstartup
+# RUN chmod +x /home/${NB_USER}/.vnc/xstartup
 
 # Set up working directories and symlinks
 RUN mkdir -p /home/${NB_USER}/Desktop/
@@ -387,7 +387,27 @@ RUN chown ${NB_UID}:${NB_GID} /scidesktop-storage /scigetup \
 #     && bash install.sh \
 #     && ln -s /home/${NB_USER}/scidesktop-storage/containers /neurocommand/local/containers
 
+
+RUN apt-get update --yes \
+    && DEBIAN_FRONTEND=noninteractive apt install --yes --no-install-recommends \
+        dbus-x11 openbox breeze-icon-theme \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install packages, then immediately remove xfwm4
+RUN apt-get update && apt-get remove -y --purge xfwm4 && apt-get autoremove -y \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN echo '#!/bin/sh' > /etc/xrdp/startwm.sh && \
+    echo 'unset DBUS_SESSION_BUS_ADDRESS' >> /etc/xrdp/startwm.sh && \
+    echo 'unset XDG_RUNTIME_DIR' >> /etc/xrdp/startwm.sh && \
+    echo 'exec dbus-run-session startlxqt' >> /etc/xrdp/startwm.sh && \
+    chmod +x /etc/xrdp/startwm.sh
+
+# RUN sed -i 's/max_bpp=32/max_bpp=16/g' /etc/xrdp/xrdp.ini
+
 USER ${NB_UID}
+
+# RUN echo "exec startlxqt" > ${HOME}/.xinitrc
 
 # Install scigetup
 COPY config/sciget/software.json /scigetup/
@@ -395,6 +415,15 @@ ADD "https://api.github.com/repos/scigetorg/scigetup/git/refs/heads/main" /scige
 RUN rm /scigetup/version.json \
     && pip install git+https://github.com/scigetorg/scigetup.git \
     && scigetup install --json /scigetup/software.json --path /scigetup
+
+RUN mkdir -p ${HOME}/Desktop && \
+    mkdir -p ${HOME}/.config/pcmanfm-qt/lxqt/ && \
+    echo '[desktop]\ndesktop_mode=1' > ${HOME}/.config/pcmanfm-qt/lxqt/settings.conf
+
+RUN mkdir -p ${HOME}/.config/lxqt/ && \
+    echo -e "[General]\nwindow_manager=openbox" > ${HOME}/.config/lxqt/session.conf
+
+RUN echo -e "\n[Appearance]\nicon_theme=breeze" >> ${HOME}/.config/lxqt/lxqt.conf
 
 WORKDIR "${HOME}"
 
