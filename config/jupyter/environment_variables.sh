@@ -54,8 +54,8 @@ export MPLCONFIGDIR=/home/${NB_USER}/.config/matplotlib-mpldir
 
 export PATH=$PATH:/home/${NB_USER}/.local/bin:/opt/conda/bin:/opt/conda/condabin
 
-# # Symlink the scigetup app dir to desktop if the link doesn't already exist
-if [ ! -e "/home/${NB_USER}/Desktop/Software-Applications" ]; then
+# Symlink the scigetup app dir to desktop, but only if the Desktop directory exists and the link doesn't already exist.
+if [ -d "/home/${NB_USER}/Desktop" ] && [ ! -e "/home/${NB_USER}/Desktop/Software-Applications" ]; then
     ln -s /scigetup/Software-Applications /home/${NB_USER}/Desktop/Software-Applications
 fi
 
