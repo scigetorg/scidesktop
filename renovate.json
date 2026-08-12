@@ -1,0 +1,72 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommitsDisabled"
+  ],
+  "timezone": "Australia/Brisbane",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "labels": ["dependencies"],
+
+  "packageRules": [
+    {
+      "description": "Base images: keep the digest fresh so pinning does not freeze CVE fixes. Grouped because a base bump is one review, not four.",
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["digest"],
+      "groupName": "container base image digests",
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "description": "Build-stage toolchain images (node, python, alpine). Minor/patch only; a major bump can change the wheel we produce.",
+      "matchManagers": ["dockerfile"],
+      "matchPackageNames": ["node", "python", "alpine"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Selkies has no release tag yet (upstream issue #227), so we track main by commit. Weekly is deliberate: this moves fast and every bump needs the desktop smoke-tested.",
+      "matchDepNames": ["selkies-project/selkies"],
+      "groupName": "selkies",
+      "schedule": ["before 6am on monday"],
+      "commitMessageTopic": "Selkies"
+    },
+    {
+      "description": "jupyter-server-proxy sits between Jupyter and the desktop; a major bump has broken proxy semantics before. Review explicitly.",
+      "matchPackageNames": ["jupyter-server-proxy"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    }
+  ],
+
+  "customManagers": [
+    {
+      "description": "ARG SELKIES_COMMIT pins the Selkies source. Renovate tracks the head of main and rewrites the SHA; Dependabot cannot do this.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Dockerfile$/"],
+      "matchStrings": [
+        "ARG SELKIES_COMMIT=(?<currentDigest>[a-f0-9]{40})"
+      ],
+      "currentValueTemplate": "main",
+      "depNameTemplate": "selkies-project/selkies",
+      "packageNameTemplate": "https://github.com/selkies-project/selkies",
+      "datasourceTemplate": "git-refs"
+    },
+    {
+      "description": "Pinned pip versions inside RUN lines, which the pip manager does not see.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Dockerfile$/"],
+      "matchStrings": [
+        "'(?<depName>[a-z0-9-]+)==(?<currentValue>[0-9.]+)'"
+      ],
+      "datasourceTemplate": "pypi"
+    }
+  ],
+
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "labels": ["security"]
+  }
+}

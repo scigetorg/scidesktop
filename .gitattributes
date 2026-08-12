@@ -1,0 +1,9 @@
+# Set non-text as binary
+# * text=auto
+# *.png binary
+
+# Forcing UNIX LF line endings for text files added to container
+* text=auto eol=lf
+*.png binary
+*.run binary
+
