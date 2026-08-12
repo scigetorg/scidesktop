@@ -14,7 +14,7 @@ ARG LMOD_VERSION=9.3
 ARG LMOD_SHA256=78e2eedea003d69f11bfab457fd313e9180c55d6960b4d99a826fccb7838ada4
 
 # Stage 1: source
-FROM docker.io/library/alpine:3.22 AS selkies-src
+FROM docker.io/library/alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce AS selkies-src
 ARG SELKIES_COMMIT
 RUN apk add --no-cache curl tar \
     && mkdir -p /src \
@@ -23,7 +23,7 @@ RUN apk add --no-cache curl tar \
 
 # Stage 2: HTML5 client. Not shipped in the sdist, so pip alone yields a
 # server with no web assets; these stages mirror upstream's own build.
-FROM docker.io/library/node:26-alpine AS selkies-web
+FROM docker.io/library/node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS selkies-web
 ARG SELKIES_MODE=webrtc
 ARG SELKIES_UPLOAD_DIR=/home/jovyan/Desktop
 WORKDIR /build
@@ -50,7 +50,7 @@ RUN set -eux; \
     cp /repo-assets/logo/favicon.ico /webout/favicon.ico
 
 # Stage 3: wheel, with the built client bundled into the package
-FROM docker.io/library/python:3-slim AS selkies-wheel
+FROM docker.io/library/python:3-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc AS selkies-wheel
 ARG SELKIES_COMMIT
 RUN python3 -m pip install --no-cache-dir --upgrade build
 WORKDIR /opt/pypi
@@ -98,6 +98,13 @@ LABEL org.opencontainers.image.base.digest="${BASE_DIGEST}"
 
 USER root
 
+# Build against an archive snapshot
+ARG APT_SNAPSHOT=20260801T000000Z
+RUN cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.live \
+    && sed -i -E "s|^URIs: https?://(archive\|security)\.ubuntu\.com/ubuntu/?|URIs: https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT}|" \
+        /etc/apt/sources.list.d/ubuntu.sources \
+    && grep -q "snapshot.ubuntu.com" /etc/apt/sources.list.d/ubuntu.sources
+
 # System dependencies: LXQt, X11, audio
 RUN apt-get update && apt-get install --no-install-recommends -y \
     # Core
@@ -133,8 +140,9 @@ RUN ln -s /opt/apps/lmod/lmod/init/profile /etc/profile.d/z00_lmod.sh \
 
 # pixelflux/pcmflux resolve from PyPI as manylinux wheels.
 COPY --from=selkies-wheel /opt/pypi/dist/*.whl /tmp/
-RUN PIP_BREAK_SYSTEM_PACKAGES=1 /usr/bin/pip3 install --no-cache-dir /tmp/*.whl \
-    && rm -f /tmp/*.whl \
+COPY config/selkies/constraints.txt /tmp/constraints.txt
+RUN PIP_BREAK_SYSTEM_PACKAGES=1 /usr/bin/pip3 install --no-cache-dir -c /tmp/constraints.txt /tmp/*.whl \
+    && rm -f /tmp/*.whl /tmp/constraints.txt \
     && command -v selkies >/dev/null \
     && command -v selkies-resize >/dev/null \
     && test -f /usr/local/lib/python3*/dist-packages/selkies/selkies_web/index.html \
@@ -180,6 +188,9 @@ RUN chmod +r /etc/jupyter/jupyter_notebook_config.py
 RUN printf '%s\n' \
     'c.LabApp.check_for_updates_class = "jupyterlab.handlers.announcements.NeverCheckForUpdate"' \
     >> /etc/jupyter/jupyter_server_config.py
+
+# Restore live sources for runtime apt.
+RUN mv /etc/apt/sources.list.d/ubuntu.sources.live /etc/apt/sources.list.d/ubuntu.sources
 
 ENV DISPLAY=:20
 ENV JUPYTER_DISABLE_RESOURCE_USAGE=1

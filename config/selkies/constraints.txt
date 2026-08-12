@@ -1,0 +1,13 @@
+# Pins for the Selkies runtime dependencies.
+#
+# The wheel we build declares these without version bounds, so an unpinned
+# install resolves to whatever PyPI serves that day. pixelflux and pcmflux are
+# the video and audio encoders, so a silent bump changes how the desktop
+# streams with no corresponding change in this repository.
+#
+# Renovate proposes updates here; the smoke test decides whether they land.
+pixelflux==2.0.0
+pcmflux==2.0.0
+av==15.1.0
+aiohttp==3.14.3
+msgpack==1.2.1
