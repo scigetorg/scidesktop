@@ -1,28 +1,57 @@
-# Scidesktop Selkies desktop adapter: Jupyter + LXQt streamed by Selkies over
-# a single port, proxied by jupyter-server-proxy.
+# Jupyter, LXQt desktop, streamed by Selkies
 
-# Selkies publishes no 2.x release, so the wheel is built from a pinned commit.
+# Selkies
 ARG SELKIES_COMMIT=48be9fddcfea0f7342b16108fb46b9c2d41ea112
 # Declared here because ARGs used in FROM must precede the first FROM.
 ARG BASE_NAME=quay.io/jupyter/base-notebook
 ARG BASE_DIGEST=sha256:5bcf92a903b64a32b0d87a103b34e3e9fcab4d1e0c4579be9963966a09f9bbfb
 
-# Ubuntu 24.04 ships Lmod 8.6.19; upstream is 9.3. Built from the release
-# tarball so the version is pinned and Renovate-managed. Built in a separate
-# stage so the compiler and lua headers never reach the final image.
+# Lmod
 ARG LMOD_VERSION=9.3
 ARG LMOD_SHA256=78e2eedea003d69f11bfab457fd313e9180c55d6960b4d99a826fccb7838ada4
+
+# Apptainer
+ARG APPTAINER_VERSION=1.5.3
+ARG APPTAINER_GO_VERSION=1.26.5
+ARG APPTAINER_GRPC_VERSION=1.83.0
+
+# Stage 0: Apptainer
+FROM docker.io/library/golang:${APPTAINER_GO_VERSION}-bookworm AS apptainer
+ARG APPTAINER_VERSION
+ARG APPTAINER_GRPC_VERSION
+RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
+RUN apt-get update && apt-get install --no-install-recommends -y \
+        autoconf automake build-essential ca-certificates cryptsetup curl \
+        fakeroot git libattr1-dev libfuse3-dev liblzo2-dev liblz4-dev \
+        liblzma-dev libprotobuf-c-dev libseccomp-dev libsubid-dev \
+        libtalloc-dev libtool libzstd-dev pkg-config uidmap zlib1g-dev \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    git clone --depth 1 --branch "v${APPTAINER_VERSION}" \
+        https://github.com/apptainer/apptainer.git /tmp/apptainer \
+    && cd /tmp/apptainer \
+    && go get "google.golang.org/grpc@v${APPTAINER_GRPC_VERSION}" \
+    && go mod tidy && go mod download \
+    && ./scripts/download-dependencies \
+    && ./scripts/compile-dependencies \
+    && printf '%s\n' "${APPTAINER_VERSION}" > VERSION \
+    && ./mconfig --prefix=/opt/apptainer --with-suid \
+    && make -C builddir \
+    && make -C builddir install \
+    && ./scripts/install-dependencies \
+    && /opt/apptainer/bin/apptainer --version \
+    && rm -rf /tmp/apptainer
 
 # Stage 1: source
 FROM docker.io/library/alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce AS selkies-src
 ARG SELKIES_COMMIT
 RUN apk add --no-cache curl tar \
     && mkdir -p /src \
-    && curl -fsSL "https://github.com/selkies-project/selkies/archive/${SELKIES_COMMIT}.tar.gz" \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused "https://github.com/selkies-project/selkies/archive/${SELKIES_COMMIT}.tar.gz" \
        | tar -xz --strip-components=1 -C /src
 
-# Stage 2: HTML5 client. Not shipped in the sdist, so pip alone yields a
-# server with no web assets; these stages mirror upstream's own build.
+# Stage 2: HTML5 client, not shipped in the sdist
 FROM docker.io/library/node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS selkies-web
 ARG SELKIES_MODE=webrtc
 ARG SELKIES_UPLOAD_DIR=/home/jovyan/Desktop
@@ -60,19 +89,16 @@ COPY --from=selkies-web /webout ./src/selkies/selkies_web
 RUN sed -i -e "s|^version =.*|version = \"2.0.0.dev0+${SELKIES_COMMIT}\"|g" pyproject.toml \
     && python3 -m build --wheel
 
-# Stage 4: Lmod.
-#
-# Built on plain Ubuntu rather than the notebook base: conda puts its own
-# tclsh and pkg-config ahead of the system ones on PATH, and configure bakes
-# whatever it finds into the install. Ubuntu 24.04 matches the base image's
-# release, so /usr/bin/lua5.4 resolves identically in the final stage.
+# Stage 4: Lmod. Plain Ubuntu; conda's tclsh and pkg-config shadow the
+# system ones on PATH.
 FROM docker.io/library/ubuntu:24.04@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea AS lmod-build
 ARG LMOD_VERSION
 ARG LMOD_SHA256
+RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
 RUN apt-get update && apt-get install --no-install-recommends -y \
         ca-certificates gcc make curl pkg-config bc \
         lua5.4 liblua5.4-dev lua-posix lua-filesystem tcl tcl-dev \
-    && curl -fsSL "https://github.com/TACC/Lmod/archive/refs/tags/${LMOD_VERSION}.tar.gz" -o /tmp/lmod.tar.gz \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused "https://github.com/TACC/Lmod/archive/refs/tags/${LMOD_VERSION}.tar.gz" -o /tmp/lmod.tar.gz \
     && echo "${LMOD_SHA256}  /tmp/lmod.tar.gz" | sha256sum -c - \
     && mkdir -p /tmp/lmod && tar -xzf /tmp/lmod.tar.gz -C /tmp/lmod --strip-components=1 \
     && cd /tmp/lmod \
@@ -90,8 +116,6 @@ ARG SELKIES_COMMIT
 LABEL maintainer="Sciget project <sciget.org>"
 LABEL org.scidesktop.status="experimental"
 LABEL org.scidesktop.desktop_adapter="selkies"
-# The inherited version label is Ubuntu's OS version, passed through
-# docker-stacks unchanged; override it and record the base separately.
 LABEL org.opencontainers.image.version="selkies-${SELKIES_COMMIT}"
 LABEL org.opencontainers.image.base.name="${BASE_NAME}"
 LABEL org.opencontainers.image.base.digest="${BASE_DIGEST}"
@@ -100,6 +124,7 @@ USER root
 
 # Build against an archive snapshot
 ARG APT_SNAPSHOT=20260801T000000Z
+RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
 RUN cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.live \
     && sed -i -E "s|^URIs: https?://(archive\|security)\.ubuntu\.com/ubuntu/?|URIs: https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT}|" \
         /etc/apt/sources.list.d/ubuntu.sources \
@@ -112,7 +137,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     ca-certificates acl ssl-cert sudo \
     # Virtual framebuffer
     xvfb \
-    # LXQt desktop (Qt-based, openbox WM)
+    # LXQt desktop
     lxqt-core qterminal pcmanfm-qt openbox \
     mesa-utils breeze-icon-theme \
     # X11 / input
@@ -123,22 +148,49 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     # GL / EGL
     libdrm2 libegl1 libgl1 libopengl0 libgles2 libglvnd0 libglx0 \
     mesa-va-drivers libva2 vainfo \
-    # System python for selkies, deliberately not the conda env
+    # System python for selkies, not the conda env
     python3-pip python3-dev python3-setuptools python3-wheel \
-    # Audio: selkies captures the PulseAudio monitor source
+    # Audio
     libpulse0 pipewire pipewire-alsa pipewire-audio-client-libraries \
     pipewire-pulse wireplumber alsa-utils \
-    # Lmod runtime (the build stage has the headers and compiler)
+    # Lmod runtime
     lua5.4 lua-posix lua-filesystem tcl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Lmod: `module` is the single access path for containerised applications.
+# Lmod
 COPY --from=lmod-build /opt/apps /opt/apps
 RUN ln -s /opt/apps/lmod/lmod/init/profile /etc/profile.d/z00_lmod.sh \
     && ln -s /opt/apps/lmod/lmod/init/cshrc /etc/profile.d/z00_lmod.csh \
     && /opt/apps/lmod/lmod/libexec/lmod --version
 
-# pixelflux/pcmflux resolve from PyPI as manylinux wheels.
+# Apptainer. setuid disabled; libtalloc2/libprotobuf-c1 are proot's libs.
+COPY --from=apptainer /opt/apptainer /opt/apptainer
+RUN ln -sf /opt/apptainer/bin/apptainer /usr/local/bin/apptainer \
+    && ln -sf /opt/apptainer/bin/singularity /usr/local/bin/singularity \
+    && rm -rf /opt/apptainer/libexec/apptainer/cni \
+    && sed -i 's/^allow setuid = yes/allow setuid = no/' /opt/apptainer/etc/apptainer/apptainer.conf \
+    && apt-get update \
+    && apt-get install --no-install-recommends -y \
+        fuse-overlayfs squashfuse libtalloc2 libprotobuf-c1 uidmap fakeroot \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && apptainer --version
+
+# CVMFS
+ARG CVMFS_VERSION=2.13.3
+ARG CVMFS_CONFIG_VERSION=1.1-0
+RUN cd /tmp \
+    && arch="$(dpkg --print-architecture)" \
+    && for p in cvmfs cvmfs-libs cvmfs-fuse3; do \
+         curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -O "https://ecsft.cern.ch/dist/cvmfs/cvmfs-${CVMFS_VERSION}/${p}_${CVMFS_VERSION}+ubuntu24.04_${arch}.deb"; \
+       done \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -O "https://ecsft.cern.ch/dist/cvmfs/cvmfs-config/cvmfs-config-none_${CVMFS_CONFIG_VERSION}_all.deb" \
+    && apt-get update \
+    && apt-get install --no-install-recommends -y ./cvmfs*.deb \
+    && rm -f /tmp/*.deb \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && cvmfs2 --version
+
+# Selkies
 COPY --from=selkies-wheel /opt/pypi/dist/*.whl /tmp/
 COPY config/selkies/constraints.txt /tmp/constraints.txt
 RUN PIP_BREAK_SYSTEM_PACKAGES=1 /usr/bin/pip3 install --no-cache-dir -c /tmp/constraints.txt /tmp/*.whl \
@@ -168,13 +220,12 @@ COPY --chown=root:users config/selkies/start_desktop.sh /opt/scidesktop/start_de
 COPY --chown=root:users config/selkies/start_selkies.sh /opt/scidesktop/start_selkies.sh
 RUN chmod +rx /opt/scidesktop/*.sh
 
-# Replaces the upstream conda hook with a static equivalent; see the file.
+# Replaces the upstream conda activation hook.
 COPY --chown=root:users config/selkies/10activate-conda-env.sh \
      /usr/local/bin/before-notebook.d/10activate-conda-env.sh
 RUN chmod +rx /usr/local/bin/before-notebook.d/*
 
-# Same substitution for interactive shells; conda.sh defines the same
-# function without spawning python.
+# Same for interactive shells.
 RUN sed -i 's|eval "$(conda shell.bash hook)"|. /opt/conda/etc/profile.d/conda.sh|' \
         "/home/${NB_USER}/.bashrc" \
     && grep -q 'profile.d/conda.sh' "/home/${NB_USER}/.bashrc"
@@ -195,9 +246,8 @@ RUN mv /etc/apt/sources.list.d/ubuntu.sources.live /etc/apt/sources.list.d/ubunt
 ENV DISPLAY=:20
 ENV JUPYTER_DISABLE_RESOURCE_USAGE=1
 
-# No ENTRYPOINT/CMD override: start.sh handles the spawner's command, NB_UID
-# remap, /etc/passwd for arbitrary UIDs and CHOWN_HOME.
-# The desktop is not started here; start_selkies.sh starts it on first use.
+# No ENTRYPOINT/CMD override; start.sh handles the spawner's command and
+# NB_UID remap. The desktop starts on first use.
 
 WORKDIR "/home/${NB_USER}"
 USER ${NB_UID}
