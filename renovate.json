@@ -6,45 +6,79 @@
     ":semanticCommitsDisabled"
   ],
   "timezone": "Australia/Brisbane",
-  "schedule": ["before 6am on monday"],
+  "schedule": [
+    "before 6am on monday"
+  ],
   "prConcurrentLimit": 5,
-  "labels": ["dependencies"],
-
+  "labels": [
+    "dependencies"
+  ],
+  "pip_requirements": {
+    "managerFilePatterns": [
+      "/^config/selkies/constraints\\.txt$/"
+    ]
+  },
   "packageRules": [
     {
-      "description": "Base images: keep the digest fresh so pinning does not freeze CVE fixes. Grouped because a base bump is one review, not four.",
-      "matchManagers": ["dockerfile"],
-      "matchUpdateTypes": ["digest"],
-      "groupName": "container base image digests",
-      "schedule": ["before 6am on monday"]
+      "description": "Base and build-stage image digests, grouped into one review.",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "groupName": "container image digests"
     },
     {
-      "description": "Build-stage toolchain images (node, python, alpine). Minor/patch only; a major bump can change the wheel we produce.",
-      "matchManagers": ["dockerfile"],
-      "matchPackageNames": ["node", "python", "alpine"],
-      "matchUpdateTypes": ["major"],
+      "description": "A major toolchain bump changes the artefacts these stages produce.",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchPackageNames": [
+        "node",
+        "python",
+        "alpine",
+        "golang",
+        "ubuntu"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Selkies has no release tag yet (upstream issue #227), so we track main by commit. Weekly is deliberate: this moves fast and every bump needs the desktop smoke-tested.",
-      "matchDepNames": ["selkies-project/selkies"],
-      "groupName": "selkies",
-      "schedule": ["before 6am on monday"],
-      "commitMessageTopic": "Selkies"
+      "description": "Selkies tracks main; every bump needs the desktop smoke-tested.",
+      "matchDepNames": [
+        "selkies-project/selkies"
+      ],
+      "groupName": "selkies"
     },
     {
-      "description": "jupyter-server-proxy sits between Jupyter and the desktop; a major bump has broken proxy semantics before. Review explicitly.",
-      "matchPackageNames": ["jupyter-server-proxy"],
-      "matchUpdateTypes": ["major"],
+      "description": "Encoders. A bump changes how the desktop streams.",
+      "matchPackageNames": [
+        "pixelflux",
+        "pcmflux",
+        "av"
+      ],
+      "groupName": "selkies encoders"
+    },
+    {
+      "matchPackageNames": [
+        "jupyter-server-proxy"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "dependencyDashboardApproval": true
     }
   ],
-
   "customManagers": [
     {
-      "description": "ARG SELKIES_COMMIT pins the Selkies source. Renovate tracks the head of main and rewrites the SHA; Dependabot cannot do this.",
+      "description": "Selkies commit pin; there is no 2.x release to track.",
       "customType": "regex",
-      "managerFilePatterns": ["/^Dockerfile$/"],
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
       "matchStrings": [
         "ARG SELKIES_COMMIT=(?<currentDigest>[a-f0-9]{40})"
       ],
@@ -54,19 +88,86 @@
       "datasourceTemplate": "git-refs"
     },
     {
-      "description": "Pinned pip versions inside RUN lines, which the pip manager does not see.",
+      "description": "Lmod release tarball.",
       "customType": "regex",
-      "managerFilePatterns": ["/^Dockerfile$/"],
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG LMOD_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "TACC/Lmod",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "Apptainer source build. Tags carry a v prefix; the ARG does not.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG APPTAINER_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "apptainer/apptainer",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "description": "Go toolchain used to build Apptainer.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG APPTAINER_GO_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "golang",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "grpc pin carried from the neurodesktop build.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG APPTAINER_GRPC_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "google.golang.org/grpc",
+      "datasourceTemplate": "go"
+    },
+    {
+      "description": "Pinned pip versions inside RUN lines.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
       "matchStrings": [
         "'(?<depName>[a-z0-9-]+)==(?<currentValue>[0-9.]+)'"
       ],
       "datasourceTemplate": "pypi"
+    },
+    {
+      "description": "CVMFS packages. Release tags are prefixed cvmfs-.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG CVMFS_VERSION=(?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "cvmfs/cvmfs",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^cvmfs-(?<version>.*)$"
     }
   ],
-
   "vulnerabilityAlerts": {
     "enabled": true,
-    "schedule": ["at any time"],
-    "labels": ["security"]
+    "schedule": [
+      "at any time"
+    ],
+    "labels": [
+      "security"
+    ]
   }
 }
