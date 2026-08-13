@@ -145,8 +145,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     libxext6 libxkbcommon0 \
     # GL / EGL
     libdrm2 libegl1 libgl1 libopengl0 libgles2 libglvnd0 libglx0 \
-    # pixelflux links libva-drm even without a GPU
-    libva2 libva-drm2 \
+    # pixelflux links libva even without a GPU
+    libva2 libva-drm2 libva-x11-2 \
     # System python for selkies, not the conda env
     python3-pip \
     # Audio
