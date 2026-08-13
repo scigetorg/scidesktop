@@ -133,23 +133,20 @@ RUN cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sou
 # System dependencies: LXQt, X11, audio
 RUN apt-get update && apt-get install --no-install-recommends -y \
     # Core
-    dbus-x11 dbus-user-session jq curl wget \
-    ca-certificates acl ssl-cert sudo \
+    dbus-x11 dbus-user-session curl wget \
+    ca-certificates acl sudo \
     # Virtual framebuffer
     xvfb \
     # LXQt desktop
-    lxqt-core qterminal pcmanfm-qt openbox \
-    mesa-utils breeze-icon-theme \
+    lxqt-core qterminal pcmanfm-qt openbox breeze-icon-theme \
     # X11 / input
-    x11-utils x11-xkb-utils x11-xserver-utils xserver-xorg-core \
-    wmctrl xclip xdotool xsel xcvt \
+    x11-utils x11-xkb-utils x11-xserver-utils xcvt \
     libx11-xcb1 libxcb-dri3-0 libxdamage1 libxfixes3 libxv1 libxtst6 \
     libxext6 libxkbcommon0 \
     # GL / EGL
     libdrm2 libegl1 libgl1 libopengl0 libgles2 libglvnd0 libglx0 \
-    mesa-va-drivers libva2 vainfo \
     # System python for selkies, not the conda env
-    python3-pip python3-dev python3-setuptools python3-wheel \
+    python3-pip \
     # Audio
     libpulse0 pipewire pipewire-alsa pipewire-audio-client-libraries \
     pipewire-pulse wireplumber alsa-utils \
