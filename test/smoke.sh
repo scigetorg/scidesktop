@@ -88,11 +88,47 @@ sys.exit(0 if g.width > 0 else 1)" 2>/dev/null | sed 's/^/        /'
 docker exec "${NAME}" bash -lc 'type -t module' 2>/dev/null | grep -q function \
     && pass "module available" || fail "module available"
 
-# 7. Nothing from the neurodesk lineage came along
+# 7. Apptainer, and the pieces unprivileged builds fall back to. Whether a
+#    build actually succeeds depends on the runtime granting user namespaces,
+#    so that is checked separately under SMOKE_BUILD=1.
+docker exec "${NAME}" bash -lc 'apptainer --version' >/dev/null 2>&1 \
+    && pass "apptainer runs" || fail "apptainer runs"
+for f in /opt/apptainer/libexec/apptainer/bin/proot /opt/apptainer/libexec/apptainer/bin/mksquashfs; do
+    docker exec "${NAME}" test -f "${f}" 2>/dev/null \
+        && pass "$(basename "${f}") vendored" || fail "$(basename "${f}") vendored"
+done
+docker exec "${NAME}" bash -c 'command -v fakeroot' >/dev/null 2>&1 \
+    && pass "fakeroot present" || fail "fakeroot present"
+docker exec "${NAME}" grep -q '^allow setuid = no' /opt/apptainer/etc/apptainer/apptainer.conf 2>/dev/null \
+    && pass "apptainer setuid disabled" || fail "apptainer setuid disabled"
+docker exec "${NAME}" bash -lc 'cvmfs2 --version' >/dev/null 2>&1 \
+    && pass "cvmfs present" || fail "cvmfs present"
+
+# 8. Nothing from the neurodesk lineage came along
 if docker exec "${NAME}" bash -c 'ls -d /opt/neurodesk* /neurocommand /cvmfs/neurodesk* 2>/dev/null | head -1' 2>/dev/null | grep -q .; then
     fail "no neurodesk payload"
 else
     pass "no neurodesk payload"
+fi
+
+# Optional: build a container for real. Needs a privileged container, because
+# Apptainer requires user namespaces, which Docker denies to unprivileged
+# containers on most hosts. Runs as root in a privileged container, which is
+# how neurodesktop's own launcher runs. Off by default.
+if [ "${SMOKE_BUILD:-0}" = "1" ]; then
+    echo "  .. building a container (privileged)"
+    docker rm -f "${NAME}-build" >/dev/null 2>&1 || true
+    docker run -d --name "${NAME}-build" --privileged "${IMAGE}" sleep 600 >/dev/null
+    if docker exec -u root "${NAME}-build" bash -lc '
+        printf "Bootstrap: docker\nFrom: alpine:3.22\n%%post\n    echo ok > /marker\n" > /tmp/t.def
+        apptainer build --force /tmp/t.sif /tmp/t.def >/tmp/build.log 2>&1 \
+          && apptainer exec /tmp/t.sif cat /marker | grep -q ok' 2>/dev/null; then
+        pass "apptainer builds and runs a container"
+    else
+        fail "apptainer builds and runs a container"
+        docker exec -u root "${NAME}-build" tail -5 /tmp/build.log 2>/dev/null | sed 's/^/        /'
+    fi
+    docker rm -f "${NAME}-build" >/dev/null 2>&1 || true
 fi
 
 echo
