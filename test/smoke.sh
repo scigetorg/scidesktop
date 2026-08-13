@@ -84,6 +84,19 @@ print(f'geometry {g.width}x{g.height} dominant {top} n={count}')
 sys.exit(0 if g.width > 0 else 1)" 2>/dev/null | sed 's/^/        /'
 [ "${PIPESTATUS[0]}" = "0" ] && pass "framebuffer readable" || fail "framebuffer readable"
 
+# 5b. The encoders import. The framebuffer check above passes even when
+#     selkies cannot encode it, so the desktop serves, renders, and streams
+#     nothing. Encoder errors only appear once a client asks for a stream, so
+#     the log check below is a backstop rather than proof.
+docker exec "${NAME}" /usr/bin/python3 -c 'import pixelflux, pcmflux' >/dev/null 2>&1 \
+    && pass "encoders import" || fail "encoders import"
+if docker logs "${NAME}" 2>&1 | grep -qE "failed to import|video pipeline did not start"; then
+    fail "no encoder errors logged"
+    docker logs "${NAME}" 2>&1 | grep -E "failed to import|did not start" | tail -2 | sed 's/^/        /'
+else
+    pass "no encoder errors logged"
+fi
+
 # 6. module is on the path for interactive shells
 docker exec "${NAME}" bash -lc 'type -t module' 2>/dev/null | grep -q function \
     && pass "module available" || fail "module available"
