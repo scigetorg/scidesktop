@@ -126,7 +126,7 @@ USER root
 ARG APT_SNAPSHOT=20260801T000000Z
 RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
 RUN cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.live \
-    && sed -i -E "s|^URIs: https?://(archive\|security)\.ubuntu\.com/ubuntu/?|URIs: https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT}|" \
+    && sed -i -E "s|^URIs: https?://((archive\|security)\.ubuntu\.com/ubuntu\|ports\.ubuntu\.com/ubuntu-ports)/?|URIs: https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT}|" \
         /etc/apt/sources.list.d/ubuntu.sources \
     && grep -q "snapshot.ubuntu.com" /etc/apt/sources.list.d/ubuntu.sources
 
