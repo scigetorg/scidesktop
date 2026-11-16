@@ -52,6 +52,9 @@ for b in fusermount3 squashfuse fuse-overlayfs newuidmap fakeroot; do check "fus
 check "cvmfs: cvmfs2" has cvmfs2
 check "cvmfs: mount helper" test -x /sbin/mount.cvmfs -o -x /usr/sbin/mount.cvmfs
 
+# tools base components call (jupyterlab-git: git, ssh, an editor; tar -J: xz)
+for b in git ssh nano xz tmux; do check "tools: ${b}" has "${b}"; done
+
 # lmod runtime
 check "lmod: lua5.4" has lua5.4
 check "lmod: lua posix" lua5.4 -e 'require("posix")'

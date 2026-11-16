@@ -1,0 +1,10 @@
+# Command-line tools that base components call, or that break when run from a
+# container. Anything else a user runs is delivered through sciget.
+# git, with ssh for remotes and an editor for commit messages: jupyterlab-git
+git
+openssh-client
+nano
+# tar -J calls xz
+xz-utils
+# a containerised session manager would start shells in its own image
+tmux
