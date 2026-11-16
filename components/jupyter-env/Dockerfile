@@ -16,9 +16,10 @@ RUN apt-get update && apt-get install --no-install-recommends -y ca-certificates
 # A pin changed without ./lock fails here rather than installing the old lock.
 RUN --mount=type=bind,from=components,source=check-lock,target=/usr/local/bin/check-lock \
     --mount=type=bind,source=.,target=/src \
-    check-lock /src/environment.yml /src/linux-64.lock
+    check-lock /src/environment.yml /src/linux-64.lock \
+    && check-lock /src/requirements.in /src/requirements.lock
 COPY --from=micromamba /usr/local/bin/micromamba /usr/local/bin/micromamba
-COPY linux-64.lock /tmp/linux-64.lock
+COPY linux-64.lock requirements.lock /tmp/
 COPY patches/ /tmp/patches/
 COPY jupyter_server_config.json /tmp/jupyter_server_config.json
 RUN micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
@@ -28,6 +29,10 @@ RUN micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
         >> /opt/conda/conda-meta/pinned \
     && printf '%s\n' 'auto_update_conda: false' 'show_channel_urls: true' \
         'channels:' '  - conda-forge' > /opt/conda/.condarc \
+    # Extensions only on PyPI: hashed, without dependencies (they come from the
+    # conda lock above).
+    && /opt/conda/bin/python -m pip install --no-cache-dir --no-deps --require-hashes \
+        -r /tmp/requirements.lock \
     # Startup-time patches; see each file.
     && for p in /tmp/patches/*.py; do /opt/conda/bin/python "${p}"; done \
     && /opt/conda/bin/python -m compileall -q /opt/conda/lib/python3*/site-packages/rfc3987_syntax \
@@ -42,7 +47,7 @@ RUN micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
         '@jupyterlab/extensionmanager-extension:plugin' \
         '@jupyterlab/help-extension:about' \
     && install -d -m 0755 /out/manifest \
-    && /opt/conda/bin/python -c 'import json, glob; v = {m["name"]: m["version"] for m in map(lambda f: json.load(open(f)), glob.glob("/opt/conda/conda-meta/*.json"))}; json.dump({k: v.get(k) for k in ("python", "jupyterlab", "jupyterhub-singleuser", "jupyter-server-proxy", "ipykernel", "mamba")}, open("/out/manifest/jupyter-env.json", "w"))' \
+    && /opt/conda/bin/python -c 'import json, glob; v = {m["name"]: m["version"] for m in map(lambda f: json.load(open(f)), glob.glob("/opt/conda/conda-meta/*.json"))}; json.dump({k: v.get(k) for k in ("python", "jupyterlab", "jupyterhub-singleuser", "jupyter-server-proxy", "ipykernel", "mamba", "ipywidgets", "jupyterlab-git")}, open("/out/manifest/jupyter-env.json", "w"))' \
     && chown -R "${NB_UID:?}:${NB_GID:?}" /opt/conda \
     && chmod -R g+rwX /opt/conda \
     && find /opt/conda -type d -exec chmod g+s {} +
@@ -68,12 +73,16 @@ USER ${NB_UID}
 RUN set -e \
     && jupyter lab --version \
     && jupyterhub-singleuser --version \
-    && python -c 'import jupyter_server_proxy, ipykernel, jupyterlab' \
+    && python -c 'import jupyter_server_proxy, ipykernel, jupyterlab, ipywidgets, jupyterlab_git, jupyterlmod' \
+    && pip check \
     && mamba --version \
     && ! command -v conda \
     && test -r /opt/conda/etc/profile.d/mamba.sh \
     && touch /opt/conda/.write-test && rm /opt/conda/.write-test \
-    && jupyter server extension list 2>&1 | grep -q 'jupyter_server_proxy.*enabled' \
+    && exts=$(jupyter server extension list 2>&1) \
+    && for e in jupyter_server_proxy jupyterlab_git jupyterlmod; do \
+         echo "${exts}" | grep -q "${e}.*enabled" || { echo "server extension ${e} not enabled"; exit 1; }; \
+       done \
     && python -c 'import json; c = json.load(open("/opt/conda/etc/jupyter/jupyter_server_config.d/scidesktop.json")); assert c["FileContentsManager"]["allow_hidden"]' \
     && test ! -d /opt/conda/pkgs -o -z "$(ls -A /opt/conda/pkgs 2>/dev/null | grep -v -E '^(cache|urls|urls.txt)$')" \
     && jupyter server extension list 2>&1 | grep -E 'enabled|disabled' \

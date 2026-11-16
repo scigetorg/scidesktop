@@ -1,0 +1,4 @@
+# Jupyter extensions only published on PyPI. Installed without dependencies:
+# everything they need must be in environment.yml (jupyterlmod: jupyter-core,
+# jupyter-server). Run ./lock after changing a pin.
+jupyterlmod==5.3.2
