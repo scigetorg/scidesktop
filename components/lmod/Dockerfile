@@ -26,7 +26,20 @@ RUN : "${LMOD_VERSION:?}" "${LMOD_SHA256:?}" \
     && make install \
     && /opt/apps/lmod/lmod/libexec/lmod --version 2>&1 | grep -F "${LMOD_VERSION}" \
     && install -d -m 0755 /out/manifest \
-    && printf '{"lmod": "%s"}\n' "${LMOD_VERSION}" > /out/manifest/lmod.json
+    && printf '{"lmod": "%s"}\n' "${LMOD_VERSION}" > /out/manifest/lmod.json \
+    # Start-up hook for the Jupyter server: just the variables jupyterlmod and
+    # Lmod's commands need, taken from Lmod's own init. Sourcing the full init
+    # there would also export BASH_ENV and the module functions, making every
+    # later bash process the server starts load Lmod again.
+    && install -d -m 0755 /out/hooks \
+    && { printf '%s\n' '# Generated at build time from Lmod'"'"'s init (components/lmod/Dockerfile).' \
+           '# Sourced by start.sh: Lmod'"'"'s variables for the Jupyter server (jupyterlmod).'; \
+         env -i HOME=/root PATH=/usr/bin:/bin bash -c '. /opt/apps/lmod/lmod/init/profile >/dev/null 2>&1; \
+           for v in LMOD_CMD LMOD_DIR LMOD_PKG LMOD_ROOT MODULESHOME MODULEPATH MODULEPATH_ROOT; do \
+             [ -n "${!v:-}" ] || { echo "Lmod init did not set ${v}" >&2; exit 1; }; \
+             printf "[ -n \"\${%s:-}\" ] || export %s=%q\n" "${v}" "${v}" "${!v}"; \
+           done'; } > /out/hooks/15-lmod.sh \
+    && chmod 0644 /out/hooks/15-lmod.sh
 
 # Integration files from rootfs/ (hooks, symlinks, config) at their image paths,
 # without group or other write permission whatever the checkout's umask.
@@ -40,9 +53,13 @@ FROM scratch AS component
 COPY --from=rootfs /rootfs/ /
 COPY --from=build /opt/apps /opt/apps
 COPY --from=build /out/manifest/ /opt/scidesktop/manifest.d/
+COPY --from=build /out/hooks/ /usr/local/bin/before-notebook.d/
 
 FROM os AS test
 COPY --from=component / /
 RUN bash -lc 'module --version 2>&1 | grep -q "Modules based on Lua"' \
     && bash -ic 'type -t module' 2>/dev/null | grep -qx function \
-    && bash -c 'source /opt/apps/lmod/lmod/init/bash && module avail 2>&1 | tail -1'
+    && bash -c 'source /opt/apps/lmod/lmod/init/bash && module avail 2>&1 | tail -1' \
+    # The start-up hook gives the Jupyter server Lmod's environment (jupyterlmod).
+    && env -u LMOD_CMD -u BASH_ENV bash -ec '. /usr/local/bin/before-notebook.d/15-lmod.sh; test -x "${LMOD_CMD}"; [ -n "${MODULEPATH}" ]; [ -z "${BASH_ENV:-}" ]; ! declare -F module' \
+    && cat /usr/local/bin/before-notebook.d/15-lmod.sh
