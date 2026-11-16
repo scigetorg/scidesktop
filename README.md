@@ -12,9 +12,15 @@ but Jupyter itself.
 
 ## Running it
 
+The image is assembled from components under `components/` with `docker buildx bake`. It
+expects a checkout of [sciget](https://github.com/scigetorg/sciget) beside this one
+(`../sciget`) until sciget publishes an image.
+
 ```sh
-docker build -t scidesktop .
+docker buildx bake --allow=fs.read=..        # builds scidesktop:latest
+docker buildx bake --allow=fs.read=.. test   # every component's own test
 docker run --rm -p 8888:8888 --shm-size=2g -e JUPYTER_TOKEN=scidesktop scidesktop
+./test/smoke.sh scidesktop                   # end-to-end checks
 ```
 
 Open <http://localhost:8888/lab?token=scidesktop> and choose **Desktop** from the launcher.
@@ -28,10 +34,17 @@ enough for a large virtual screen.
 
 | | |
 |---|---|
-| Base | `quay.io/jupyter/base-notebook`, digest-pinned |
+| Base | Ubuntu 26.04 LTS, digest-pinned, packages from a dated `snapshot.ubuntu.com` snapshot |
+| Startup | docker-stacks `start.sh` and hooks, vendored unchanged (JupyterHub contract) |
+| Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked) |
 | Desktop | LXQt on Xvfb, with PipeWire for audio |
-| Streaming | Selkies, built from a pinned commit |
+| Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
+| Containers | Apptainer built from source; sciget with a default catalogue |
 | Modules | Lmod, built from the upstream release |
+
+`/opt/scidesktop/manifest.d/` holds one JSON file per component with its versions. Design and rationale:
+[docs/base-image.md](docs/base-image.md). **Contributing:** read [docs/components.md](docs/components.md)
+first; CI enforces its rules.
 
 Every external dependency is pinned by version or digest and checksummed where the
 publisher provides one. Renovate proposes updates rather than builds drifting silently.
@@ -43,6 +56,14 @@ publisher provides one. Renovate proposes updates rather than builds drifting si
 | `DISPLAY` | `:20` | X display for the desktop session |
 | `SCIDESKTOP_XVFB_SCREEN` | `8192x4096x24` | Virtual screen; oversized to allow client-driven resize |
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | Desktop credential; generated per container if unset |
+| `SCIDESKTOP_CVMFS_MODE` | `external` | `external`, `internal` or `disabled`; see the runbook |
+| `SCIDESKTOP_APPTAINER_SETUID` | `auto` | `auto`, `yes` or `no`; applies only when the container starts as root |
+| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download the sciget catalogues in the background on a user's first start |
+
+## Operations
+
+See the [operator runbook](docs/operator-runbook.md) for JupyterHub deployment,
+the CVMFS and Apptainer environment contract, resource sizing and triage.
 
 ## Licence
 
