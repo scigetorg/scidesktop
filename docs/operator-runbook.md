@@ -31,7 +31,10 @@ plain Jupyter image there.
 
 On Ubuntu 24.04 and later nodes, check `sysctl
 kernel.apparmor_restrict_unprivileged_userns`. When it is `1`, the pod's
-AppArmor profile must allow user namespaces.
+AppArmor profile must allow user namespaces. Running unconfined is not always
+enough: with the setting at `1`, a kernel 7.0 host (a GitHub runner) let the
+user create a namespace but refused Apptainer's user mapping, while a kernel
+6.8 host allowed both.
 
 **Workstations (`docker run`):** Docker's default seccomp and AppArmor profiles
 block user namespaces. Run with:
@@ -42,6 +45,10 @@ docker run --rm -p 8888:8888 --shm-size=2g \
     --device /dev/fuse \
     ghcr.io/scigetorg/scidesktop:<short-sha>
 ```
+
+If terminals still say containers are unavailable, the host restricts user
+namespaces as above; on a host you control, `sudo sysctl -w
+kernel.apparmor_restrict_unprivileged_userns=0` lifts it until reboot.
 
 ## JupyterHub configuration
 
@@ -99,7 +106,7 @@ derived image replaces `/etc/sciget/catalogues.json` with its own.
 
 | Symptom | Checks |
 | --- | --- |
-| "Containers are unavailable" in terminals, or tools do nothing | User namespaces are blocked for the pod: see "Platform requirements". Run `unshare -U true` in a terminal to confirm. |
+| "Containers are unavailable" in terminals, or tools do nothing | User namespaces are blocked for the pod: see "Platform requirements". If `unshare -U true` fails in a terminal, that confirms it; if it succeeds, the host may still refuse Apptainer's user mapping. |
 | SIF files fail to mount; unpacked containers work | No `/dev/fuse` in the pod. |
 | Browser stuck at "waiting for stream" | Request `/desktop/` again and read the Selkies log; check `/opt/selkies/bin/python -c 'import pixelflux, pcmflux'` succeeds. |
 | sciget lists nothing | `sciget catalogue list`; `~/.cache/sciget/first-refresh.log` for the first download; whether the catalogue's `dir` exists under `/cvmfs`. |

@@ -54,8 +54,13 @@ jobs:
       - name: Contract (layers)
         run: python3 test/contract.py layers
 
+      # The runner restricts unprivileged user namespaces through AppArmor,
+      # which refuses Apptainer's user mapping. Lifting it matches the
+      # clusters, whose `notebook` AppArmor profile allows user namespaces.
       - name: Smoke test
-        run: ./test/smoke.sh scidesktop:ci
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          ./test/smoke.sh scidesktop:ci
 
       - name: Log in to GHCR
         if: github.event_name == 'push'

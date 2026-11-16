@@ -14,15 +14,34 @@ CONF=/opt/apptainer/etc/apptainer/apptainer.conf
 MODE="${SCIDESKTOP_APPTAINER_SETUID:-auto}"
 STATUS=/tmp/.scidesktop-containers-unavailable
 
-# Test as the user who will run containers: root can always create a
-# namespace, so testing as root would answer the wrong question. Only
-# creating the namespace is tested: mapping the user to root (`unshare -r`)
-# can be refused where Apptainer still works, because Apptainer maps users
-# through newuidmap.
+# Tests what Apptainer does: a child creates the user namespace and its parent
+# writes the child's setgroups, uid_map and gid_map, mapping the user to
+# itself. Creating the namespace alone is not enough: hosts with
+# kernel.apparmor_restrict_unprivileged_userns=1 allow it but can refuse the
+# mapping. `unshare -r` is no test either: it writes the maps from inside the
+# namespace, which those hosts refuse even where Apptainer works.
+PROBE='
+self=$(readlink /proc/self/ns/user)
+unshare -U sleep 5 2>/dev/null & pid=$!
+for _ in $(seq 1 50); do
+    ns=$(readlink /proc/${pid}/ns/user 2>/dev/null) || break
+    [ "${ns}" != "${self}" ] && break
+    sleep 0.02
+done
+ok=1
+[ -n "${ns:-}" ] && [ "${ns}" != "${self}" ] \
+    && { echo deny > /proc/${pid}/setgroups \
+         && echo "$(id -u) $(id -u) 1" > /proc/${pid}/uid_map \
+         && echo "$(id -g) $(id -g) 1" > /proc/${pid}/gid_map; } 2>/dev/null \
+    && ok=0
+kill ${pid} 2>/dev/null; wait ${pid} 2>/dev/null
+exit ${ok}'
+# Tested as the user who will run containers: root can always map users, so
+# testing as root would answer the wrong question.
 if [ "$(id -u)" -eq 0 ] && [ -n "${NB_USER:-}" ]; then
-    runuser -u "${NB_USER}" -- unshare -U true 2>/dev/null && userns=yes || userns=no
+    runuser -u "${NB_USER}" -- bash -c "${PROBE}" && userns=yes || userns=no
 else
-    unshare -U true 2>/dev/null && userns=yes || userns=no
+    bash -c "${PROBE}" && userns=yes || userns=no
 fi
 
 if [ -w "${CONF}" ]; then

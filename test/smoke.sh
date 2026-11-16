@@ -172,17 +172,14 @@ actual_setuid=$(docker exec "${NAME}" awk -F ' = ' '/^allow setuid = / { print $
     /opt/apptainer/etc/apptainer/apptainer.conf 2>/dev/null)
 [ "${actual_setuid}" = no ] && pass "apptainer setuid off by default" \
     || fail "apptainer setuid off by default (got ${actual_setuid:-missing})"
-# Users are told when containers cannot run: the warning is present exactly
-# when this runtime denies user namespaces to the notebook user.
-if docker exec -u "${nb_user:-jovyan}" "${NAME}" unshare -U true >/dev/null 2>&1; then
-    expect_warning=no
-else
-    expect_warning=yes
+# Users are told when containers cannot run. Where the notebook user cannot
+# even create a user namespace, the warning must be there; the check against
+# Apptainer itself is with the user-namespace check below.
+if ! docker exec -u "${nb_user:-jovyan}" "${NAME}" unshare -U true >/dev/null 2>&1; then
+    docker exec "${NAME}" test -e /tmp/.scidesktop-containers-unavailable \
+        && pass "containers-unavailable warning where user namespaces are denied" \
+        || fail "containers-unavailable warning where user namespaces are denied"
 fi
-docker exec "${NAME}" test -e /tmp/.scidesktop-containers-unavailable && got_warning=yes || got_warning=no
-[ "${got_warning}" = "${expect_warning}" ] \
-    && pass "containers-unavailable warning matches runtime (${expect_warning})" \
-    || fail "containers-unavailable warning matches runtime (expected ${expect_warning}, got ${got_warning})"
 docker exec "${NAME}" bash -lc 'cvmfs2 --version' >/dev/null 2>&1 \
     && pass "cvmfs present" || fail "cvmfs present"
 
@@ -270,18 +267,29 @@ if [ "${SMOKE_APPTAINER:-1}" = "1" ]; then
     docker run -d --name "${NAME}-userns" --security-opt apparmor=unconfined \
         --security-opt seccomp=unconfined -e JUPYTER_TOKEN=x "${IMAGE}" >/dev/null
     for _ in $(seq 1 60); do docker exec "${NAME}-userns" curl -fsS -o /dev/null localhost:8888/api 2>/dev/null && break; sleep 0.5; done
-    docker exec "${NAME}-userns" test ! -e /tmp/.scidesktop-containers-unavailable \
-        && pass "no containers-unavailable warning where user namespaces work" \
-        || fail "no containers-unavailable warning where user namespaces work"
-    if docker exec -e SMOKE_ALPINE="${SMOKE_ALPINE}" -w /tmp "${NAME}-userns" bash -lc '
-        apptainer build --sandbox /tmp/sb docker://${SMOKE_ALPINE} >/tmp/userns.log 2>&1 \
-          && apptainer exec /tmp/sb cat /etc/alpine-release 2>>/tmp/userns.log' >/dev/null 2>&1; then
+    # Whether Apptainer runs a container as the user in container $1; the
+    # log is left at /tmp/userns.log there.
+    apptainer_runs() {
+        docker exec -e SMOKE_ALPINE="${SMOKE_ALPINE}" -w /tmp "$1" bash -lc '
+            apptainer build --sandbox /tmp/sb docker://${SMOKE_ALPINE} >/tmp/userns.log 2>&1 \
+              && apptainer exec /tmp/sb cat /etc/alpine-release 2>>/tmp/userns.log' >/dev/null 2>&1
+    }
+    if apptainer_runs "${NAME}-userns"; then
         pass "apptainer runs a container as the user (user namespaces)"
     else
         fail "apptainer runs a container as the user (user namespaces)"
         docker exec "${NAME}-userns" tail -5 /tmp/userns.log 2>/dev/null | sed 's/^/        /'
         echo "        host: kernel $(uname -r), $(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null | sed 's/^/apparmor_restrict_unprivileged_userns=/')"
     fi
+    # The warning is shown exactly where Apptainer cannot run: here and under
+    # Docker's default security options.
+    for c in "${NAME}-userns:relaxed" "${NAME}:default"; do
+        apptainer_runs "${c%:*}" && runs=yes || runs=no
+        docker exec "${c%:*}" test -e /tmp/.scidesktop-containers-unavailable && warned=yes || warned=no
+        [ "${warned}" != "${runs}" ] \
+            && pass "containers-unavailable warning matches Apptainer (${c##*:} security, runs: ${runs})" \
+            || fail "containers-unavailable warning matches Apptainer (${c##*:} security, runs: ${runs}, warned: ${warned})"
+    done
     docker rm -f "${NAME}-userns" >/dev/null 2>&1 || true
 fi
 
