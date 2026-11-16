@@ -1,0 +1,10 @@
+# Runtime for Apptainer (components/apptainer): FUSE image drivers, unprivileged
+# build helpers, and proot's libraries
+fuse3
+squashfuse
+fuse-overlayfs
+uidmap
+fakeroot
+libtalloc2
+libprotobuf-c1
+libseccomp2

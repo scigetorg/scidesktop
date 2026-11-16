@@ -1,0 +1,10 @@
+# Base userland: only what the base itself calls (start.sh, hooks, Selkies).
+# Anything a user runs that could be a container is delivered through sciget.
+ca-certificates
+curl
+locales
+netbase
+sudo
+tini
+dbus-user-session
+procps

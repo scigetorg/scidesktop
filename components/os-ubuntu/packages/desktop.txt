@@ -1,0 +1,8 @@
+# LXQt session on Openbox
+lxqt-core
+openbox
+breeze-icon-theme
+fonts-liberation
+# Qt 6 SVG image and icon plugins. A Recommends of libqt6gui6, so skipped by
+# --no-install-recommends; without it LXQt's themed menu button is blank.
+qt6-svg-plugins
