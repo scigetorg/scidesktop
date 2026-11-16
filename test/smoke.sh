@@ -45,6 +45,13 @@ else
     fail "jupyter responds"; exit 1
 fi
 
+# Server extensions reach what they wrap: jupyterlmod finds Lmod (through the
+# start-up hook's environment), jupyterlab-git finds git.
+body=$(curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/module/system" 2>/dev/null)
+echo "${body}" | grep -qi lmod && pass "jupyterlmod finds Lmod" || fail "jupyterlmod finds Lmod (got: ${body:0:80})"
+body=$(curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/git/settings" 2>/dev/null)
+echo "${body}" | grep -q '"gitVersion": *"[0-9]' && pass "jupyterlab-git finds git" || fail "jupyterlab-git finds git (got: ${body:0:80})"
+
 # 2. The desktop route serves. This is what spawns selkies, so it is slow the
 #    first time.
 code=$(curl -s -o /tmp/${NAME}-desktop.html -w '%{http_code}' -m 180 \
