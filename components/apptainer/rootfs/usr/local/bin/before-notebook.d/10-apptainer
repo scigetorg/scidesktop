@@ -1,0 +1,33 @@
+#!/bin/bash
+# Apptainer needs either user namespaces or its setuid starter. Ubuntu 24.04
+# sets apparmor_restrict_unprivileged_userns=1, which denies namespaces to
+# unprivileged users, leaving setuid as the only path for a non-root desktop.
+#
+# SCIDESKTOP_APPTAINER_SETUID: auto (enable only when namespaces are unusable)
+#                              yes | no
+set -u
+CONF=/opt/apptainer/etc/apptainer/apptainer.conf
+MODE="${SCIDESKTOP_APPTAINER_SETUID:-auto}"
+
+[ -w "${CONF}" ] || { echo "[apptainer] ${CONF} not writable, leaving setuid as built"; exit 0; }
+
+case "${MODE}" in
+    no)  want=no ;;
+    yes) want=yes ;;
+    *)   # Test as the user who will run containers: root can always create a
+         # namespace, so testing here would answer the wrong question.
+         if [ "$(id -u)" -eq 0 ] && [ -n "${NB_USER:-}" ]; then
+             probe="runuser -u ${NB_USER} -- unshare -U -r true"
+         else
+             probe="unshare -U -r true"
+         fi
+         if ${probe} 2>/dev/null; then want=no; else want=yes; fi ;;
+esac
+
+if [ "${want}" = yes ] && [ ! -u /opt/apptainer/libexec/apptainer/bin/starter-suid ]; then
+    echo "[apptainer] setuid wanted but starter-suid is not setuid; leaving disabled"
+    exit 0
+fi
+
+sed -i "s/^allow setuid = .*/allow setuid = ${want}/" "${CONF}"
+echo "[apptainer] allow setuid = ${want} (mode=${MODE})"
