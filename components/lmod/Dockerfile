@@ -1,21 +1,23 @@
 # syntax=docker/dockerfile:1
-# Lmod built from its release tarball against the OS layer's Lua. Runtime
-# needs lua5.4, lua-posix, lua-filesystem and tcl from the OS layer.
+# Lmod built from its release tarball on plain Ubuntu of the OS layer's
+# release, so an OS package update (a snapshot bump) does not rebuild it or
+# change its layer. Runtime needs lua5.4, lua-posix, lua-filesystem and tcl
+# from the OS layer; the test runs it there.
 
 # Versions come from docker-bake.hcl.
 ARG UBUNTU_IMAGE
 
-FROM os-build AS build
-# Versions come from docker-bake.hcl.
+FROM ${UBUNTU_IMAGE} AS build
 ARG LMOD_VERSION
 ARG LMOD_SHA256
 ARG TARGETARCH
 ARG APT_CACHE_ID
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
-        gcc make bc pkg-config liblua5.4-dev tcl-dev
+        gcc make bc pkg-config liblua5.4-dev tcl-dev \
+        lua5.4 lua-posix lua-filesystem tcl curl ca-certificates
 RUN : "${LMOD_VERSION:?}" "${LMOD_SHA256:?}" \
     && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused \
         "https://github.com/TACC/Lmod/archive/refs/tags/${LMOD_VERSION}.tar.gz" -o /tmp/lmod.tar.gz \
