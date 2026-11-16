@@ -1,0 +1,53 @@
+---
+name: Privileged smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: privileged-smoke
+  cancel-in-progress: false
+
+jobs:
+  apptainer-build:
+    name: Apptainer build (amd64, privileged)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout scidesktop
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: scidesktop
+
+      - name: Checkout sciget
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: scigetorg/sciget
+          path: sciget
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Reads the caches the Image workflow writes; does not write its own.
+      - name: Build image
+        working-directory: scidesktop
+        env:
+          IMAGE: scidesktop:privileged-smoke
+        run: |
+          args=()
+          for t in os-ubuntu micromamba startup jupyter-env selkies apptainer lmod sciget scidesktop; do
+              args+=(--set "${t}.cache-from=type=gha,scope=${t}")
+          done
+          docker buildx bake --allow=fs.read=.. "${args[@]}"
+
+      - name: Run privileged smoke test
+        working-directory: scidesktop
+        env:
+          SMOKE_BUILD: '1'
+        run: ./test/smoke.sh scidesktop:privileged-smoke

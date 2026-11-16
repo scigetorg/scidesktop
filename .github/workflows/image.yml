@@ -1,0 +1,92 @@
+---
+name: Image
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, test, smoke and publish (amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # scidesktop and sciget side by side, as docker-bake.hcl expects
+      # (SCIGET_SRC=../sciget), until sciget publishes an image.
+      - name: Checkout scidesktop
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: scidesktop
+
+      - name: Checkout sciget
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: scigetorg/sciget
+          path: sciget
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # docs/components.md: the assembly only assembles, one copy of each version,
+      # every component has a target and a test.
+      - name: Contract (static)
+        working-directory: scidesktop
+        run: python3 test/contract.py static
+
+      # One bake builds every component, runs every component's test stage and loads the
+      # assembled image. Each component caches in its own GitHub Actions scope, so
+      # an unchanged component is not rebuilt.
+      - name: Build components, component tests and image
+        working-directory: scidesktop
+        env:
+          IMAGE: scidesktop:ci
+        run: |
+          args=()
+          for t in os-ubuntu micromamba startup jupyter-env selkies apptainer lmod sciget scidesktop; do
+              args+=(--set "${t}.cache-from=type=gha,scope=${t}"
+                     --set "${t}.cache-to=type=gha,scope=${t},mode=max")
+          done
+          docker buildx bake --allow=fs.read=.. "${args[@]}" default test
+
+      # docs/components.md: what each component writes (no overlaps, no shadowing,
+      # no permission changes to shared folders, a manifest entry).
+      - name: Contract (layers)
+        working-directory: scidesktop
+        run: python3 test/contract.py layers
+
+      - name: Smoke test
+        working-directory: scidesktop
+        run: ./test/smoke.sh scidesktop:ci
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish tested image
+        if: github.event_name == 'push'
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          image="$(printf '%s' "${IMAGE}" | tr '[:upper:]' '[:lower:]')"
+          short_sha="$(printf '%.7s' "${GITHUB_SHA}")"
+          docker tag scidesktop:ci "${image}:${short_sha}"
+          docker tag scidesktop:ci "${image}:latest"
+          docker push "${image}:${short_sha}"
+          docker push "${image}:latest"
