@@ -25,8 +25,8 @@ when it is small.
 
 | Component | Stays because | Rule |
 | --- | --- | --- |
-| `nb_conda_kernels` | Jupyter server extension: user environments as kernels | 3 |
-| `jupyterlmod` | JupyterLab and server extension for the base's Lmod | 3 |
+| ~~`nb_conda_kernels`~~ | **Dropped 2026-11-16:** it calls `conda`, which the mamba-only environment does not ship (tested: finds no environments, and fails on `mamba info`). Users register environments with `python -m ipykernel install --user` (README) | n/a |
+| `jupyterlmod` | JupyterLab and server extension for the base's Lmod (PyPI only: a hashed pip lock in `jupyter-env`) | 3 |
 | `jupyterlab-git` | JupyterLab and server extension | 3 |
 | `git`, with `openssh-client` and `nano` | called by `jupyterlab-git`; git needs ssh for remotes and an editor for commit messages (`less`, its pager, is already in the base) | 2 |
 | `ipywidgets` | a kernel-side package and JupyterLab extension | 3 |

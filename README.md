@@ -32,6 +32,14 @@ Open <http://localhost:8888/lab?token=scidesktop> and choose **Desktop** from th
 The desktop session starts on first use, so a session that only ever uses notebooks never
 pays for it.
 
+**Your own Python environments** live in your home and become notebook kernels the
+standard Jupyter way:
+
+```sh
+mamba create -p ~/envs/analysis python ipykernel numpy
+~/envs/analysis/bin/python -m ipykernel install --user --name analysis
+```
+
 `--shm-size` matters: the X server uses shared memory, and Docker's 64 MB default is not
 enough for a large virtual screen.
 

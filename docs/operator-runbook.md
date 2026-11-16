@@ -78,6 +78,7 @@ when the user first opens **Desktop** from the launcher.
 | `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogues in the background on a user's first start. |
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | The desktop's internal credential; generated per container when unset. |
+| `CPU_LIMIT`, `MEM_LIMIT` | from the pod's cgroup | Set by KubeSpawner, or derived at start from the cgroup when it does not. `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS` and `NUMEXPR_NUM_THREADS` follow `CPU_LIMIT` unless set, so numerical libraries use the pod's CPUs. |
 
 sciget ships with a default catalogue in `/etc/sciget/`, copied to each user's
 `~/.config/sciget/` on first start (files a user already has are kept). A

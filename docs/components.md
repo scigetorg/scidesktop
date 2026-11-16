@@ -65,7 +65,13 @@ components/<component>/
   value; each bake target passes only the ones its component uses. A missing value
   fails the build (`${NAME:?}` in `RUN`).
 - **Python pins** live in the component's `environment.yml` or `requirements.in`;
-  run the component's `./lock` after changing one.
+  run the component's `./lock` after changing one. They stay out of the bake
+  file on purpose: the build installs only from the lock file (every package,
+  exact URL and hash), which `./lock` solves from those files before the build.
+  Passing versions from bake would mean solving during the build, so dependency
+  versions would drift between builds; generating `environment.yml` from bake
+  would add templating for the few top-level pins only, while the lock file
+  stays the record of everything installed.
 - **Checksums** are not updated by Renovate: update the `*_SHA256` variable
   with its version.
 
@@ -81,6 +87,7 @@ Components meet in a few shared folders. Each file in them has one owner.
 | `/etc/bash.bashrc.d/` | interactive shell setup (all bash terminals) | `<component>.sh` |
 | `/usr/local/etc/jupyter/` | Jupyter config from components outside the Jupyter environment | `jupyter_server_config.py` is Selkies'; others use `jupyter_server_config.d/<component>.json` |
 | `/opt/scidesktop/` | scidesktop's own scripts; `manifest.d/<component>.json` | `<component>.json` |
+| `/etc/scidesktop/home-defaults/` | files copied into each user's home at start, never overwriting the user's own (derived images' default settings) | the path the file should have in the home |
 
 The layer check enforces what it can:
 
