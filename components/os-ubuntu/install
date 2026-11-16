@@ -23,7 +23,9 @@ sed -i -E "s|^URIs: https?://(archive\|security)\.ubuntu\.com/ubuntu/?|URIs: htt
 grep -q "snapshot.ubuntu.com" "${sources}"
 
 apt_get() { apt-get -o Acquire::https::CAInfo=/tmp/bootstrap-ca.crt "$@"; }
-apt_get update
+# Any index that fails to download (after the retries above) fails the build;
+# by default apt only warns and installs from whatever indexes it got.
+apt_get update -o APT::Update::Error-Mode=any
 apt_get upgrade --yes
 # shellcheck disable=SC2046
 apt_get install --yes --no-install-recommends \

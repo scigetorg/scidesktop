@@ -30,6 +30,12 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      # Buildx reads the GitHub Actions cache token from the environment, which
+      # `run` steps do not get by default; without it the gha cache is skipped
+      # and every run rebuilds every component.
+      - name: Expose the Actions cache to Buildx
+        uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+
       # docs/components.md: the assembly only assembles, one copy of each version,
       # every component has a target and a test.
       - name: Contract (static)
