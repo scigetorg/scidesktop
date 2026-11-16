@@ -275,11 +275,12 @@ if [ "${SMOKE_APPTAINER:-1}" = "1" ]; then
         || fail "no containers-unavailable warning where user namespaces work"
     if docker exec -e SMOKE_ALPINE="${SMOKE_ALPINE}" -w /tmp "${NAME}-userns" bash -lc '
         apptainer build --sandbox /tmp/sb docker://${SMOKE_ALPINE} >/tmp/userns.log 2>&1 \
-          && apptainer exec /tmp/sb cat /etc/alpine-release' >/dev/null 2>&1; then
+          && apptainer exec /tmp/sb cat /etc/alpine-release 2>>/tmp/userns.log' >/dev/null 2>&1; then
         pass "apptainer runs a container as the user (user namespaces)"
     else
         fail "apptainer runs a container as the user (user namespaces)"
         docker exec "${NAME}-userns" tail -5 /tmp/userns.log 2>/dev/null | sed 's/^/        /'
+        echo "        host: kernel $(uname -r), $(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null | sed 's/^/apparmor_restrict_unprivileged_userns=/')"
     fi
     docker rm -f "${NAME}-userns" >/dev/null 2>&1 || true
 fi
