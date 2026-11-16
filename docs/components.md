@@ -54,8 +54,13 @@ components/<component>/
   its own. Add a `<component>-test` target to the bake group `test`.
 - **Manifest entry (L4):** the component writes `/opt/scidesktop/manifest.d/<component>.json`
   with its versions, detected from what was built.
-- **Build `FROM os-build`** only if the component compiles against OS libraries.
-  Otherwise build `FROM ${UBUNTU_IMAGE}`, so OS updates do not rebuild it.
+- **Build `FROM ${UBUNTU_IMAGE}`** (plain Ubuntu of the OS layer's release) and
+  install build dependencies there, even when compiling against OS libraries:
+  the same release has the same ABI, and OS package updates (snapshot bumps)
+  then neither rebuild the component nor change its layer. The test stage runs
+  it on the real OS layer and catches any missing library. `os-build` (the
+  snapshot OS) is there only for a component that needs the exact OS packages
+  at build time.
 
 ### Versions
 
