@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,7 +30,8 @@ NOT_RENOVATED = {
     "NB_UID": "setting, not a version",
     "NB_GID": "setting, not a version",
     "IMAGE": "output tag",
-    "SCIGET_SRC": "local path until sciget publishes an image",
+    "SCIGET_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
+    "SCIGET_SRC": "built from SCIGET_COMMIT",
 }
 # Instructions the assembly may use: image metadata a component cannot provide.
 ASSEMBLY_ALLOWED = {"FROM", "COPY", "LABEL", "ENV", "EXPOSE", "HEALTHCHECK",
@@ -132,10 +134,13 @@ def static():
 
 def component_tar(target):
     """Stream a target's filesystem and return {path: (type, mode, uid, gid)}."""
+    # stderr goes to a file: a pipe left unread while the tar streams can
+    # fill and deadlock both processes.
+    errlog = tempfile.TemporaryFile()
     proc = subprocess.Popen(
         ["docker", "buildx", "bake", "--allow=fs.read=..", "--progress=quiet", target,
          "--set", f"{target}.output=type=tar,dest=-"],
-        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cwd=ROOT, stdout=subprocess.PIPE, stderr=errlog)
     entries, manifests = {}, {}
     with tarfile.open(fileobj=proc.stdout, mode="r|") as tar:
         for m in tar:
@@ -146,8 +151,10 @@ def component_tar(target):
             entries[path] = (kind, m.mode & 0o7777, m.uid, m.gid)
             if path.startswith("/opt/scidesktop/manifest.d/") and m.isfile():
                 manifests[path] = tar.extractfile(m).read()
-    err = proc.stderr.read().decode()
-    if proc.wait() != 0:
+    rc = proc.wait()
+    errlog.seek(0)
+    err = errlog.read().decode(errors="replace")
+    if rc != 0:
         sys.exit(f"building {target} failed:\n{err}")
     return entries, manifests
 
