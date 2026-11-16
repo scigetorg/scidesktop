@@ -13,6 +13,8 @@ IMAGE="${1:-scidesktop}"
 NAME="scidesktop-smoke-$$"
 PORT="${SMOKE_PORT:-18999}"
 TOKEN="smoke"
+# Test container image for the Apptainer checks.
+SMOKE_ALPINE="${SMOKE_ALPINE:-alpine:3.22}"
 FAILED=0
 
 pass() { printf '  ok    %s\n' "$1"; }
@@ -66,10 +68,12 @@ print(' '.join(str(p) for p in sorted(ports)))" 2>/dev/null)
     || fail "only 8888 listens externally (got: ${external:-none})"
 
 # 4. The session is actually up
-for proc in Xvfb lxqt-session pipewire; do
+for proc in Xvfb lxqt-session pipewire wireplumber pipewire-pulse; do
     docker exec "${NAME}" pgrep -x "${proc}" >/dev/null 2>&1 \
         && pass "${proc} running" || fail "${proc} running"
 done
+docker exec "${NAME}" bash -c 'test -S "${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}/pulse/native"' 2>/dev/null \
+    && pass "pulseaudio socket up" || fail "pulseaudio socket up"
 
 # Selkies' interpreter, read from its launcher, so the checks below run
 # wherever Selkies is installed.
@@ -116,7 +120,9 @@ docker exec "${NAME}" bash -lc 'case ":${XDG_DATA_DIRS}:" in *:/opt/sciget:*) ex
 for mode in -ic -lic; do
     out=$(docker exec -u "$(docker exec "${NAME}" printenv NB_USER 2>/dev/null || echo jovyan)" -w /tmp "${NAME}" \
         bash "${mode}" 'type -t module >/dev/null && type -t mamba >/dev/null && echo SHELL_OK' 2>&1 \
-        | grep -v -e 'cannot set terminal process group' -e 'no job control')
+        | sed 's/\x1b\[[0-9;]*m//g' \
+        | grep -v -e 'cannot set terminal process group' -e 'no job control' \
+        | grep -vxF -f <(docker exec "${NAME}" cat /tmp/.scidesktop-containers-unavailable 2>/dev/null))
     if [ "$(printf '%s' "${out}")" = SHELL_OK ]; then
         pass "bash ${mode}: clean, module and mamba"
     else
@@ -159,6 +165,17 @@ actual_setuid=$(docker exec "${NAME}" awk -F ' = ' '/^allow setuid = / { print $
     /opt/apptainer/etc/apptainer/apptainer.conf 2>/dev/null)
 [ "${actual_setuid}" = no ] && pass "apptainer setuid off by default" \
     || fail "apptainer setuid off by default (got ${actual_setuid:-missing})"
+# Users are told when containers cannot run: the warning is present exactly
+# when this runtime denies user namespaces to the notebook user.
+if docker exec -u "${nb_user:-jovyan}" "${NAME}" unshare -U true >/dev/null 2>&1; then
+    expect_warning=no
+else
+    expect_warning=yes
+fi
+docker exec "${NAME}" test -e /tmp/.scidesktop-containers-unavailable && got_warning=yes || got_warning=no
+[ "${got_warning}" = "${expect_warning}" ] \
+    && pass "containers-unavailable warning matches runtime (${expect_warning})" \
+    || fail "containers-unavailable warning matches runtime (expected ${expect_warning}, got ${got_warning})"
 docker exec "${NAME}" bash -lc 'cvmfs2 --version' >/dev/null 2>&1 \
     && pass "cvmfs present" || fail "cvmfs present"
 
@@ -246,8 +263,11 @@ if [ "${SMOKE_APPTAINER:-1}" = "1" ]; then
     docker run -d --name "${NAME}-userns" --security-opt apparmor=unconfined \
         --security-opt seccomp=unconfined -e JUPYTER_TOKEN=x "${IMAGE}" >/dev/null
     for _ in $(seq 1 60); do docker exec "${NAME}-userns" curl -fsS -o /dev/null localhost:8888/api 2>/dev/null && break; sleep 0.5; done
-    if docker exec -w /tmp "${NAME}-userns" bash -lc '
-        apptainer build --sandbox /tmp/sb docker://alpine:3.22 >/tmp/userns.log 2>&1 \
+    docker exec "${NAME}-userns" test ! -e /tmp/.scidesktop-containers-unavailable \
+        && pass "no containers-unavailable warning where user namespaces work" \
+        || fail "no containers-unavailable warning where user namespaces work"
+    if docker exec -e SMOKE_ALPINE="${SMOKE_ALPINE}" -w /tmp "${NAME}-userns" bash -lc '
+        apptainer build --sandbox /tmp/sb docker://${SMOKE_ALPINE} >/tmp/userns.log 2>&1 \
           && apptainer exec /tmp/sb cat /etc/alpine-release' >/dev/null 2>&1; then
         pass "apptainer runs a container as the user (user namespaces)"
     else
@@ -265,8 +285,8 @@ if [ "${SMOKE_BUILD:-0}" = "1" ]; then
     echo "  .. building a container (privileged)"
     docker rm -f "${NAME}-build" >/dev/null 2>&1 || true
     docker run -d --name "${NAME}-build" --privileged "${IMAGE}" sleep 600 >/dev/null
-    if docker exec -u root "${NAME}-build" bash -lc '
-        printf "Bootstrap: docker\nFrom: alpine:3.22\n%%post\n    echo ok > /marker\n" > /tmp/t.def
+    if docker exec -e SMOKE_ALPINE="${SMOKE_ALPINE}" -u root "${NAME}-build" bash -lc '
+        printf "Bootstrap: docker\nFrom: ${SMOKE_ALPINE}\n%%post\n    echo ok > /marker\n" > /tmp/t.def
         apptainer build --force /tmp/t.sif /tmp/t.def >/tmp/build.log 2>&1 \
           && apptainer exec /tmp/t.sif cat /marker | grep -q ok' 2>/dev/null; then
         pass "apptainer builds and runs a container"
