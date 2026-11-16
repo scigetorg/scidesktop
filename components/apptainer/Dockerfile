@@ -1,14 +1,17 @@
 # syntax=docker/dockerfile:1
-# Apptainer built from source against the OS layer, so it links against the
-# libraries it runs with. Built --with-suid: rootfs/.../10-apptainer turns
-# the setuid starter on only where user namespaces are unavailable.
+# Apptainer built from source on plain Ubuntu of the OS layer's release: the
+# same release gives the same library ABI, and building off the OS layer means
+# an OS package update (a snapshot bump) does not rebuild Apptainer or change
+# its layer. The test runs it on the real OS layer and fails on any missing
+# library. Built --with-suid: rootfs/.../10-apptainer turns the setuid starter
+# on only where user namespaces are unavailable.
 
 # Versions come from docker-bake.hcl.
 ARG APPTAINER_GO_VERSION
 ARG UBUNTU_IMAGE
 FROM docker.io/library/golang:${APPTAINER_GO_VERSION} AS go
 
-FROM os-build AS build
+FROM ${UBUNTU_IMAGE} AS build
 ARG APPTAINER_VERSION
 ARG APPTAINER_GRPC_VERSION
 # x/crypto is raised past the release's own pin for its security fixes, in
@@ -17,10 +20,10 @@ ARG APPTAINER_CRYPTO_VERSION
 ARG TARGETARCH
 ARG APT_CACHE_ID
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
-        autoconf automake build-essential cryptsetup git libattr1-dev \
+        autoconf automake build-essential ca-certificates cryptsetup curl git libattr1-dev \
         libfuse3-dev liblzo2-dev liblz4-dev liblzma-dev libprotobuf-c-dev \
         libseccomp-dev libsubid-dev libtalloc-dev libtool libzstd-dev \
         pkg-config zlib1g-dev
