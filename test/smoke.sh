@@ -267,12 +267,13 @@ if [ "${SMOKE_APPTAINER:-1}" = "1" ]; then
     docker run -d --name "${NAME}-userns" --security-opt apparmor=unconfined \
         --security-opt seccomp=unconfined -e JUPYTER_TOKEN=x "${IMAGE}" >/dev/null
     for _ in $(seq 1 60); do docker exec "${NAME}-userns" curl -fsS -o /dev/null localhost:8888/api 2>/dev/null && break; sleep 0.5; done
-    # Whether Apptainer runs a container as the user in container $1; the
-    # log is left at /tmp/userns.log there.
+    # Whether Apptainer runs a container as the user in container $1, in a
+    # new sandbox each time; the log is left at /tmp/userns.log there.
     apptainer_runs() {
         docker exec -e SMOKE_ALPINE="${SMOKE_ALPINE}" -w /tmp "$1" bash -lc '
-            apptainer build --sandbox /tmp/sb docker://${SMOKE_ALPINE} >/tmp/userns.log 2>&1 \
-              && apptainer exec /tmp/sb cat /etc/alpine-release 2>>/tmp/userns.log' >/dev/null 2>&1
+            sb=$(mktemp -d -u /tmp/sb.XXXXXX)
+            apptainer build --sandbox "${sb}" docker://${SMOKE_ALPINE} >/tmp/userns.log 2>&1 \
+              && apptainer exec "${sb}" cat /etc/alpine-release 2>>/tmp/userns.log' >/dev/null 2>&1
     }
     if apptainer_runs "${NAME}-userns"; then
         pass "apptainer runs a container as the user (user namespaces)"
