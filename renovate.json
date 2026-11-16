@@ -15,7 +15,7 @@
   ],
   "pip_requirements": {
     "managerFilePatterns": [
-      "/^config/selkies/constraints\\.txt$/"
+      "/^components/selkies/requirements\\.in$/"
     ]
   },
   "packageRules": [
@@ -31,14 +31,11 @@
     },
     {
       "description": "A major toolchain bump changes the artefacts these stages produce.",
-      "matchManagers": [
-        "dockerfile"
-      ],
       "matchPackageNames": [
-        "node",
-        "python",
         "alpine",
         "golang",
+        "node",
+        "python",
         "ubuntu"
       ],
       "matchUpdateTypes": [
@@ -47,20 +44,11 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Selkies tracks main; every bump needs the desktop smoke-tested.",
+      "description": "Selkies releases; every bump needs the desktop smoke-tested.",
       "matchDepNames": [
-        "selkies-project/selkies"
+        "selkies"
       ],
       "groupName": "selkies"
-    },
-    {
-      "description": "Encoders. A bump changes how the desktop streams.",
-      "matchPackageNames": [
-        "pixelflux",
-        "pcmflux",
-        "av"
-      ],
-      "groupName": "selkies encoders"
     },
     {
       "matchPackageNames": [
@@ -70,95 +58,179 @@
         "major"
       ],
       "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Component os-ubuntu: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/os-ubuntu/**"
+      ],
+      "groupName": "component os-ubuntu",
+      "addLabels": [
+        "component:os-ubuntu"
+      ]
+    },
+    {
+      "description": "Component jupyter-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/jupyter-env/**"
+      ],
+      "groupName": "component jupyter-env",
+      "addLabels": [
+        "component:jupyter-env"
+      ]
+    },
+    {
+      "description": "Component selkies: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/selkies/**"
+      ],
+      "groupName": "component selkies",
+      "addLabels": [
+        "component:selkies"
+      ]
+    },
+    {
+      "description": "Component apptainer: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/apptainer/**"
+      ],
+      "groupName": "component apptainer",
+      "addLabels": [
+        "component:apptainer"
+      ]
+    },
+    {
+      "description": "Component lmod: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/lmod/**"
+      ],
+      "groupName": "component lmod",
+      "addLabels": [
+        "component:lmod"
+      ]
+    },
+    {
+      "description": "Component sciget: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/sciget/**"
+      ],
+      "groupName": "component sciget",
+      "addLabels": [
+        "component:sciget"
+      ]
+    },
+    {
+      "description": "Component startup: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/startup/**"
+      ],
+      "groupName": "component startup",
+      "addLabels": [
+        "component:startup"
+      ]
+    },
+    {
+      "description": "Component micromamba: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/micromamba/**"
+      ],
+      "groupName": "component micromamba",
+      "addLabels": [
+        "component:micromamba"
+      ]
+    },
+    {
+      "description": "Component os-ubuntu: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "ubuntu",
+        "cvmfs/cvmfs"
+      ],
+      "groupName": "component os-ubuntu",
+      "addLabels": [
+        "component:os-ubuntu"
+      ]
+    },
+    {
+      "description": "Component micromamba: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "mamba-org/micromamba-releases"
+      ],
+      "groupName": "component micromamba",
+      "addLabels": [
+        "component:micromamba"
+      ]
+    },
+    {
+      "description": "Component apptainer: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "apptainer/apptainer",
+        "apptainer-go",
+        "google.golang.org/grpc",
+        "golang.org/x/crypto"
+      ],
+      "groupName": "component apptainer",
+      "addLabels": [
+        "component:apptainer"
+      ]
+    },
+    {
+      "description": "Component lmod: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "TACC/Lmod"
+      ],
+      "groupName": "component lmod",
+      "addLabels": [
+        "component:lmod"
+      ]
+    },
+    {
+      "description": "Component sciget: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "sciget-go"
+      ],
+      "groupName": "component sciget",
+      "addLabels": [
+        "component:sciget"
+      ]
     }
   ],
   "customManagers": [
     {
-      "description": "Selkies commit pin; there is no 2.x release to track.",
+      "description": "Every annotated version in docker-bake.hcl: a '# renovate:' comment, then the variable on the next line.",
       "customType": "regex",
       "managerFilePatterns": [
-        "/^Dockerfile$/"
+        "/^docker-bake\\.hcl$/"
       ],
       "matchStrings": [
-        "ARG SELKIES_COMMIT=(?<currentDigest>[a-f0-9]{40})"
-      ],
-      "currentValueTemplate": "main",
-      "depNameTemplate": "selkies-project/selkies",
-      "packageNameTemplate": "https://github.com/selkies-project/selkies",
-      "datasourceTemplate": "git-refs"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: packageName=(?<packageName>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?\\s*\\nvariable \"[A-Z0-9_]+\" \\{ default = \"(?<currentValue>[^\"@]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?\" \\}"
+      ]
     },
     {
-      "description": "Lmod release tarball.",
+      "description": "Exact pins in conda environment files; regenerate the lock with ./lock.",
       "customType": "regex",
       "managerFilePatterns": [
-        "/^Dockerfile$/"
+        "/^components/[^/]+/environment\\.yml$/"
       ],
       "matchStrings": [
-        "ARG LMOD_VERSION=(?<currentValue>\\S+)"
+        "-\\s+(?<depName>[A-Za-z0-9_.-]+)==(?<currentValue>[^\\s#]+)"
       ],
-      "depNameTemplate": "TACC/Lmod",
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      "description": "Apptainer source build. Tags carry a v prefix; the ARG does not.",
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^Dockerfile$/"
-      ],
-      "matchStrings": [
-        "ARG APPTAINER_VERSION=(?<currentValue>\\S+)"
-      ],
-      "depNameTemplate": "apptainer/apptainer",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.*)$"
-    },
-    {
-      "description": "Go toolchain used to build Apptainer.",
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^Dockerfile$/"
-      ],
-      "matchStrings": [
-        "ARG APPTAINER_GO_VERSION=(?<currentValue>\\S+)"
-      ],
-      "depNameTemplate": "golang",
-      "datasourceTemplate": "docker"
-    },
-    {
-      "description": "grpc pin carried from the neurodesktop build.",
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^Dockerfile$/"
-      ],
-      "matchStrings": [
-        "ARG APPTAINER_GRPC_VERSION=(?<currentValue>\\S+)"
-      ],
-      "depNameTemplate": "google.golang.org/grpc",
-      "datasourceTemplate": "go"
-    },
-    {
-      "description": "Pinned pip versions inside RUN lines.",
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^Dockerfile$/"
-      ],
-      "matchStrings": [
-        "'(?<depName>[a-z0-9-]+)==(?<currentValue>[0-9.]+)'"
-      ],
-      "datasourceTemplate": "pypi"
-    },
-    {
-      "description": "CVMFS packages. Release tags are prefixed cvmfs-.",
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^Dockerfile$/"
-      ],
-      "matchStrings": [
-        "ARG CVMFS_VERSION=(?<currentValue>\\S+)"
-      ],
-      "depNameTemplate": "cvmfs/cvmfs",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^cvmfs-(?<version>.*)$"
+      "packageNameTemplate": "conda-forge/{{depName}}",
+      "datasourceTemplate": "conda"
     }
   ],
   "vulnerabilityAlerts": {
