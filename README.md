@@ -12,16 +12,21 @@ but Jupyter itself.
 
 ## Running it
 
-The image is assembled from components under `components/` with `docker buildx bake`. It
-expects a checkout of [sciget](https://github.com/scigetorg/sciget) beside this one
-(`../sciget`) until sciget publishes an image.
+The image is assembled from components under `components/` with `docker buildx bake`
+(see [docs/components.md](docs/components.md)).
 
 ```sh
-docker buildx bake --allow=fs.read=..        # builds scidesktop:latest
-docker buildx bake --allow=fs.read=.. test   # every component's own test
-docker run --rm -p 8888:8888 --shm-size=2g -e JUPYTER_TOKEN=scidesktop scidesktop
+docker buildx bake                           # builds scidesktop:latest
+docker buildx bake test                      # every component's own test
+docker run --rm -p 8888:8888 --shm-size=2g -e JUPYTER_TOKEN=scidesktop \
+    --security-opt seccomp=unconfined --security-opt apparmor=unconfined scidesktop
 ./test/smoke.sh scidesktop                   # end-to-end checks
 ```
+
+The two `--security-opt` flags let Apptainer run containers inside it; see
+[Platform requirements](docs/operator-runbook.md#platform-requirements).
+sciget is built from a pinned commit; to build your own working copy instead,
+use `SCIGET_SRC=../sciget docker buildx bake --allow=fs.read=..`.
 
 Open <http://localhost:8888/lab?token=scidesktop> and choose **Desktop** from the launcher.
 The desktop session starts on first use, so a session that only ever uses notebooks never

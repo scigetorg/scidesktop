@@ -1,93 +1,108 @@
-# Scidesktop operator runbook
+# scidesktop operator runbook
 
-This runbook deploys scidesktop as a JupyterHub single-user image. Use an image
-digest or an immutable short-SHA tag from `ghcr.io/scigetorg/scidesktop`; do not
-deploy `latest` when reproducibility matters.
+How to run scidesktop as a JupyterHub single-user image, what the platform
+must provide, and how to check and triage a deployment. Deploy an image digest
+or an immutable short-SHA tag from `ghcr.io/scigetorg/scidesktop`, not
+`latest`.
+
+## Platform requirements
+
+scidesktop exists to launch containerised tools with Apptainer, inside the
+single-user pod and without privileges. That needs:
+
+| Requirement | Why | Without it |
+| --- | --- | --- |
+| **Unprivileged user namespaces**: allowed by the node kernel, and not blocked by the pod's seccomp or AppArmor profile | Apptainer runs containers through user namespaces (setuid is off) | JupyterLab and the desktop start, but no containerised tool runs. Users see a warning in every terminal; the log says `[apptainer] WARNING` |
+| `/dev/fuse` in the pod (optional) | mounting SIF files and writable overlays | unpacked containers (CVMFS, sandboxes) still run; SIF files do not |
+| `/cvmfs` mounted by the node (optional) | fast, shared, on-demand delivery of containers | sciget cannot find containers that live on CVMFS |
+| 2 GiB of shared memory at `/dev/shm`, at least 2 CPUs | the X server and the desktop | rendering errors; slow starts |
+
+Platforms that cannot provide user namespaces (for example EKS Fargate, GKE
+Autopilot, OpenShift's default security constraints) are not targets: use a
+plain Jupyter image there.
+
+**Reference configurations that work:**
+
+- **neurocloud** (`neurodesk/neurocloud`): pods non-privileged, seccomp not set
+  (unconfined), a `notebook` AppArmor profile from security-profiles-operator
+  that allows Apptainer's mounts, CVMFS from the CVMFS CSI driver.
+- **AIS** (`Australian-Imaging-Service/ais-jupyterhub`): the same, plus
+  `/dev/fuse` from smarter-device-manager (`smarter-devices/fuse: 1` per pod).
+
+On Ubuntu 24.04 and later nodes, check `sysctl
+kernel.apparmor_restrict_unprivileged_userns`. When it is `1`, the pod's
+AppArmor profile must allow user namespaces.
+
+**Workstations (`docker run`):** Docker's default seccomp and AppArmor profiles
+block user namespaces. Run with:
+
+```sh
+docker run --rm -p 8888:8888 --shm-size=2g \
+    --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+    --device /dev/fuse \
+    ghcr.io/scigetorg/scidesktop:<short-sha>
+```
 
 ## JupyterHub configuration
-
-Allocate at least two CPUs and 2 GiB of shared memory. The example uses
-KubeSpawner with an externally managed CVMFS mount:
 
 ```python
 c.KubeSpawner.image = "ghcr.io/scigetorg/scidesktop:<short-sha>"
 c.KubeSpawner.cpu_guarantee = 2
 c.KubeSpawner.cpu_limit = 2
 
-c.KubeSpawner.environment = {
-    "SCIDESKTOP_APPTAINER_SETUID": "auto",
-    "SCIDESKTOP_CVMFS_MODE": "external",
-}
-
 c.KubeSpawner.volumes = [
-    {
-        "name": "shm",
-        "emptyDir": {"medium": "Memory", "sizeLimit": "2Gi"},
-    },
-    {
-        "name": "cvmfs",
-        # Replace this with the cluster's PVC, CSI or hostPath definition.
-        "persistentVolumeClaim": {"claimName": "cvmfs"},
-    },
+    {"name": "shm", "emptyDir": {"medium": "Memory", "sizeLimit": "2Gi"}},
+    # The cluster's CVMFS CSI claim, or another read-only /cvmfs volume.
+    {"name": "cvmfs", "persistentVolumeClaim": {"claimName": "cvmfs"}},
 ]
 c.KubeSpawner.volume_mounts = [
     {"name": "shm", "mountPath": "/dev/shm"},
-    {"name": "cvmfs", "mountPath": "/cvmfs", "readOnly": True},
+    {"name": "cvmfs", "mountPath": "/cvmfs", "readOnly": True,
+     "mountPropagation": "HostToContainer"},
 ]
+# Plus the cluster's security settings from "Platform requirements".
 ```
 
-Do not set `c.KubeSpawner.cmd`, `command` or `args` merely to start Jupyter.
-The image deliberately keeps docker-stacks' `start.sh`; it accepts the
-spawner-supplied command and handles user setup. Only Jupyter listens outside
-the container on port 8888. The desktop is created lazily when the user opens
-the **Desktop** launcher.
+Do not set `c.KubeSpawner.cmd`, `command` or `args` just to start Jupyter. The
+image keeps docker-stacks' `start.sh`, which accepts the spawner's command and
+sets up the user. Only port 8888 listens outside the pod; the desktop starts
+when the user first opens **Desktop** from the launcher.
 
-If `auto` selects the setuid Apptainer starter, the pod security policy must
-permit that binary to elevate. If the cluster grants unprivileged user
-namespaces, `auto` disables the setuid path. Validate the selected path in the
-pod startup log and against the cluster's security policy.
-
-## Environment contract
+## Environment
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SCIDESKTOP_APPTAINER_SETUID` | `auto` | `auto` probes user namespaces as the notebook user; `yes` requests the setuid starter; `no` disables it. |
-| `SCIDESKTOP_CVMFS_MODE` | `external` | `external` consumes an existing `/cvmfs`; `internal` mounts with FUSE; `disabled` skips CVMFS setup. |
-| `SCIDESKTOP_CVMFS_REPOSITORIES` | empty | Comma-separated repositories to mount in `internal` mode. |
-| `CVMFS_HTTP_PROXY` | `DIRECT` | Proxy written to CVMFS configuration in `internal` mode. |
-| `CVMFS_QUOTA_LIMIT` | `5000` | CVMFS cache quota in MiB in `internal` mode. |
-| `CVMFS_CACHE_BASE` | `/var/lib/cvmfs` | Cache directory in `internal` mode; mount persistent storage here if desired. |
+| `SCIDESKTOP_APPTAINER_SETUID` | `auto` | Applies only when the container starts as root. `auto` enables the setuid starter only if user namespaces fail for the notebook user; `yes`/`no` force it. The setuid starter only works in privileged containers. |
+| `SCIDESKTOP_CVMFS_MODE` | `external` | `external`: use the `/cvmfs` the platform mounts. `internal`: mount inside the container (needs root, `/dev/fuse`, mount capability, repository config and keys under `/etc/cvmfs`). `disabled`: skip. |
+| `SCIDESKTOP_CVMFS_REPOSITORIES` | empty | Repositories to mount in `internal` mode, comma-separated. |
+| `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
+| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogues in the background on a user's first start. |
+| `SELKIES_BASIC_AUTH_PASSWORD` | generated | The desktop's internal credential; generated per container when unset. |
 
-`external` is the normal JupyterHub mode: arrange `/cvmfs` with the cluster's
-CVMFS CSI integration, a read-only host mount or another cluster-supported
-volume. `internal` requires root at startup, `/dev/fuse`, mount capability,
-repository configuration and public keys under `/etc/cvmfs`; it is unsuitable
-for most restricted clusters. Derived images supply their own repository
-configuration, keys and sciget catalogue—the base image intentionally ships
-none.
-
-At one CPU, overlapping startup work has measured 13.9 seconds instead of 4.7
-seconds when staged. Process priority does not help because a Kubernetes CPU
-limit is a quota for the entire cgroup. Give each single-user pod at least two
-CPUs rather than tuning process priority.
+sciget ships with a default catalogue in `/etc/sciget/`, copied to each user's
+`~/.config/sciget/` on first start (files a user already has are kept). A
+derived image replaces `/etc/sciget/catalogues.json` with its own.
 
 ## Deployment check
 
-1. Start a single-user server and inspect its logs for `[apptainer]` and
-   `[cvmfs]`. Confirm the decisions match the pod security and volume setup.
-2. Open JupyterLab on port 8888, then open **Desktop** from the launcher.
-3. Confirm the LXQt desktop renders and an application tile from the derived
-   image appears and starts.
-4. In a terminal, run `apptainer --version`, `cvmfs2 --version`, and
-   `grep '^allow setuid' /opt/apptainer/etc/apptainer/apptainer.conf`.
+1. Start a single-user server. In its log, read the `[apptainer]` line (`user
+   namespaces=yes` expected) and the `[cvmfs]` line, and check there is no
+   `[apptainer] WARNING`.
+2. Open JupyterLab, then **Desktop** from the launcher; the LXQt desktop
+   should render within a few seconds.
+3. In a terminal: no yellow "Containers are unavailable" message; `sciget find`
+   lists the catalogue; `apptainer exec` of a container from `/cvmfs` runs.
+4. `cat /opt/scidesktop/manifest.d/*.json` shows the version of every part.
 
 ## Triage
 
 | Symptom | Checks |
 | --- | --- |
-| Browser remains at “waiting for stream” | Run `/usr/bin/python3 -c 'import pixelflux, pcmflux'` in the pod. An import failure usually means an encoder runtime library is missing; inspect the Selkies log after requesting `/desktop/`. |
-| Application tiles do nothing | Check `allow setuid` in `apptainer.conf`, the `[apptainer]` startup decision, whether the runtime grants unprivileged user namespaces, and whether pod security permits the setuid starter. Run the launch command from a terminal to expose its error. |
-| Application menu is empty | Confirm the derived image installed a sciget catalogue and launchers under `/opt/sciget/applications`; check that `/opt/sciget` is present in `XDG_DATA_DIRS`, and verify the required repository is visible below `/cvmfs`. |
-| `[cvmfs] /cvmfs is empty` | Check the pod volume and mount path, then verify the node/CSI mount is populated before starting the single-user pod. |
-| Internal CVMFS does not mount | Confirm the pod starts as root, has `/dev/fuse` and mount capability, names repositories in `SCIDESKTOP_CVMFS_REPOSITORIES`, and contains their config and public keys under `/etc/cvmfs`. |
-| Desktop route returns an error | Inspect the Jupyter server-proxy and Selkies logs. Confirm no deployment override replaced `start.sh` and that only Jupyter port 8888 is exposed. |
+| "Containers are unavailable" in terminals, or tools do nothing | User namespaces are blocked for the pod: see "Platform requirements". Run `unshare -U true` in a terminal to confirm. |
+| SIF files fail to mount; unpacked containers work | No `/dev/fuse` in the pod. |
+| Browser stuck at "waiting for stream" | Request `/desktop/` again and read the Selkies log; check `/opt/selkies/bin/python -c 'import pixelflux, pcmflux'` succeeds. |
+| sciget lists nothing | `sciget catalogue list`; `~/.cache/sciget/first-refresh.log` for the first download; whether the catalogue's `dir` exists under `/cvmfs`. |
+| `[cvmfs] /cvmfs is empty` | The pod's CVMFS volume and mount path; whether the node or CSI mount is populated before the pod starts. |
+| Internal CVMFS does not mount | The pod starts as root, has `/dev/fuse` and mount capability, names repositories in `SCIDESKTOP_CVMFS_REPOSITORIES`, and has their config and keys under `/etc/cvmfs`. |
+| `/desktop/` returns an error | jupyter-server-proxy and Selkies logs; that no deployment override replaced `start.sh`. |
+| Slow starts at one CPU | Give each pod at least two CPUs; a CPU limit is a quota for the whole pod, so process priority does not help. |
