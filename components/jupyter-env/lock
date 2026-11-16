@@ -7,7 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 MICROMAMBA_VERSION=$(sed -n 's/^variable "MICROMAMBA_VERSION" { default = "\(.*\)" }$/\1/p' ../../docker-bake.hcl)
 [ -n "${MICROMAMBA_VERSION}" ] || { echo "MICROMAMBA_VERSION not found in docker-bake.hcl" >&2; exit 1; }
-docker run --rm -v "${PWD}:/work" -w /work docker.io/library/ubuntu:26.04 bash -euo pipefail -c "
+UBUNTU=$(sed -n 's/^variable "UBUNTU" { default = "\(.*\)" }$/\1/p' ../../docker-bake.hcl)
+docker run --rm -v "${PWD}:/work" -w /work "docker.io/library/ubuntu:${UBUNTU}" bash -euo pipefail -c "
     apt-get update -qq >/dev/null && apt-get install -qq -y curl ca-certificates bzip2 >/dev/null
     curl -fsSL -o /usr/local/bin/micromamba \
         https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/micromamba-linux-64

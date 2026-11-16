@@ -22,13 +22,17 @@ ARG NB_USER
 ARG NB_UID
 ARG NB_GID
 ARG TARGETARCH
+ARG APT_CACHE_ID
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN --mount=type=bind,from=bootstrap-certs,source=/etc/ssl/certs/ca-certificates.crt,target=/tmp/bootstrap-ca.crt \
-    --mount=type=bind,source=.,target=/tmp/os-ubuntu \
-    --mount=type=cache,id=apt-cache-ubuntu26.04-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-ubuntu26.04-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+    # Only what the install reads, so edits elsewhere in this component (its
+    # Dockerfile, rootfs/) do not rebuild the OS layer.
+    --mount=type=bind,source=install,target=/tmp/os-ubuntu/install \
+    --mount=type=bind,source=packages,target=/tmp/os-ubuntu/packages \
+    --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-${TARGETARCH},target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     APT_SNAPSHOT="${APT_SNAPSHOT:?}" CVMFS_VERSION="${CVMFS_VERSION:?}" \
     CVMFS_CONFIG_VERSION="${CVMFS_CONFIG_VERSION:?}" TARGETARCH="${TARGETARCH}" \
     NB_USER="${NB_USER:?}" NB_UID="${NB_UID:?}" NB_GID="${NB_GID:?}" \

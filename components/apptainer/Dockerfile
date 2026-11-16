@@ -6,7 +6,7 @@
 # Versions come from docker-bake.hcl.
 ARG APPTAINER_GO_VERSION
 ARG UBUNTU_IMAGE
-FROM docker.io/library/golang:${APPTAINER_GO_VERSION}-bookworm AS go
+FROM docker.io/library/golang:${APPTAINER_GO_VERSION} AS go
 
 FROM os-build AS build
 ARG APPTAINER_VERSION
@@ -15,9 +15,10 @@ ARG APPTAINER_GRPC_VERSION
 # Apptainer and in the gocryptfs source it bundles.
 ARG APPTAINER_CRYPTO_VERSION
 ARG TARGETARCH
+ARG APT_CACHE_ID
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=cache,id=apt-cache-ubuntu26.04-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-ubuntu26.04-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-${TARGETARCH},target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
         autoconf automake build-essential cryptsetup git libattr1-dev \
         libfuse3-dev liblzo2-dev liblz4-dev liblzma-dev libprotobuf-c-dev \

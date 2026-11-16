@@ -7,8 +7,8 @@ image metadata. `docker-bake.hcl` wires the components together and holds every
 version.
 
 ```
-docker buildx bake --allow=fs.read=..          # the image
-docker buildx bake --allow=fs.read=.. test     # every component's test
+docker buildx bake                             # the image
+docker buildx bake test                        # every component's test
 docker buildx bake apptainer-test              # one component's test
 python3 test/contract.py static                # the rules below, before building
 python3 test/contract.py layers                # the rules below, after building

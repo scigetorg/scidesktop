@@ -31,6 +31,7 @@ RUN micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
     # Startup-time patches; see each file.
     && for p in /tmp/patches/*.py; do /opt/conda/bin/python "${p}"; done \
     && /opt/conda/bin/python -m compileall -q /opt/conda/lib/python3*/site-packages/rfc3987_syntax \
+        /opt/conda/lib/python3*/site-packages/simpervisor \
     && MAMBA_ROOT_PREFIX=/opt/conda micromamba clean --all --force-pkgs-dirs --yes \
     && /opt/conda/bin/jupyter lab clean \
     # Server settings and disabled JupyterLab plugins live in the environment.
@@ -79,4 +80,6 @@ RUN set -e \
     # rfc3987_syntax must not compile its parsers at import (patches/).
     && us=$(cd /tmp && python -X importtime -c 'import jsonschema' 2>&1 \
             | awk -F'|' '/rfc3987_syntax.syntax_helpers/ { gsub(/ /, "", $2); print $2 }') \
-    && echo "rfc3987_syntax import: ${us:-0} us" && [ "${us:-0}" -lt 200000 ]
+    && echo "rfc3987_syntax import: ${us:-0} us" && [ "${us:-0}" -lt 200000 ] \
+    # The desktop's readiness poll is capped (patches/simpervisor_ready_backoff.py).
+    && python -c 'import inspect, simpervisor.process as p; assert "min(2 * wait_time, 0.1)" in inspect.getsource(p)'

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Installs the OS layer. Run by the Dockerfile with this directory mounted at
-# /tmp/os-ubuntu and the build arguments in the environment.
+# Installs the OS layer. Run by the Dockerfile with this script and packages/
+# mounted under /tmp/os-ubuntu and the build arguments in the environment.
 set -euo pipefail
 HERE=/tmp/os-ubuntu
 : "${APT_SNAPSHOT:?}" "${CVMFS_VERSION:?}" "${CVMFS_CONFIG_VERSION:?}"

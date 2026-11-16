@@ -201,6 +201,7 @@
         "docker-bake.hcl"
       ],
       "matchDepNames": [
+        "sciget",
         "sciget-go"
       ],
       "groupName": "component sciget",
@@ -219,6 +220,20 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: packageName=(?<packageName>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?\\s*\\nvariable \"[A-Z0-9_]+\" \\{ default = \"(?<currentValue>[^\"@]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?\" \\}"
       ]
+    },
+    {
+      "description": "sciget commit built into the image until sciget publishes an image.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"SCIGET_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "sciget",
+      "packageNameTemplate": "https://github.com/scigetorg/sciget",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
     },
     {
       "description": "Exact pins in conda environment files; regenerate the lock with ./lock.",

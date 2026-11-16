@@ -6,7 +6,7 @@
 # Versions come from docker-bake.hcl.
 ARG SCIGET_GO_VERSION
 ARG UBUNTU_IMAGE
-FROM docker.io/library/golang:${SCIGET_GO_VERSION}-bookworm AS build
+FROM docker.io/library/golang:${SCIGET_GO_VERSION} AS build
 ARG NB_UID
 ARG NB_GID
 COPY --from=sciget-src . /src

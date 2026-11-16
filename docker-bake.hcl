@@ -1,12 +1,11 @@
 # scidesktop build graph. Each component under components/ builds independently and
 # in parallel; the assembly copies their outputs onto the OS layer.
 #
-#   docker buildx bake --allow=fs.read=..        # the image (default group)
-#   docker buildx bake --allow=fs.read=.. test   # every component's test stage
-#   docker buildx bake os-ubuntu-test            # one component's test
+#   docker buildx bake                  # the image (default group)
+#   docker buildx bake test             # every component's test stage
+#   docker buildx bake os-ubuntu-test   # one component's test
 #
-# --allow=fs.read=.. lets bake read SCIGET_SRC (../sciget) until sciget ships
-# as an image. Components build only through bake: it supplies their versions.
+# Components build only through bake: it supplies their versions.
 #
 # Components that compile native code build FROM the OS layer (context "os") so
 # they link against the same libraries they run with.
@@ -37,7 +36,7 @@ variable "MICROMAMBA_SHA256" { default = "701f39c06f8e6a670a0e186c8479b9e5c0502a
 # renovate: datasource=github-releases depName=apptainer/apptainer extractVersion=^v(?<version>.*)$
 variable "APPTAINER_VERSION" { default = "1.5.5" }
 # renovate: datasource=docker depName=apptainer-go packageName=golang
-variable "APPTAINER_GO_VERSION" { default = "1.27.4" }
+variable "APPTAINER_GO_VERSION" { default = "1.27.4-bookworm" }
 # renovate: datasource=go depName=google.golang.org/grpc
 variable "APPTAINER_GRPC_VERSION" { default = "1.85.0" }
 # renovate: datasource=go depName=golang.org/x/crypto
@@ -48,7 +47,7 @@ variable "LMOD_VERSION" { default = "9.4.5" }
 variable "LMOD_SHA256" { default = "05292b7a1d9285a869129726f1429f86393fe274bf12d311828e16df27cdaaf3" }
 
 # renovate: datasource=docker depName=sciget-go packageName=golang
-variable "SCIGET_GO_VERSION" { default = "1.27.0" }
+variable "SCIGET_GO_VERSION" { default = "1.27.0-bookworm" }
 
 # The notebook user, set in the OS layer and used by components that own files.
 variable "NB_USER" { default = "jovyan" }
@@ -58,8 +57,11 @@ variable "NB_GID" { default = "100" }
 # --- Build settings ---------------------------------------------------------
 
 variable "IMAGE" { default = "scidesktop:latest" }
-# Local checkout until the sciget image is published.
-variable "SCIGET_SRC" { default = "../sciget" }
+# sciget is built from source at this commit until it publishes an image
+# (Renovate tracks its main branch). For local sciget development, build your
+# working copy instead: SCIGET_SRC=../sciget docker buildx bake --allow=fs.read=..
+variable "SCIGET_COMMIT" { default = "a03f07260ca3f554360c5fcf137be9dbe844467e" }
+variable "SCIGET_SRC" { default = "https://github.com/scigetorg/sciget.git#${SCIGET_COMMIT}" }
 
 group "default" {
   targets = ["scidesktop"]
@@ -92,6 +94,7 @@ target "os-ubuntu" {
   contexts = { tests = "test" }
   args = {
     UBUNTU_IMAGE         = "docker.io/library/ubuntu:${UBUNTU}"
+    APT_CACHE_ID         = "ubuntu-${regex("^[^@]+", UBUNTU)}"
     APT_SNAPSHOT         = APT_SNAPSHOT
     CVMFS_VERSION        = CVMFS_VERSION
     CVMFS_CONFIG_VERSION = CVMFS_CONFIG_VERSION
@@ -121,7 +124,10 @@ target "os-ubuntu-test" {
 # compiles against; UBUNTU_IMAGE is for the stage that lays out its rootfs/.
 target "_component" {
   inherits = ["_common"]
-  args     = { UBUNTU_IMAGE = "docker.io/library/ubuntu:${UBUNTU}" }
+  args = {
+    UBUNTU_IMAGE = "docker.io/library/ubuntu:${UBUNTU}"
+    APT_CACHE_ID = "ubuntu-${regex("^[^@]+", UBUNTU)}"
+  }
   contexts = {
     os         = "target:os-ubuntu"
     os-build   = "target:os-ubuntu-build"

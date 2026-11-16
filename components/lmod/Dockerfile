@@ -10,9 +10,10 @@ FROM os-build AS build
 ARG LMOD_VERSION
 ARG LMOD_SHA256
 ARG TARGETARCH
+ARG APT_CACHE_ID
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=cache,id=apt-cache-ubuntu26.04-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-ubuntu26.04-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-${TARGETARCH},target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
         gcc make bc pkg-config liblua5.4-dev tcl-dev
 RUN : "${LMOD_VERSION:?}" "${LMOD_SHA256:?}" \
