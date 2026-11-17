@@ -18,7 +18,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BAKE = ROOT / "docker-bake.hcl"
-ASSEMBLY = ROOT / "Dockerfile"
+IMAGES = ROOT / "images"
+BASE_IMAGE = "scidesktop"
+ASSEMBLY = IMAGES / BASE_IMAGE / "Dockerfile"
 COMPONENTS = ROOT / "components"
 OS_COMPONENT = "os-ubuntu"
 
@@ -30,6 +32,7 @@ NOT_RENOVATED = {
     "NB_UID": "setting, not a version",
     "NB_GID": "setting, not a version",
     "IMAGE": "output tag",
+    "MICRODESKTOP_IMAGE": "output tag",
     "SCIGET_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "SCIGET_SRC": "built from SCIGET_COMMIT",
 }
@@ -66,6 +69,10 @@ def instructions(dockerfile):
     return lines
 
 
+def rel(path):
+    return path.relative_to(ROOT)
+
+
 def component_names():
     return sorted(p.parent.name for p in COMPONENTS.glob("*/Dockerfile"))
 
@@ -79,23 +86,23 @@ def static():
     copied = []
     for ins, text in instructions(ASSEMBLY):
         if ins not in ASSEMBLY_ALLOWED:
-            fail("S1", f"Dockerfile: {ins} is not allowed in the assembly; move it into a component: {text[:70]}")
+            fail("S1", f"{rel(ASSEMBLY)}: {ins} is not allowed in the assembly; move it into a component: {text[:70]}")
         elif ins == "FROM" and text.split()[1:] != ["os"]:
-            fail("S1", f"Dockerfile: the assembly must be FROM os, not: {text}")
+            fail("S1", f"{rel(ASSEMBLY)}: the assembly must be FROM os, not: {text}")
         elif ins == "COPY":
             m = re.fullmatch(r"COPY --link --from=(\S+) / /", text)
             if not m:
-                fail("S1", f"Dockerfile: COPY must be `COPY --link --from=<component> / /`: {text}")
+                fail("S1", f"{rel(ASSEMBLY)}: COPY must be `COPY --link --from=<component> / /`: {text}")
             else:
                 copied.append(m.group(1))
         elif ins == "ARG" and "=" in text:
-            fail("S4", f"Dockerfile: ARG with a value; versions and settings live in docker-bake.hcl: {text}")
+            fail("S4", f"{rel(ASSEMBLY)}: ARG with a value; versions and settings live in docker-bake.hcl: {text}")
     # S2: every assembled component is copied exactly once.
     for u in assembled:
         if copied.count(u) != 1:
-            fail("S2", f"Dockerfile: component {u} is a context of the scidesktop target but copied {copied.count(u)} times")
+            fail("S2", f"{rel(ASSEMBLY)}: component {u} is a context of the scidesktop target but copied {copied.count(u)} times")
     for u in set(copied) - set(assembled):
-        fail("S2", f"Dockerfile: copies {u}, which is not a context of the scidesktop target")
+        fail("S2", f"{rel(ASSEMBLY)}: copies {u}, which is not a context of the scidesktop target")
 
     # S3: every component has a target, a test target in group "test", and the
     # component/test stages.
@@ -116,6 +123,30 @@ def static():
         for ins, line in instructions(df):
             if ins == "ARG" and "=" in line:
                 fail("S4", f"{u}: ARG with a value; put it in docker-bake.hcl: {line}")
+
+    # S6: every folder in images/ is a bake target of the same name in group
+    # "default", built from that folder. A domain image's final stage is FROM
+    # another image in images/, handed in as a bake target; a registry image
+    # would bypass the base built alongside it.
+    images = sorted(p.parent.name for p in IMAGES.glob("*/Dockerfile"))
+    for name in images:
+        df = IMAGES / name / "Dockerfile"
+        t = targets.get(name)
+        if t is None:
+            fail("S6", f"{rel(df)}: no bake target {name}")
+            continue
+        if name not in groups["default"]["targets"]:
+            fail("S6", f"{name}: not in the bake group \"default\"")
+        if (ROOT / t.get("context", ".")).resolve() != df.parent.resolve():
+            fail("S6", f"{name}: the bake target's context is {t.get('context')}, not images/{name}")
+        if name == BASE_IMAGE:
+            continue
+        froms = [[w for w in text.split()[1:] if not w.startswith("--")] for ins, text in instructions(df) if ins == "FROM"]
+        base = froms[-1][0] if froms else None
+        if base not in images or base == name:
+            fail("S6", f"{rel(df)}: the final stage must be FROM another image in images/, not {base}")
+        elif t.get("contexts", {}).get(base) != f"target:{base}":
+            fail("S6", f"{name}: FROM {base} needs `contexts = {{ {base} = \"target:{base}\" }}` in its bake target")
 
     # S5: every bake variable is one line, and tracked by Renovate unless
     # listed in NOT_RENOVATED.

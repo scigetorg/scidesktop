@@ -2,12 +2,12 @@
 
 scidesktop is assembled from **components**. Each component is a folder under
 `components/` that builds one part of the image on its own, with its own test.
-The main `Dockerfile` only stacks the components' outputs onto the OS layer and sets
+The base image's `images/scidesktop/Dockerfile` only stacks the components' outputs onto the OS layer and sets
 image metadata. `docker-bake.hcl` wires the components together and holds every
-version.
+version. Domain images build on the base; see [images.md](images.md).
 
 ```
-docker buildx bake                             # the image
+docker buildx bake                             # every image
 docker buildx bake test                        # every component's test
 docker buildx bake apptainer-test              # one component's test
 python3 test/contract.py static                # the rules below, before building
@@ -31,7 +31,7 @@ fails with the rule's code (S1-S5, L1-L5) and what to change.
    package snapshot) is listed in `components/os-ubuntu/packages/*.txt`.
 3. **Python packages for Jupyter go in `jupyter-env`.** There is one Jupyter
    environment; extensions are packages in its `environment.yml`.
-4. **The main Dockerfile only assembles (S1, S2).** It may contain `FROM os`,
+4. **The base Dockerfile only assembles (S1, S2).** It may contain `FROM os`,
    one `COPY --link --from=<component> / /` per component, and image metadata (`ENV`,
    `LABEL`, `EXPOSE`, `HEALTHCHECK`, `ENTRYPOINT`, `CMD`, `WORKDIR`, `USER`).
    No `RUN`, no other `COPY`. Environment variables stay here because they are
@@ -122,7 +122,7 @@ in that order.
 2. Versions in `docker-bake.hcl` with `# renovate:` comments; targets `<component>`
    and `<component>-test`; add `<component>-test` to group `test`.
 3. If it goes into the image: add it to the `scidesktop` target's contexts and
-   one `COPY --link --from=<component> / /` line to the `Dockerfile`.
+   one `COPY --link --from=<component> / /` line to `images/scidesktop/Dockerfile`.
 4. A Renovate group for `components/<component>/**` and its dependency names.
 5. `python3 test/contract.py static`, build, `python3 test/contract.py layers`,
    `./test/smoke.sh`.

@@ -78,8 +78,8 @@ components/
 build/
   arch                TARGETARCH → upstream names
 config/               runtime config and hooks (exists today)
-docker-bake.hcl       component targets + assembly
-Dockerfile            the assembly
+docker-bake.hcl       component targets + images
+images/scidesktop/    the assembly (Dockerfile); domain images beside it
 support.yml           OS × arch × component matrix
 test/
   os-contract.sh      asserts the OS layer's contract
@@ -178,8 +178,8 @@ Never copy a dynamically linked binary between distributions.
 components/<component>/
   Dockerfile      builds the component; final stage holds only the prefix
   test            runs inside the component's image
-docker-bake.hcl   one target per component, plus the assembly
-Dockerfile        the assembly: FROM os, COPY --link --from each component
+docker-bake.hcl   one target per component, plus the images
+images/scidesktop/Dockerfile   the assembly: FROM os, COPY --link --from each component
 ```
 
 `docker buildx bake` builds the components in parallel and passes them to the

@@ -16,7 +16,7 @@ The image is assembled from components under `components/` with `docker buildx b
 (see [docs/components.md](docs/components.md)).
 
 ```sh
-docker buildx bake                           # builds scidesktop:latest
+docker buildx bake                           # builds every image (scidesktop:latest, ...)
 docker buildx bake test                      # every component's own test
 docker run --rm -p 8888:8888 --shm-size=2g -e JUPYTER_TOKEN=scidesktop \
     --security-opt seccomp=unconfined --security-opt apparmor=unconfined scidesktop
@@ -48,6 +48,18 @@ mamba create -p ~/envs/analysis python ipykernel numpy
 
 `--shm-size` matters: the X server uses shared memory, and Docker's 64 MB default is not
 enough for a large virtual screen.
+
+## Images
+
+| Image | Folder | What it adds |
+|---|---|---|
+| scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below |
+| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy (a shell for now) |
+
+Domain images build `FROM scidesktop` and add only their own files, like the
+[docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
+base alongside them, so nothing needs publishing first. To start a new one, or
+to build one for your own community in a fork, see [docs/images.md](docs/images.md).
 
 ## What is in it
 

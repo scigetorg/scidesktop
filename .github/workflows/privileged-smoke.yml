@@ -35,7 +35,7 @@ jobs:
           for t in os-ubuntu micromamba startup jupyter-env selkies apptainer lmod sciget scidesktop; do
               args+=(--set "${t}.cache-from=type=gha,scope=${t}")
           done
-          docker buildx bake "${args[@]}"
+          docker buildx bake "${args[@]}" scidesktop
 
       - name: Run privileged smoke test
         env:
