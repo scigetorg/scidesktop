@@ -1,0 +1,63 @@
+---
+name: Update APT snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 4 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: apt-snapshot-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Open snapshot update PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+
+      - name: Update snapshot and open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if gh pr list --state open --search 'Bump APT snapshot in:title' \
+              --json number --jq 'length' | grep -vq '^0$'; then
+            echo 'An APT snapshot update PR is already open; leaving it for review.'
+            exit 0
+          fi
+
+          snapshot="$(date -u +%Y%m%dT000000Z)"
+          branch="automation/apt-snapshot-${snapshot}"
+          files=(docker-bake.hcl)
+          sed -i -E \
+            "s/^(variable \"APT_SNAPSHOT\" \{ default = \")[0-9]{8}T[0-9]{6}Z(\" \})$/\\1${snapshot}\\2/" \
+            docker-bake.hcl
+          grep -qx "variable \"APT_SNAPSHOT\" { default = \"${snapshot}\" }" docker-bake.hcl
+
+          if git diff --quiet -- "${files[@]}"; then
+            echo "APT_SNAPSHOT is already ${snapshot}."
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "${branch}"
+          git add -- "${files[@]}"
+          git commit -m "Bump APT snapshot to ${snapshot}"
+          git push origin "HEAD:${branch}"
+          gh pr create \
+            --base main \
+            --head "${branch}" \
+            --title "Bump APT snapshot to ${snapshot}" \
+            --body 'Updates the Ubuntu package snapshot used for reproducible image builds.'

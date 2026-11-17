@@ -1,0 +1,76 @@
+#!/bin/bash
+# Installs the OS layer. Run by the Dockerfile with this script and packages/
+# mounted under /tmp/os-ubuntu and the build arguments in the environment.
+set -euo pipefail
+HERE=/tmp/os-ubuntu
+: "${APT_SNAPSHOT:?}" "${CVMFS_VERSION:?}" "${CVMFS_CONFIG_VERSION:?}"
+: "${TARGETARCH:?}" "${NB_USER:?}" "${NB_UID:?}" "${NB_GID:?}"
+
+echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
+# The build caches /var/cache/apt; the image's docker-clean hook would empty it.
+rm -f /etc/apt/apt.conf.d/docker-clean
+
+# Packages come from a dated snapshot. The live sources are kept beside it and
+# restored by the Dockerfile's runtime "os" stage, so apt at runtime sees the
+# live archive.
+sources=/etc/apt/sources.list.d/ubuntu.sources
+cp "${sources}" "${sources}.live"
+case "${TARGETARCH}" in
+    amd64) archive=ubuntu ;;
+    *) echo "os-ubuntu: no snapshot mapping for ${TARGETARCH}" >&2; exit 1 ;;
+esac
+sed -i -E "s|^URIs: https?://(archive\|security)\.ubuntu\.com/ubuntu/?|URIs: https://snapshot.ubuntu.com/${archive}/${APT_SNAPSHOT}|" "${sources}"
+grep -q "snapshot.ubuntu.com" "${sources}"
+
+apt_get() { apt-get -o Acquire::https::CAInfo=/tmp/bootstrap-ca.crt "$@"; }
+# Any index that fails to download (after the retries above) fails the build;
+# by default apt only warns and installs from whatever indexes it got.
+apt_get update -o APT::Update::Error-Mode=any
+apt_get upgrade --yes
+# shellcheck disable=SC2046
+apt_get install --yes --no-install-recommends \
+    $(sed -e 's/#.*//' "${HERE}"/packages/*.txt | tr -s '[:space:]' ' ')
+
+# CVMFS client from CERN's packages for this release and architecture.
+. /etc/os-release
+cvmfs_tmp=$(mktemp -d)
+for p in cvmfs cvmfs-libs cvmfs-fuse3; do
+    curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "${cvmfs_tmp}/${p}.deb" \
+        "https://ecsft.cern.ch/dist/cvmfs/cvmfs-${CVMFS_VERSION}/${p}_${CVMFS_VERSION}+ubuntu${VERSION_ID}_${TARGETARCH}.deb"
+done
+curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "${cvmfs_tmp}/cvmfs-config-none.deb" \
+    "https://ecsft.cern.ch/dist/cvmfs/cvmfs-config/cvmfs-config-none_${CVMFS_CONFIG_VERSION}_all.deb"
+apt_get install --yes --no-install-recommends "${cvmfs_tmp}"/*.deb
+rm -rf "${cvmfs_tmp}"
+cvmfs2 --version
+
+# Locales, as docker-stacks generates them.
+printf '%s\n' "en_US.UTF-8 UTF-8" "C.UTF-8 UTF-8" > /etc/locale.gen
+locale-gen
+rm -rf /usr/bin/pebble /var/lib/pebble
+
+# Notebook user. The image ships a default user on UID 1000; it is removed so
+# the notebook user can take that UID.
+if id -un "${NB_UID}" >/dev/null 2>&1; then
+    userdel --remove "$(id -un "${NB_UID}")"
+fi
+echo "auth requisite pam_deny.so" >> /etc/pam.d/su
+sed -i -e 's/^%admin/#%admin/' -e 's/^%sudo/#%sudo/' /etc/sudoers
+sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc
+useradd --no-log-init --create-home --shell /bin/bash --uid "${NB_UID}" \
+    --gid "${NB_GID}" --no-user-group "${NB_USER}"
+# start.sh rewrites /etc/passwd when the container runs as an unknown UID.
+chmod g+w /etc/passwd
+install -d -o "${NB_UID}" -g "${NB_GID}" "/home/${NB_USER}/.cache" "/home/${NB_USER}/work"
+
+# Interactive bash sources drop-in snippets from components (Lmod, mamba).
+install -d -m 0755 /etc/bash.bashrc.d
+printf '%s\n' '' '# Drop-in snippets from image components.' \
+    'for f in /etc/bash.bashrc.d/*.sh; do [ -r "${f}" ] && . "${f}"; done; unset f' \
+    >> /etc/bash.bashrc
+
+# This layer's entry in the image's version manifest.
+install -d -m 0755 /opt/scidesktop/manifest.d
+printf '{"id": "%s", "version": "%s", "arch": "%s", "package_snapshot": "%s", "cvmfs": "%s"}\n' \
+    "${ID}" "${VERSION_ID}" "$(uname -m)" "${APT_SNAPSHOT}" "${CVMFS_VERSION}" \
+    > /opt/scidesktop/manifest.d/os-ubuntu.json

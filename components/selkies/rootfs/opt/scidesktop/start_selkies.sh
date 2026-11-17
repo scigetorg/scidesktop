@@ -27,9 +27,12 @@ if [ ! -S "${X_SOCKET}" ]; then
     setsid /opt/scidesktop/start_desktop.sh </dev/null >>/tmp/scidesktop-desktop.log 2>&1 &
 fi
 
-for _ in $(seq 1 200); do
+# Up to 60 s, checked often: jupyter-server-proxy re-checks readiness at
+# doubling intervals (~1.3 s, then ~2.6 s), so starting Selkies sooner can
+# save a whole interval.
+for _ in $(seq 1 1200); do
     [ -S "${X_SOCKET}" ] && break
-    sleep 0.3
+    sleep 0.05
 done
 
 if [ ! -S "${X_SOCKET}" ]; then

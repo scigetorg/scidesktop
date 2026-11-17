@@ -1,0 +1,5 @@
+# Runtime for Lmod (components/lmod)
+lua5.4
+lua-posix
+lua-filesystem
+tcl

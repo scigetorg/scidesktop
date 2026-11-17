@@ -1,0 +1,8 @@
+[
+  {
+    "name": "neuroimaging",
+    "url": "https://apps-json.neurodesk.workers.dev/neuroimaging/apps.json",
+    "use": true,
+    "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
+  }
+]

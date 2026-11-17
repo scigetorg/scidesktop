@@ -1,0 +1,16 @@
+#!/bin/bash
+# Fails when a lockfile is older than the pins it was generated from: every
+# exact pin (name==version) in the input must appear in the lock.
+#
+#   check-lock <input> <lock>
+set -euo pipefail
+input="$1"; lock="$2"
+status=0
+while read -r name version; do
+    if grep -qiE "(/|^)${name}-${version}-[^/]*\.(conda|tar\.bz2)|^${name}==${version}( |$)" "${lock}"; then
+        continue
+    fi
+    echo "check-lock: ${input} pins ${name}==${version} but ${lock} does not; run ./lock" >&2
+    status=1
+done < <(sed -e 's/#.*//' "${input}" | grep -oE '[A-Za-z0-9_.-]+==[0-9][^ ]*' | sed 's/==/ /')
+exit "${status}"

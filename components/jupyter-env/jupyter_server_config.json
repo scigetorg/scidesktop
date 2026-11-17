@@ -1,0 +1,13 @@
+{
+  "FileContentsManager": {
+    "allow_hidden": true
+  },
+  "ServerApp": {
+    "terminado_settings": {
+      "shell_command": ["/bin/bash"]
+    }
+  },
+  "LabApp": {
+    "check_for_updates_class": "jupyterlab.handlers.announcements.NeverCheckForUpdate"
+  }
+}

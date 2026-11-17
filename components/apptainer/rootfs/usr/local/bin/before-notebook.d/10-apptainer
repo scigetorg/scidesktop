@@ -1,0 +1,73 @@
+#!/bin/bash
+# Decides how Apptainer runs containers here, and records when it cannot.
+#
+# Apptainer needs unprivileged user namespaces (the normal path; setuid off)
+# or its setuid starter (only in privileged containers). When neither works,
+# scidesktop cannot launch any containerised tool: the hook writes STATUS,
+# which /etc/bash.bashrc.d/apptainer.sh shows in every terminal, and logs a
+# warning. See docs/operator-runbook.md, "Platform requirements".
+#
+# SCIDESKTOP_APPTAINER_SETUID: auto (setuid only when namespaces are unusable)
+#                              yes | no
+set -u
+CONF=/opt/apptainer/etc/apptainer/apptainer.conf
+MODE="${SCIDESKTOP_APPTAINER_SETUID:-auto}"
+STATUS=/tmp/.scidesktop-containers-unavailable
+
+# Tests what Apptainer does: a child creates the user namespace and its parent
+# writes the child's setgroups, uid_map and gid_map, mapping the user to
+# itself. Creating the namespace alone is not enough: hosts with
+# kernel.apparmor_restrict_unprivileged_userns=1 allow it but can refuse the
+# mapping. `unshare -r` is no test either: it writes the maps from inside the
+# namespace, which those hosts refuse even where Apptainer works.
+PROBE='
+self=$(readlink /proc/self/ns/user)
+unshare -U sleep 5 2>/dev/null & pid=$!
+for _ in $(seq 1 50); do
+    ns=$(readlink /proc/${pid}/ns/user 2>/dev/null) || break
+    [ "${ns}" != "${self}" ] && break
+    sleep 0.02
+done
+ok=1
+[ -n "${ns:-}" ] && [ "${ns}" != "${self}" ] \
+    && { echo deny > /proc/${pid}/setgroups \
+         && echo "$(id -u) $(id -u) 1" > /proc/${pid}/uid_map \
+         && echo "$(id -g) $(id -g) 1" > /proc/${pid}/gid_map; } 2>/dev/null \
+    && ok=0
+kill ${pid} 2>/dev/null; wait ${pid} 2>/dev/null
+exit ${ok}'
+# Tested as the user who will run containers: root can always map users, so
+# testing as root would answer the wrong question.
+if [ "$(id -u)" -eq 0 ] && [ -n "${NB_USER:-}" ]; then
+    runuser -u "${NB_USER}" -- bash -c "${PROBE}" && userns=yes || userns=no
+else
+    bash -c "${PROBE}" && userns=yes || userns=no
+fi
+
+if [ -w "${CONF}" ]; then
+    case "${MODE}" in
+        no)  want=no ;;
+        yes) want=yes ;;
+        *)   [ "${userns}" = yes ] && want=no || want=yes ;;
+    esac
+    if [ "${want}" = yes ] && [ ! -u /opt/apptainer/libexec/apptainer/bin/starter-suid ]; then
+        echo "[apptainer] setuid wanted but starter-suid is not setuid; leaving disabled"
+        want=no
+    fi
+    sed -i "s/^allow setuid = .*/allow setuid = ${want}/" "${CONF}"
+    echo "[apptainer] allow setuid = ${want} (mode=${MODE}, user namespaces=${userns})"
+fi
+setuid=$(awk -F ' = ' '/^allow setuid = / { print $2; exit }' "${CONF}")
+
+rm -f "${STATUS}"
+if [ "${userns}" = no ] && [ "${setuid}" != yes ]; then
+    printf '%s\n' \
+        "Containers are unavailable here: this platform blocks unprivileged user" \
+        "namespaces, so Apptainer cannot run tools. JupyterLab and the desktop still" \
+        "work. Operators: see the scidesktop operator runbook, Platform requirements." \
+        "With docker run, add: --security-opt seccomp=unconfined --security-opt apparmor=unconfined" \
+        > "${STATUS}"
+    chmod 0644 "${STATUS}"
+    echo "[apptainer] WARNING: user namespaces unavailable and setuid off; containerised tools will not run"
+fi
+exit 0

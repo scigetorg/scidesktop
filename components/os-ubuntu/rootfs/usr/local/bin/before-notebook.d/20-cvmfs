@@ -1,0 +1,53 @@
+#!/bin/bash
+# CVMFS delivery, in the mode the deployment supports.
+#
+# SCIDESKTOP_CVMFS_MODE:
+#   external (default) consume a /cvmfs mounted by the host or pod spec
+#   internal           mount inside the container; needs /dev/fuse and root
+#   disabled           do nothing
+#
+# SCIDESKTOP_CVMFS_REPOSITORIES: comma-separated, internal mode only.
+# Repository configs and public keys come from the derived image or a mount
+# under /etc/cvmfs; none ship in this image.
+set -u
+MODE="${SCIDESKTOP_CVMFS_MODE:-external}"
+REPOS="${SCIDESKTOP_CVMFS_REPOSITORIES:-}"
+
+case "${MODE}" in
+disabled)
+    exit 0
+    ;;
+external)
+    if find /cvmfs -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null | grep -q .; then
+        echo "[cvmfs] using mounted /cvmfs: $(ls /cvmfs | tr '\n' ' ')"
+    else
+        echo "[cvmfs] /cvmfs is empty; container delivery falls back to the registry"
+    fi
+    ;;
+internal)
+    [ "$(id -u)" -eq 0 ] || { echo "[cvmfs] internal mode needs root; skipping"; exit 0; }
+    [ -c /dev/fuse ] || { echo "[cvmfs] no /dev/fuse; skipping"; exit 0; }
+    [ -n "${REPOS}" ] || { echo "[cvmfs] internal mode needs SCIDESKTOP_CVMFS_REPOSITORIES; skipping"; exit 0; }
+
+    mkdir -p /var/lib/cvmfs
+    cat > /etc/cvmfs/default.local <<CONF
+CVMFS_HTTP_PROXY=${CVMFS_HTTP_PROXY:-DIRECT}
+CVMFS_QUOTA_LIMIT=${CVMFS_QUOTA_LIMIT:-5000}
+CVMFS_CACHE_BASE=${CVMFS_CACHE_BASE:-/var/lib/cvmfs}
+CVMFS_REPOSITORIES=${REPOS}
+CONF
+    for repo in ${REPOS//,/ }; do
+        mkdir -p "/cvmfs/${repo}"
+        if mountpoint -q "/cvmfs/${repo}"; then
+            echo "[cvmfs] ${repo} already mounted"
+        elif mount -t cvmfs "${repo}" "/cvmfs/${repo}" 2>/dev/null; then
+            echo "[cvmfs] mounted ${repo}"
+        else
+            echo "[cvmfs] failed to mount ${repo}; check its config and key under /etc/cvmfs"
+        fi
+    done
+    ;;
+*)
+    echo "[cvmfs] unknown SCIDESKTOP_CVMFS_MODE='${MODE}'; treating as disabled"
+    ;;
+esac

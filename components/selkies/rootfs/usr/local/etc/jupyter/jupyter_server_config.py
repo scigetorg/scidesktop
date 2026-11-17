@@ -35,8 +35,3 @@ c.ServerProxy.servers = {
         },
     }
 }
-
-c.FileContentsManager.allow_hidden = True
-c.ServerApp.terminado_settings = {
-    "shell_command": ["/bin/bash"]
-}

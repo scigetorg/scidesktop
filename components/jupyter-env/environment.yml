@@ -1,0 +1,16 @@
+# The Jupyter server environment at /opt/conda. Users install into it with
+# `mamba install`, so it holds only what the image needs to serve notebooks.
+#
+# After changing this file, regenerate the lockfile: ./lock
+name: base
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - jupyterlab==4.6.6
+  - jupyterhub-singleuser==6.2.0
+  - jupyter-server-proxy==4.6.1
+  - ipykernel==7.4.0
+  - mamba==2.10.0
+  - ipywidgets==8.1.9
+  - jupyterlab-git==0.55.0

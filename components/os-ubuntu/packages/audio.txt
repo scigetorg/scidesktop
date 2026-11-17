@@ -1,0 +1,6 @@
+# PipeWire with PulseAudio compatibility; Selkies captures the monitor source.
+# Containerised applications bring their own ALSA and talk PulseAudio.
+libpulse0
+pipewire
+pipewire-pulse
+wireplumber

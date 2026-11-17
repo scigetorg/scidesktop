@@ -1,0 +1,5 @@
+{
+  "display_start_command": [
+    "/opt/scidesktop/start_desktop.sh"
+  ]
+}

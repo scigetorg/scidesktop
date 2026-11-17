@@ -1,0 +1,27 @@
+#!/bin/bash
+# Copies files from /etc/scidesktop/home-defaults into the user's home at
+# start, never overwriting a file the user already has. Derived images put
+# default settings there (desktop, editor or tool configuration).
+set -u
+SRC=/etc/scidesktop/home-defaults
+[ -d "${SRC}" ] || exit 0
+[ -n "$(find "${SRC}" -mindepth 1 \( -type f -o -type l \) -print -quit 2>/dev/null)" ] || exit 0
+
+copy='
+cd "$1" || exit 0
+n=0
+while IFS= read -r -d "" f; do
+    dest="$2/${f#./}"
+    [ -e "${dest}" ] || [ -L "${dest}" ] && continue
+    mkdir -p "$(dirname "${dest}")" && cp -P --preserve=mode,timestamps "${f}" "${dest}" && n=$((n + 1))
+done < <(find . \( -type f -o -type l \) -print0)
+[ "${n}" -eq 0 ] || echo "[home-defaults] copied ${n} file(s) to $2"
+'
+if [ "$(id -u)" -eq 0 ]; then
+    user="${NB_USER:-jovyan}"
+    home="$(getent passwd "${user}" | cut -d: -f6)"
+    runuser -u "${user}" -- bash -c "${copy}" _ "${SRC}" "${home}"
+else
+    bash -c "${copy}" _ "${SRC}" "${HOME}"
+fi
+exit 0

@@ -20,9 +20,10 @@ if [ ! -S "${X_SOCKET}" ]; then
         +iglx +render -nolisten tcp -ac -noreset -shmem -s 0 -dpms \
         >/tmp/Xvfb.log 2>&1 &
 
-    for _ in $(seq 1 100); do
+    # Up to 30 s, checked often: the desktop route waits on this.
+    for _ in $(seq 1 600); do
         [ -S "${X_SOCKET}" ] && break
-        sleep 0.3
+        sleep 0.05
     done
 fi
 
@@ -32,7 +33,12 @@ if [ ! -S "${X_SOCKET}" ]; then
 fi
 echo "[desktop] Xvfb ready on ${DISPLAY}"
 
-/usr/bin/dbus-launch --exit-with-session /usr/bin/startlxqt >/tmp/lxqt.log 2>&1 &
+# One D-Bus session for LXQt and the audio stack. Without an address in its
+# environment PipeWire auto-launches its own bus through the X server, which
+# can stall it for seconds and leave WirePlumber unable to connect.
+eval "$(/usr/bin/dbus-launch --sh-syntax --exit-with-x11)"
+export DBUS_SESSION_BUS_ADDRESS
+/usr/bin/startlxqt >/tmp/lxqt.log 2>&1 &
 echo "[desktop] LXQt session started"
 
 # PulseAudio compatibility: selkies captures the monitor source.
@@ -41,11 +47,16 @@ export PULSE_RUNTIME_PATH="${XDG_RUNTIME_DIR}/pulse"
 export PULSE_SERVER="unix:${PULSE_RUNTIME_PATH}/native"
 mkdir -p "${PULSE_RUNTIME_PATH}"
 
+# Audio: PipeWire first; once its socket exists, the session manager and the
+# PulseAudio server (which Selkies captures from) start together.
 pipewire >/tmp/pipewire.log 2>&1 &
-sleep 1
+for _ in $(seq 1 100); do
+    [ -S "${PIPEWIRE_RUNTIME_DIR}/pipewire-0" ] && break
+    sleep 0.02
+done
+[ -S "${PIPEWIRE_RUNTIME_DIR}/pipewire-0" ] || echo "[desktop] WARNING: PipeWire socket not up after 2 s; see /tmp/pipewire.log" >&2
 wireplumber >/tmp/wireplumber.log 2>&1 &
-sleep 0.3
 pipewire-pulse >/tmp/pipewire-pulse.log 2>&1 &
-echo "[desktop] PipeWire ready"
+echo "[desktop] PipeWire started"
 
 wait

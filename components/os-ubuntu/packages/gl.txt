@@ -1,0 +1,11 @@
+# GL/EGL and VA-API; pixelflux links libva even without a GPU
+libdrm2
+libegl1
+libgl1
+libopengl0
+libgles2
+libglvnd0
+libglx0
+libva2
+libva-drm2
+libva-x11-2
