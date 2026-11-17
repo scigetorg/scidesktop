@@ -38,5 +38,4 @@ FROM os AS test
 COPY --from=component / /
 RUN sciget --version \
     && test -x /usr/local/bin/before-notebook.d/30-sciget \
-    && python3 -c 'import json; json.load(open("/etc/sciget/catalogues.json")); json.load(open("/etc/sciget/config.json"))' \
     && test "$(stat -c %u /opt/sciget/applications)" = "${NB_UID}"

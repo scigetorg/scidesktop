@@ -26,7 +26,8 @@ cleanup() {
     for mode in disabled external internal; do
         docker rm -f "${NAME}-cvmfs-${mode}" >/dev/null 2>&1 || true
     done
-    docker rm -f "${NAME}-singleuser" "${NAME}-hub" "${NAME}-userns" >/dev/null 2>&1 || true
+    docker rm -f "${NAME}-singleuser" "${NAME}-hub" "${NAME}-userns" "${NAME}-tile" >/dev/null 2>&1 || true
+    [ -z "${TILE_DIR:-}" ] || rm -rf "${TILE_DIR:?}"
 }
 trap cleanup EXIT
 
@@ -75,7 +76,8 @@ print(' '.join(str(p) for p in sorted(ports)))" 2>/dev/null)
     || fail "only 8888 listens externally (got: ${external:-none})"
 
 # 4. The session is actually up
-for proc in Xvfb lxqt-session pipewire wireplumber pipewire-pulse; do
+# The session and its window manager.
+for proc in Xvfb icewm-session icewm pipewire wireplumber pipewire-pulse; do
     docker exec "${NAME}" pgrep -x "${proc}" >/dev/null 2>&1 \
         && pass "${proc} running" || fail "${proc} running"
 done
@@ -141,6 +143,17 @@ docker exec -u "$(docker exec "${NAME}" printenv NB_USER 2>/dev/null || echo jov
     bash -c 'cmp -s /etc/sciget/catalogues.json ~/.config/sciget/catalogues.json && sciget catalogue list | grep -q .' 2>/dev/null \
     && pass "sciget catalogue configured for the user" \
     || fail "sciget catalogue configured for the user"
+
+# Files that component tests cannot check on the OS layer, which has no
+# Python: sciget's system settings are valid JSON (sciget ignores a malformed
+# file) and the startup scripts parse.
+docker exec "${NAME}" python3 -c '
+import ast, json
+json.load(open("/etc/sciget/catalogues.json")); json.load(open("/etc/sciget/config.json"))
+for f in ("/usr/local/bin/start-notebook.py", "/usr/local/bin/start-singleuser.py"):
+    ast.parse(open(f).read())
+' >/dev/null 2>&1 && pass "sciget settings valid JSON, startup scripts parse" \
+    || fail "sciget settings valid JSON, startup scripts parse"
 
 # Every component's manifest entry is present and readable by the user.
 docker exec "${NAME}" python3 -c '
@@ -257,6 +270,39 @@ lab_code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${SU_PORT}/u
 [ "${lab_code}" = 302 ] && pass "singleuser sends unauthenticated users to the Hub" \
     || fail "singleuser sends unauthenticated users to the Hub (HTTP ${lab_code})"
 docker rm -f "${NAME}-singleuser" "${NAME}-hub" >/dev/null 2>&1 || true
+
+# App tiles: a desktop entry in sciget's applications folder becomes a
+# JupyterLab launcher tile, and the tile starts the application maximised
+# on the desktop (desktop_app.py), starting the desktop first.
+TILE_PORT="${SMOKE_TILE_PORT:-18997}"
+TILE_DIR=$(mktemp -d)
+printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=Smoke terminal' \
+    'Exec=xfce4-terminal --title=smoke-tile' > "${TILE_DIR}/smoke-terminal.desktop"
+chmod -R a+rX "${TILE_DIR}"
+docker run -d --name "${NAME}-tile" -p "${TILE_PORT}:8888" --shm-size=1g \
+    -e JUPYTER_TOKEN="${TOKEN}" -v "${TILE_DIR}:/opt/sciget/applications:ro" "${IMAGE}" >/dev/null
+for _ in $(seq 1 120); do
+    curl -fsS -o /dev/null "http://127.0.0.1:${TILE_PORT}/api" 2>/dev/null && break
+    sleep 0.5
+done
+curl -s "http://127.0.0.1:${TILE_PORT}/server-proxy/servers-info?token=${TOKEN}" 2>/dev/null \
+    | grep -q '"app-smoke-terminal"' \
+    && pass "app tile registered from sciget's applications folder" \
+    || fail "app tile registered from sciget's applications folder"
+tile_code=$(curl -s -o /dev/null -w '%{http_code}' -m 120 \
+    "http://127.0.0.1:${TILE_PORT}/app-smoke-terminal/launch?token=${TOKEN}" 2>/dev/null)
+for _ in $(seq 1 60); do
+    docker logs "${NAME}-tile" 2>&1 | grep -q "window 0x[0-9a-f]* maximised" && break
+    sleep 0.5
+done
+if [ "${tile_code}" = 200 ] && docker logs "${NAME}-tile" 2>&1 | grep -q "window 0x[0-9a-f]* maximised"; then
+    pass "app tile starts its application maximised"
+else
+    fail "app tile starts its application maximised (HTTP ${tile_code})"
+    docker logs "${NAME}-tile" 2>&1 | grep -E "desktop-app|\[desktop\]" | tail -5 | sed 's/^/        /'
+fi
+docker rm -f "${NAME}-tile" >/dev/null 2>&1 || true
+rm -rf "${TILE_DIR:?}"; TILE_DIR=""
 
 # Apptainer runs a container as the user, the way the Kubernetes deployment
 # runs pods: not privileged, no /dev/fuse, AppArmor and seccomp relaxed (the

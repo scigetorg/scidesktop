@@ -1,11 +1,18 @@
 #!/bin/bash
-# Bring up the desktop session: Xvfb, LXQt, PipeWire.
+# Bring up the desktop session: Xvfb, IceWM, PipeWire. IceWM gives a taskbar
+# and maximised applications (settings in /etc/X11/icewm).
 # Called by start_selkies.sh on first use, not at container boot.
 
 export DISPLAY="${DISPLAY:-:20}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}"
 mkdir -p "${XDG_RUNTIME_DIR}"
 chmod 700 "${XDG_RUNTIME_DIR}"
+
+# One session per container. Selkies and the app tiles both start it on
+# demand; a second caller exits while the first holds the lock (the session's
+# processes inherit it).
+exec 9>"${XDG_RUNTIME_DIR}/desktop.lock"
+flock -n 9 || { echo "[desktop] session already starting"; exit 0; }
 
 # Strip any ".screen" suffix: DISPLAY=:20.0 would look for X20.0.
 DISPLAY_NUM="${DISPLAY#*:}"
@@ -33,19 +40,26 @@ if [ ! -S "${X_SOCKET}" ]; then
 fi
 echo "[desktop] Xvfb ready on ${DISPLAY}"
 
-# One D-Bus session for LXQt and the audio stack. Without an address in its
-# environment PipeWire auto-launches its own bus through the X server, which
-# can stall it for seconds and leave WirePlumber unable to connect.
+# One D-Bus session for the desktop and the audio stack. Without an address in
+# its environment PipeWire auto-launches its own bus through the X server,
+# which can stall it for seconds and leave WirePlumber unable to connect.
 eval "$(/usr/bin/dbus-launch --sh-syntax --exit-with-x11)"
 export DBUS_SESSION_BUS_ADDRESS
-/usr/bin/startlxqt >/tmp/lxqt.log 2>&1 &
-echo "[desktop] LXQt session started"
+# Without icewmbg: painting the oversized screen's background delays Selkies'
+# start by about 0.5 s.
+/usr/bin/icewm-session --nobg >/tmp/icewm.log 2>&1 &
+echo "[desktop] IceWM session started"
 
 # PulseAudio compatibility: selkies captures the monitor source.
 export PIPEWIRE_RUNTIME_DIR="${XDG_RUNTIME_DIR}"
 export PULSE_RUNTIME_PATH="${XDG_RUNTIME_DIR}/pulse"
 export PULSE_SERVER="unix:${PULSE_RUNTIME_PATH}/native"
 mkdir -p "${PULSE_RUNTIME_PATH}"
+
+# The session's bus and audio server, for applications started from outside
+# the session (desktop_app.py).
+printf '%s\n' "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}" \
+    "PULSE_SERVER=${PULSE_SERVER}" >"${XDG_RUNTIME_DIR}/desktop.env"
 
 # Audio: PipeWire first; once its socket exists, the session manager and the
 # PulseAudio server (which Selkies captures from) start together.

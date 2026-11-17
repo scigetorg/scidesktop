@@ -1,0 +1,48 @@
+# IceWM settings: applications start maximised from JupyterLab's launcher
+# tiles, the taskbar switches between them. No start menu, workspaces,
+# desktop icons or system monitors; three taskbar buttons open sciget, the
+# file manager and a terminal. A user's ~/.icewm/preferences overrides this
+# file.
+
+# Taskbar at the bottom: launcher buttons (toolbar), window buttons, tray.
+ShowTaskBar=1
+TaskBarAtTop=0
+TaskBarShowStartMenu=0
+TaskBarShowWindowListMenu=0
+TaskBarShowWorkspaces=0
+TaskBarShowShowDesktopButton=0
+TaskBarShowCPUStatus=0
+TaskBarShowMEMStatus=0
+TaskBarShowNetStatus=0
+TaskBarShowMailboxStatus=0
+TaskBarShowAPMStatus=0
+TaskBarShowClock=0
+TaskBarShowTray=1
+TaskBarEnableSystemTray=1
+TaskBarShowWindows=1
+TaskBarShowWindowIcons=1
+TaskBarShowTransientWindows=0
+
+# One workspace, so a window cannot be lost on another.
+WorkspaceNames=" 1 "
+
+# Root menu (right click on the desktop): the window list only.
+ShowProgramsMenu=0
+ShowSettingsMenu=0
+ShowFocusModeMenu=0
+ShowThemesMenu=0
+ShowHelp=0
+ShowAbout=0
+ShowRun=0
+ShowWindowList=1
+ShowLogoutMenu=0
+ShowLogoutSubMenu=0
+
+# Windows the launcher does not maximise open in the free space.
+SmartPlacement=1
+CenterLarge=1
+# The browser resizes the screen through RandR; keep windows on it.
+ArrangeWindowsOnScreenSizeChange=1
+
+DesktopBackgroundColor="#000000"
+DesktopBackgroundImage=""

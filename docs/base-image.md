@@ -8,8 +8,8 @@ that another distribution or CPU architecture is an addition, not a rewrite.
 ## Goals
 
 - Own the startup path, the Python environment and every installed package.
-- One Python environment we maintain (Jupyter's). The system `python3` stays
-  only as an apt dependency of Openbox and LXQt.
+- One Python environment we maintain (Jupyter's). The OS layer has no system
+  `python3`.
 - Reproducible OS packages from a pinned base digest plus a package snapshot.
 - Keep docker-stacks' runtime contract so JupyterHub, operators and users see
   no change.
@@ -102,7 +102,7 @@ name.
 | `user` | `jovyan` UID 1000, group `users` GID 100, home `/home/jovyan` |
 | `x11` | Xvfb, xrandr, xdpyinfo, xkb tools, libX11/xcb/Xtst/Xfixes/Xdamage |
 | `gl` | libGL, libEGL, libGLES, libglvnd, libdrm, libva (pixelflux links it) |
-| `desktop` | LXQt session, Openbox, PCManFM-Qt, a terminal, an icon theme, dbus-x11 |
+| `desktop` | IceWM session, Thunar, xfce4-terminal, an icon theme, dbus-x11 |
 | `audio` | PipeWire, pipewire-pulse, WirePlumber, libpulse |
 | `fuse` | fuse3, squashfuse, fuse-overlayfs, uidmap, fakeroot |
 | `cvmfs` | CVMFS client, `cvmfs-config-none` |
@@ -165,7 +165,7 @@ prefixes in.
 
 What stays in `os-<id>` as distro packages: anything wired into system paths,
 dbus or fontconfig, or with hundreds of shared libraries. That is the desktop
-(LXQt, Xvfb, Mesa), audio (PipeWire), FUSE and CVMFS. These are reproducible
+(IceWM, Thunar, Xvfb, Mesa), audio (PipeWire), FUSE and CVMFS. These are reproducible
 through the OS layer's `pinning` mechanism, not through separate components.
 
 Rule for a new component: it installs into its own prefix, and is either static,

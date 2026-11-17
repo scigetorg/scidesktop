@@ -1,0 +1,8 @@
+# Settings that take precedence over the theme (Arc-Dark sets one button
+# width for every task). Equal-width task buttons, and a taskbar about 40 px
+# high with 32 px launcher icons. A user's ~/.icewm/prefoverride overrides
+# this file.
+TaskbarButtonWidthDivisor=6
+SmallIconSize=32
+NormalTaskBarFontNameXft="DejaVu Sans:size=15"
+ActiveTaskBarFontNameXft="DejaVu Sans:size=15:bold"

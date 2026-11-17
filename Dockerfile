@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# scidesktop: JupyterLab, an LXQt desktop streamed by Selkies, Apptainer, Lmod
+# scidesktop: JupyterLab, an IceWM desktop streamed by Selkies, Apptainer, Lmod
 # and sciget on the OS layer. Built with `docker buildx bake`; every component is a
 # named context (see docker-bake.hcl and docs/components.md).
 #

@@ -1,5 +1,5 @@
-# Virtual framebuffer, and the X tools Selkies calls (xrandr, cvt). Xvfb and
-# LXQt pull in xkbcomp and x11-utils themselves.
+# Virtual framebuffer, and the X tools Selkies calls (xrandr, cvt). Xvfb pulls
+# in xkbcomp itself.
 xvfb
 x11-xserver-utils
 xcvt

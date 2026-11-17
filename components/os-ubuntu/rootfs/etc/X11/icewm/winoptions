@@ -1,0 +1,2 @@
+# Window options for app mode. Replaces /usr/share/icewm/winoptions, whose
+# example rules hide some X11 tools (xeyes) from the taskbar.
