@@ -141,8 +141,8 @@ def static():
             fail("S6", f"{name}: the bake target's context is {t.get('context')}, not images/{name}")
         if name == BASE_IMAGE:
             continue
-        froms = [[w for w in text.split()[1:] if not w.startswith("--")] for ins, text in instructions(df) if ins == "FROM"]
-        base = froms[-1][0] if froms else None
+        from_lines = [[w for w in text.split()[1:] if not w.startswith("--")] for ins, text in instructions(df) if ins == "FROM"]
+        base = from_lines[-1][0] if from_lines else None
         if base not in images or base == name:
             fail("S6", f"{rel(df)}: the final stage must be FROM another image in images/, not {base}")
         elif t.get("contexts", {}).get(base) != f"target:{base}":
