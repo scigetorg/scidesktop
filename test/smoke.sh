@@ -83,6 +83,9 @@ for proc in Xvfb icewm-session icewm pipewire wireplumber pipewire-pulse; do
 done
 docker exec "${NAME}" bash -c 'test -S "${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}/pulse/native"' 2>/dev/null \
     && pass "pulseaudio socket up" || fail "pulseaudio socket up"
+docker exec "${NAME}" xrdb -query 2>/dev/null | grep -q '^Xcursor.size:[[:space:]]*24$' \
+    && pass "pointer size set (not scaled to the virtual screen)" \
+    || fail "pointer size set (not scaled to the virtual screen)"
 
 # Selkies' interpreter, read from its launcher, so the checks below run
 # wherever Selkies is installed.

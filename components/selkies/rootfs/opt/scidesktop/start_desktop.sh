@@ -40,6 +40,11 @@ if [ ! -S "${X_SOCKET}" ]; then
 fi
 echo "[desktop] Xvfb ready on ${DISPLAY}"
 
+# Without a size, Xcursor scales the pointer to the screen height (1/48), so
+# the oversized virtual screen gets a 96 px pointer. As a server resource it
+# applies to every client, including applications in containers.
+echo 'Xcursor.size: 24' | xrdb -merge
+
 # One D-Bus session for the desktop and the audio stack. Without an address in
 # its environment PipeWire auto-launches its own bus through the X server,
 # which can stall it for seconds and leave WirePlumber unable to connect.
