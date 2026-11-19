@@ -40,8 +40,10 @@ RUN micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
     && MAMBA_ROOT_PREFIX=/opt/conda micromamba clean --all --force-pkgs-dirs --yes \
     && /opt/conda/bin/jupyter lab clean \
     # Server settings and disabled JupyterLab plugins live in the environment.
+    # The settings file is not in jupyter_server_config.d/: Jupyter reads that
+    # folder only to enable extensions, and ignores any other setting there.
     && install -D -m 0644 /tmp/jupyter_server_config.json \
-        /opt/conda/etc/jupyter/jupyter_server_config.d/scidesktop.json \
+        /opt/conda/etc/jupyter/jupyter_server_config.json \
     && /opt/conda/bin/jupyter labextension disable --level=sys_prefix \
         '@jupyterlab/apputils-extension:announcements' \
         '@jupyterlab/extensionmanager-extension:plugin' \
@@ -83,7 +85,10 @@ RUN set -e \
     && for e in jupyter_server_proxy jupyterlab_git jupyterlmod; do \
          echo "${exts}" | grep -q "${e}.*enabled" || { echo "server extension ${e} not enabled"; exit 1; }; \
        done \
-    && python -c 'import json; c = json.load(open("/opt/conda/etc/jupyter/jupyter_server_config.d/scidesktop.json")); assert c["FileContentsManager"]["allow_hidden"]' \
+    # The server settings are loaded, not just installed.
+    && cfg=$(jupyter server --show-config 2>/dev/null) \
+    && echo "${cfg}" | grep -q 'allow_hidden = True' \
+    && echo "${cfg}" | grep -q "terminado_settings = {'shell_command': \['/bin/bash'\]}" \
     && test ! -d /opt/conda/pkgs -o -z "$(ls -A /opt/conda/pkgs 2>/dev/null | grep -v -E '^(cache|urls|urls.txt)$')" \
     && jupyter server extension list 2>&1 | grep -E 'enabled|disabled' \
     # rfc3987_syntax must not compile its parsers at import (patches/).

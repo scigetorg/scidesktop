@@ -20,9 +20,12 @@ export PULSE_SERVER="unix:${PULSE_RUNTIME_PATH}/native"
 # Strip any ".screen" suffix: DISPLAY=:20.0 would look for X20.0.
 DISPLAY_NUM="${DISPLAY#*:}"
 X_SOCKET="/tmp/.X11-unix/X${DISPLAY_NUM%%.*}"
+# A server that answers, not just its socket: a container restart leaves the
+# socket behind with no server (start_desktop.sh removes it).
+x_alive() { [ -S "${X_SOCKET}" ] && xrdb -query >/dev/null 2>&1; }
 
 # Start the session and let it come up while selkies starts.
-if [ ! -S "${X_SOCKET}" ]; then
+if ! x_alive; then
     echo "[selkies] starting desktop session"
     setsid /opt/scidesktop/start_desktop.sh </dev/null >>/tmp/scidesktop-desktop.log 2>&1 &
 fi
@@ -31,11 +34,11 @@ fi
 # doubling intervals (~1.3 s, then ~2.6 s), so starting Selkies sooner can
 # save a whole interval.
 for _ in $(seq 1 1200); do
-    [ -S "${X_SOCKET}" ] && break
+    x_alive && break
     sleep 0.05
 done
 
-if [ ! -S "${X_SOCKET}" ]; then
+if ! x_alive; then
     echo "[selkies] ERROR: no X server at ${X_SOCKET}; see /tmp/Xvfb.log and /tmp/scidesktop-desktop.log" >&2
     exit 1
 fi

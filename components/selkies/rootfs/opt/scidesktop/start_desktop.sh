@@ -17,6 +17,13 @@ flock -n 9 || { echo "[desktop] session already starting"; exit 0; }
 # Strip any ".screen" suffix: DISPLAY=:20.0 would look for X20.0.
 DISPLAY_NUM="${DISPLAY#*:}"
 X_SOCKET="/tmp/.X11-unix/X${DISPLAY_NUM%%.*}"
+x_alive() { xrdb -query >/dev/null 2>&1; }
+
+# A container restart kills the session without cleanup, leaving its X socket
+# and lock, which would stop Xvfb from starting and look like a running server.
+if ! x_alive; then
+    rm -f "${X_SOCKET}" "/tmp/.X${DISPLAY_NUM%%.*}-lock" "${XDG_RUNTIME_DIR}/desktop.env"
+fi
 
 # Oversized screen leaves room for client-driven resize.
 if [ ! -S "${X_SOCKET}" ]; then
@@ -29,12 +36,12 @@ if [ ! -S "${X_SOCKET}" ]; then
 
     # Up to 30 s, checked often: the desktop route waits on this.
     for _ in $(seq 1 600); do
-        [ -S "${X_SOCKET}" ] && break
+        [ -S "${X_SOCKET}" ] && x_alive && break
         sleep 0.05
     done
 fi
 
-if [ ! -S "${X_SOCKET}" ]; then
+if ! x_alive; then
     echo "[desktop] ERROR: X server did not start; see /tmp/Xvfb.log" >&2
     exit 1
 fi

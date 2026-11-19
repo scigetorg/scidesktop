@@ -52,6 +52,11 @@ body=$(curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/modu
 echo "${body}" | grep -qi lmod && pass "jupyterlmod finds Lmod" || fail "jupyterlmod finds Lmod (got: ${body:0:80})"
 body=$(curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/git/settings" 2>/dev/null)
 echo "${body}" | grep -q '"gitVersion": *"[0-9]' && pass "jupyterlab-git finds git" || fail "jupyterlab-git finds git (got: ${body:0:80})"
+# The server settings are in effect: hidden files are served.
+code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: token ${TOKEN}" \
+    "http://127.0.0.1:${PORT}/api/contents/.bashrc?content=0" 2>/dev/null)
+[ "${code}" = 200 ] && pass "hidden files served (server settings loaded)" \
+    || fail "hidden files served (server settings loaded) (got HTTP ${code})"
 
 # 2. The desktop route serves. This is what spawns selkies, so it is slow the
 #    first time.
@@ -251,6 +256,27 @@ if docker exec "${NAME}" bash -c 'ls -d /opt/neurodesk* /neurocommand /cvmfs/neu
 else
     pass "no neurodesk payload"
 fi
+
+# 8b. The desktop comes back after a container restart, which kills the
+#     session without cleanup and leaves its X socket behind.
+docker restart "${NAME}" >/dev/null
+for _ in $(seq 1 120); do
+    curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/api" 2>/dev/null && break
+    sleep 0.5
+done
+code=$(curl -s -o /dev/null -w '%{http_code}' -m 180 \
+    -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/desktop/")
+restarted=yes
+for proc in Xvfb icewm pipewire-pulse; do
+    up=
+    for _ in $(seq 1 100); do
+        docker exec "${NAME}" pgrep -x "${proc}" >/dev/null 2>&1 && up=1 && break
+        sleep 0.1
+    done
+    [ -n "${up}" ] || restarted="no (${proc} not running)"
+done
+[ "${code}" = 200 ] && [ "${restarted}" = yes ] && pass "desktop returns after a container restart" \
+    || fail "desktop returns after a container restart (HTTP ${code}, ${restarted})"
 
 # 9. JupyterHub spawn. KubeSpawner runs start-singleuser.py with the Hub's
 #    environment; the server checks the Hub API before serving, so a stand-in
