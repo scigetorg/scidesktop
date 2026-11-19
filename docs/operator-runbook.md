@@ -5,6 +5,16 @@ must provide, and how to check and triage a deployment. Deploy an image digest
 or an immutable short-SHA tag from `ghcr.io/scigetorg/scidesktop`, not
 `latest`.
 
+Every tag is one image for amd64 and arm64; each node pulls its own
+architecture.
+
+| Tag | Moves | Use |
+| --- | --- | --- |
+| `<short sha>` (seven characters of the commit on `main`) | never | deployments |
+| `<YYYY-MM-DD>` (UTC) | to the last build of that day | finding a build by date |
+| `latest` | with every build of `main` | trying it out |
+| `run-<number>-<arch>` | never | none: single-architecture parts of the tags above |
+
 ## Platform requirements
 
 scidesktop exists to launch containerised tools with Apptainer, inside the

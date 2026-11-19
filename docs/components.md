@@ -15,8 +15,9 @@ python3 test/contract.py layers                # the rules below, after building
 ./test/smoke.sh scidesktop                     # the assembled image end to end
 ```
 
-CI runs all of these on every pull request. A pull request that breaks a rule
-fails with the rule's code (S1-S5, L1-L5) and what to change.
+CI runs all of these on every pull request, once on amd64 and once on arm64.
+A pull request that breaks a rule fails with the rule's code (S1-S7, L1-L5) and
+what to change.
 
 ## The rules
 
@@ -78,7 +79,43 @@ components/<component>/
   would add templating for the few top-level pins only, while the lock file
   stays the record of everything installed.
 - **Checksums** are not updated by Renovate: update the `*_SHA256` variable
-  with its version.
+  with its version. A file that differs per architecture has one variable per
+  architecture, `NAME_SHA256_AMD64` and `NAME_SHA256_ARM64` (S5); update both.
+
+### Architectures
+
+Every image is built for amd64 and arm64. One bake run builds one platform:
+the machine's own by default, or `PLATFORM=linux/arm64 docker buildx bake`.
+CI builds each on a runner of that architecture and joins the two when it
+publishes (see [images.md](images.md#ci-and-publishing)).
+
+- **Ask `components/target-arch`, not the machine (S7).** buildx sets
+  `TARGETARCH` (`amd64`, `arm64`). `target-arch <naming>` turns it into the
+  name an upstream uses: `conda` (`linux-64`, `linux-aarch64`), `uname`
+  (`x86_64`, `aarch64`), `deb`, `go`. It fails with a clear message on an
+  architecture scidesktop has no build for. A component declares
+  `ARG TARGETARCH` and mounts the helper into the `RUN` that needs it:
+
+  ```dockerfile
+  ARG TARGETARCH
+  RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+      curl -fsSLO "https://example.org/tool-$(target-arch uname).tar.gz"
+  ```
+
+  Nothing calls `uname -m` or `dpkg --print-architecture`. A new naming is a
+  line in `target-arch`; a new architecture is a line there, a CI runner, and
+  whatever the build then reports missing.
+- **A checksum per architecture**, picked by `TARGETARCH`; see
+  `components/micromamba/Dockerfile`.
+- **A conda lock per architecture (S7).** `./lock` solves `environment.yml`
+  for every architecture in one run and writes `linux-64.lock` and
+  `linux-aarch64.lock`; the build installs the one for its `TARGETARCH`, and
+  fails if a pin is missing from either. The pip lock (`requirements.lock`) is
+  one file for all architectures: each pin lists the hashes of every file of
+  that version, so `--require-hashes` installs exactly the locked version
+  whichever wheel fits.
+- **Software without an arm64 build** cannot be in an image. Build it from
+  source in the component, or leave it to sciget and Apptainer.
 
 ### Shared places
 
@@ -121,7 +158,8 @@ in that order.
 1. `components/<component>/Dockerfile` with `rootfs`, `component` and `test` stages (copy
    an existing component, e.g. `components/lmod`), and `rootfs/` for its integration files.
 2. Versions in `docker-bake.hcl` with `# renovate:` comments; targets `<component>`
-   and `<component>-test`; add `<component>-test` to group `test`.
+   and `<component>-test`; add `<component>-test` to group `test`. CI finds
+   the component by its folder: nothing to add to the workflows.
 3. If it goes into the image: add it to the `scidesktop` target's contexts and
    one `COPY --link --from=<component> / /` line to `images/scidesktop/Dockerfile`.
 4. A Renovate group for `components/<component>/**` and its dependency names.
