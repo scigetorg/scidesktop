@@ -21,7 +21,6 @@ RUN --mount=type=bind,from=components,source=check-lock,target=/usr/local/bin/ch
 COPY --from=micromamba /usr/local/bin/micromamba /usr/local/bin/micromamba
 COPY linux-64.lock requirements.lock /tmp/
 COPY patches/ /tmp/patches/
-COPY jupyter_server_config.json /tmp/jupyter_server_config.json
 RUN micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
         --file /tmp/linux-64.lock \
     # Keep users' installs on this Python minor, as docker-stacks does.
@@ -39,11 +38,9 @@ RUN micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
         /opt/conda/lib/python3*/site-packages/simpervisor \
     && MAMBA_ROOT_PREFIX=/opt/conda micromamba clean --all --force-pkgs-dirs --yes \
     && /opt/conda/bin/jupyter lab clean \
-    # Server settings and disabled JupyterLab plugins live in the environment.
-    # The settings file is not in jupyter_server_config.d/: Jupyter reads that
-    # folder only to enable extensions, and ignores any other setting there.
-    && install -D -m 0644 /tmp/jupyter_server_config.json \
-        /opt/conda/etc/jupyter/jupyter_server_config.json \
+    # Disabled JupyterLab plugins live in the environment. The server settings
+    # are in rootfs/etc/jupyter, the lowest-priority config folder, so an
+    # operator's or derived image's settings in any other folder win.
     && /opt/conda/bin/jupyter labextension disable --level=sys_prefix \
         '@jupyterlab/apputils-extension:announcements' \
         '@jupyterlab/extensionmanager-extension:plugin' \
@@ -88,7 +85,8 @@ RUN set -e \
     # The server settings are loaded, not just installed.
     && cfg=$(jupyter server --show-config 2>/dev/null) \
     && echo "${cfg}" | grep -q 'allow_hidden = True' \
-    && echo "${cfg}" | grep -q "terminado_settings = {'shell_command': \['/bin/bash'\]}" \
+    && echo "${cfg}" | grep -q "terminado_settings = {'shell_command': \['/bin/bash', '-l'\]}" \
+    && echo "${cfg}" | grep -q 'check_for_updates_class = .*NeverCheckForUpdate' \
     && test ! -d /opt/conda/pkgs -o -z "$(ls -A /opt/conda/pkgs 2>/dev/null | grep -v -E '^(cache|urls|urls.txt)$')" \
     && jupyter server extension list 2>&1 | grep -E 'enabled|disabled' \
     # rfc3987_syntax must not compile its parsers at import (patches/).
