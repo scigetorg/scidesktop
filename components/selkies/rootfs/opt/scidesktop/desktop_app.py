@@ -24,6 +24,7 @@ import http.server
 import json
 import os
 import shlex
+import socket
 import subprocess
 import sys
 import threading
@@ -74,13 +75,23 @@ def wait_for(test, timeout, step=0.05):
     return test()
 
 
+def x_alive():
+    """An X server answers; a container restart leaves its socket file behind."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        try:
+            s.connect(X_SOCKET)
+            return True
+        except OSError:
+            return False
+
+
 def ensure_session():
-    if not os.path.exists(X_SOCKET):
+    if not x_alive():
         log("starting desktop session")
         with open("/tmp/scidesktop-desktop.log", "ab") as out:
             subprocess.Popen(["/opt/scidesktop/start_desktop.sh"], stdin=subprocess.DEVNULL,
                              stdout=out, stderr=out, start_new_session=True)
-    if not wait_for(lambda: os.path.exists(X_SOCKET), 30):
+    if not wait_for(x_alive, 30):
         raise RuntimeError(f"no X server at {X_SOCKET}")
     d = xdisplay.Display(DISPLAY)
     try:
