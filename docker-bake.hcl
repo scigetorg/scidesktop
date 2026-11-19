@@ -19,7 +19,8 @@
 # Renovate updates every variable carrying a "# renovate:" comment. Keep each
 # variable on one line: the comment, then `variable "NAME" { default = "..." }`.
 # Checksums are not updated by Renovate; a version bump fails the build until
-# its checksum is updated too.
+# its checksum is updated too. A file that differs per architecture has one
+# checksum variable per architecture: NAME_SHA256_AMD64, NAME_SHA256_ARM64.
 
 # renovate: datasource=docker depName=ubuntu
 variable "UBUNTU" { default = "26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96" }
@@ -31,7 +32,8 @@ variable "CVMFS_CONFIG_VERSION" { default = "1.1-0" }
 
 # renovate: datasource=github-releases depName=mamba-org/micromamba-releases
 variable "MICROMAMBA_VERSION" { default = "2.10.0-0" }
-variable "MICROMAMBA_SHA256" { default = "701f39c06f8e6a670a0e186c8479b9e5c0502a2f0cda6cef65d83bdd2875e8bd" }
+variable "MICROMAMBA_SHA256_AMD64" { default = "701f39c06f8e6a670a0e186c8479b9e5c0502a2f0cda6cef65d83bdd2875e8bd" }
+variable "MICROMAMBA_SHA256_ARM64" { default = "3bb56786e21b9b24024f599fe9185b4a59dc3f9f59937a42311ee583adbbb23c" }
 
 # renovate: datasource=github-releases depName=apptainer/apptainer extractVersion=^v(?<version>.*)$
 variable "APPTAINER_VERSION" { default = "1.5.5" }
@@ -93,7 +95,10 @@ target "os-ubuntu" {
   inherits = ["_common"]
   context  = "components/os-ubuntu"
   target   = "os"
-  contexts = { tests = "test" }
+  contexts = {
+    tests      = "test"
+    components = "components"
+  }
   args = {
     UBUNTU_IMAGE         = "docker.io/library/ubuntu:${UBUNTU}"
     APT_CACHE_ID         = "ubuntu-${regex("^[^@]+", UBUNTU)}"
@@ -142,12 +147,18 @@ target "_component" {
 # A build tool for the conda-based components; not copied into the image.
 target "micromamba" {
   inherits = ["_common"]
-  contexts = { os = "target:os-ubuntu" }
-  context  = "components/micromamba"
-  target   = "component"
+  contexts = {
+    os         = "target:os-ubuntu"
+    components = "components"
+  }
+  context = "components/micromamba"
+  target  = "component"
   args = {
-    MICROMAMBA_VERSION = MICROMAMBA_VERSION
-    MICROMAMBA_SHA256  = MICROMAMBA_SHA256
+    UBUNTU_IMAGE            = "docker.io/library/ubuntu:${UBUNTU}"
+    APT_CACHE_ID            = "ubuntu-${regex("^[^@]+", UBUNTU)}"
+    MICROMAMBA_VERSION      = MICROMAMBA_VERSION
+    MICROMAMBA_SHA256_AMD64 = MICROMAMBA_SHA256_AMD64
+    MICROMAMBA_SHA256_ARM64 = MICROMAMBA_SHA256_ARM64
   }
 }
 

@@ -23,6 +23,10 @@ BASE_IMAGE = "scidesktop"
 ASSEMBLY = IMAGES / BASE_IMAGE / "Dockerfile"
 COMPONENTS = ROOT / "components"
 OS_COMPONENT = "os-ubuntu"
+# The one place that names architectures; everything else asks it.
+TARGET_ARCH = COMPONENTS / "target-arch"
+# Asking the machine instead of buildx's TARGETARCH.
+ARCH_PROBE = re.compile(r"uname -m|dpkg --print-architecture")
 
 # Bake variables that carry no "# renovate:" comment, and why.
 NOT_RENOVATED = {
@@ -71,6 +75,12 @@ def instructions(dockerfile):
 
 def rel(path):
     return path.relative_to(ROOT)
+
+
+def target_arch(naming, arch=None):
+    out = subprocess.run([TARGET_ARCH, naming], env={"TARGETARCH": arch} if arch else {},
+                         capture_output=True, text=True, check=True).stdout
+    return out.split()
 
 
 def component_names():
@@ -123,6 +133,21 @@ def static():
         for ins, line in instructions(df):
             if ins == "ARG" and "=" in line:
                 fail("S4", f"{u}: ARG with a value; put it in docker-bake.hcl: {line}")
+
+    # S7: the architecture comes from buildx. Nothing asks the machine.
+    arches = target_arch("list")
+    for path in sorted(COMPONENTS.rglob("*")):
+        if not path.is_file() or path == TARGET_ARCH or path.suffix == ".lock":
+            continue
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            code = line.split("#", 1)[0]
+            if ARCH_PROBE.search(code):
+                fail("S7", f"{rel(path)}:{n}: asks the machine for its architecture; "
+                           f"use TARGETARCH and components/target-arch: {line.strip()[:70]}")
 
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is
@@ -181,8 +206,16 @@ def static():
         if not re.fullmatch(r'variable "\w+" \{ default = "[^"]*" \}', line):
             fail("S5", f"docker-bake.hcl:{i+1}: {name} must be one line: variable \"{name}\" {{ default = \"...\" }}")
         renovated = i > 0 and lines[i - 1].startswith("# renovate: ")
-        if not renovated and name not in NOT_RENOVATED and not name.endswith("_SHA256"):
+        checksum = re.fullmatch(r"(\w+_SHA256)(?:_([A-Z0-9]+))?", name)
+        if not renovated and name not in NOT_RENOVATED and not checksum:
             fail("S5", f"docker-bake.hcl:{i+1}: {name} has no `# renovate:` comment above it")
+        # A checksum that differs per architecture has a variable for each one.
+        if checksum and checksum.group(2):
+            for arch in arches:
+                if f'variable "{checksum.group(1)}_{arch.upper()}" ' not in BAKE.read_text():
+                    fail("S5", f"docker-bake.hcl:{i+1}: {name} has no {checksum.group(1)}_{arch.upper()} beside it")
+            if checksum.group(2).lower() not in arches:
+                fail("S5", f"docker-bake.hcl:{i+1}: {name} is for an architecture components/target-arch does not list")
 
 
 def component_tar(target):
