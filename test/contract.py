@@ -25,6 +25,7 @@ COMPONENTS = ROOT / "components"
 OS_COMPONENT = "os-ubuntu"
 # The one place that names architectures; everything else asks it.
 TARGET_ARCH = COMPONENTS / "target-arch"
+CI = ROOT / ".github" / "workflows" / "image.yml"
 # Asking the machine instead of buildx's TARGETARCH.
 ARCH_PROBE = re.compile(r"uname -m|dpkg --print-architecture")
 
@@ -155,6 +156,11 @@ def static():
             lock = env.with_name(f"{target_arch('conda', arch)[0]}.lock")
             if not lock.is_file():
                 fail("S7", f"{rel(env.parent)}: no {lock.name} for {arch}; run ./lock")
+
+    ci = sorted(re.findall(r"^ +- arch: (\S+)$", CI.read_text(), re.M))
+    if ci != sorted(arches):
+        fail("S7", f"{rel(CI)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
+                   f"components/target-arch lists {', '.join(arches)}")
 
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is

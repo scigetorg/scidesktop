@@ -6,6 +6,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,11 +15,29 @@ concurrency:
   group: image-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Images pushed to GHCR as ghcr.io/<owner>/<image>. Every folder in images/
+  # is built and smoke-tested on every architecture; add a name here to
+  # publish it too.
+  PUBLISH: scidesktop
+  # This run's images before they are published: <candidate>-<arch>.
+  CANDIDATE: run-${{ github.run_id }}
+
 jobs:
+  # One runner per architecture, each building its own: no emulation.
+  # test/contract.py (S7) keeps this list equal to components/target-arch.
   build:
-    name: Build, test, smoke and publish (amd64)
-    runs-on: ubuntu-latest
+    name: Build, test and smoke (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
@@ -42,52 +61,80 @@ jobs:
         run: python3 test/contract.py static
 
       # One bake builds every component, runs every component's test stage and loads
-      # every image in images/. Each component caches in its own GitHub Actions scope, so
-      # an unchanged component is not rebuilt.
-      - name: Build components, component tests and image
+      # every image in images/ as <image>:ci.
+      - name: Build components, component tests and images
         env:
-          IMAGE: scidesktop:ci
-          MICRODESKTOP_IMAGE: microdesktop:ci
+          PLATFORM: linux/${{ matrix.arch }}
         run: |
-          args=()
-          for t in os-ubuntu micromamba startup jupyter-env selkies apptainer lmod sciget scidesktop microdesktop; do
-              args+=(--set "${t}.cache-from=type=gha,scope=${t}"
-                     --set "${t}.cache-to=type=gha,scope=${t},mode=max")
-          done
+          mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci write-cache)
           docker buildx bake "${args[@]}" default test
 
       # docs/components.md: what each component writes (no overlaps, no shadowing,
       # no permission changes to shared folders, a manifest entry).
       - name: Contract (layers)
+        env:
+          PLATFORM: linux/${{ matrix.arch }}
         run: python3 test/contract.py layers
 
       # The runner restricts unprivileged user namespaces through AppArmor,
       # which refuses Apptainer's user mapping. Lifting it matches the
       # clusters, whose `notebook` AppArmor profile allows user namespaces.
-      - name: Smoke test
+      - name: Smoke test every image
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          ./test/smoke.sh scidesktop:ci
-
-      - name: Smoke test (microdesktop)
-        run: ./test/smoke.sh microdesktop:ci
+          failed=0
+          for dockerfile in images/*/Dockerfile; do
+              image="$(basename "$(dirname "${dockerfile}")")"
+              echo "::group::${image}"
+              ./test/smoke.sh "${image}:ci" || failed=1
+              echo "::endgroup::"
+          done
+          exit "${failed}"
 
       - name: Log in to GHCR
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish tested image
-        if: github.event_name == 'push'
-        env:
-          IMAGE: ghcr.io/${{ github.repository }}
+      # Pushed under a tag nothing deploys. The publish job gives the images
+      # their real tags once every architecture has passed.
+      - name: Push tested images as candidates
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
-          image="$(printf '%s' "${IMAGE}" | tr '[:upper:]' '[:lower:]')"
-          short_sha="$(printf '%.7s' "${GITHUB_SHA}")"
-          docker tag scidesktop:ci "${image}:${short_sha}"
-          docker tag scidesktop:ci "${image}:latest"
-          docker push "${image}:${short_sha}"
-          docker push "${image}:latest"
+          for image in ${PUBLISH}; do
+              ref="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${image}:${CANDIDATE}-${{ matrix.arch }}"
+              docker tag "${image}:ci" "${ref}"
+              docker push "${ref}"
+          done
+
+  publish:
+    name: Publish multi-arch images
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Join the candidates and tag them
+        run: |
+          # shellcheck disable=SC2086
+          .github/scripts/publish-manifests "ghcr.io/${GITHUB_REPOSITORY_OWNER}" "${CANDIDATE}" ${PUBLISH}

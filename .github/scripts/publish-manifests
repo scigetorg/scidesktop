@@ -1,0 +1,35 @@
+#!/bin/bash
+# Joins one CI run's per-architecture candidates into a multi-arch image and
+# tags it, for each image named.
+#
+#   publish-manifests <registry>/<owner> <candidate> <image>...
+#
+# The candidates are <image>:<candidate>-<arch>, one per architecture in
+# components/target-arch. Tags written: the commit's short SHA (the one to
+# deploy), then the UTC date and latest. The candidate tags stay: the
+# multi-arch image points at them.
+set -euo pipefail
+registry="${1:?usage: publish-manifests <registry>/<owner> <candidate> <image>...}"
+candidate="${2:?}"
+shift 2
+cd "$(dirname "$0")/../.."
+arches="$(components/target-arch list)"
+short_sha="$(printf '%.7s' "${GITHUB_SHA:?}")"
+date="$(date -u +%Y-%m-%d)"
+for image in "$@"; do
+    repo="${registry,,}/${image}"
+    sources=()
+    for arch in ${arches}; do
+        sources+=("${repo}:${candidate}-${arch}")
+    done
+    docker buildx imagetools create --tag "${repo}:${short_sha}" "${sources[@]}"
+    # The moving tags follow only an image that holds every architecture.
+    published="$(docker buildx imagetools inspect "${repo}:${short_sha}" \
+        --format '{{range .Manifest.Manifests}}{{if eq .Platform.OS "linux"}}{{.Platform.Architecture}} {{end}}{{end}}')"
+    if [ "$(printf '%s\n' ${published} | sort)" != "$(printf '%s\n' ${arches} | sort)" ]; then
+        echo "publish-manifests: ${repo}:${short_sha} holds '${published}', not '${arches}'" >&2
+        exit 1
+    fi
+    docker buildx imagetools create --tag "${repo}:${date}" --tag "${repo}:latest" "${repo}:${short_sha}"
+    echo "published ${repo}:${short_sha}, :${date} and :latest for ${arches}"
+done
