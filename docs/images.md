@@ -14,10 +14,11 @@ images/
 
 ## How a domain image gets the base
 
-A domain image's Dockerfile names the base by its bake target:
+A domain image's Dockerfile starts from the base under a name only bake
+defines:
 
 ```dockerfile
-FROM scidesktop
+FROM scidesktop-base
 ```
 
 and its bake target hands that name the base built in the same run:
@@ -26,7 +27,7 @@ and its bake target hands that name the base built in the same run:
 target "microdesktop" {
   inherits = ["_common"]
   context  = "images/microdesktop"
-  contexts = { scidesktop = "target:scidesktop" }
+  contexts = { scidesktop-base = "target:scidesktop" }
   tags     = [MICRODESKTOP_IMAGE]
   output   = ["type=docker"]
 }
@@ -36,8 +37,10 @@ target "microdesktop" {
 it from the cache), then microdesktop on top. Nothing is pulled from or pushed
 to a registry, and a change to the base rebuilds and retests every image in the
 same CI run. A plain `docker build` of the folder fails, because no image called
-`scidesktop` exists outside bake; that is deliberate, so an image never builds
-on a stale published base by accident.
+`scidesktop-base` exists outside bake; that is deliberate, so an image never
+builds on a stale base by accident. (`FROM scidesktop` would not fail: bake
+loads the base into the local image store as `scidesktop:latest`, and a plain
+build would take whatever version is stored there.)
 
 ## What a domain image may do
 
@@ -51,8 +54,8 @@ own change, so all images get it.
 
 The contract test (`python3 test/contract.py static`, rule S6) checks that each
 folder in `images/` has a bake target of the same name in the `default` group,
-built from that folder, and that a domain image's final stage is `FROM` another
-image in `images/` handed in as a bake target.
+built from that folder, and that the stage a domain image builds starts from
+`<image>-base` for another image in `images/`, handed in as a bake target.
 
 ## Adding an image
 
