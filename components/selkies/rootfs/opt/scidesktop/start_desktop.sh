@@ -42,7 +42,8 @@ echo "[desktop] Xvfb ready on ${DISPLAY}"
 
 # Without a size, Xcursor scales the pointer to the screen height (1/48), so
 # the oversized virtual screen gets a 96 px pointer. As a server resource it
-# applies to every client, including applications in containers.
+# applies to every client, including applications in containers; Selkies
+# scales it with the DPI (SELKIES_CURSOR_SIZE in start_selkies.sh).
 echo 'Xcursor.size: 24' | xrdb -merge
 
 # One D-Bus session for the desktop and the audio stack. Without an address in
@@ -50,9 +51,20 @@ echo 'Xcursor.size: 24' | xrdb -merge
 # which can stall it for seconds and leave WirePlumber unable to connect.
 eval "$(/usr/bin/dbus-launch --sh-syntax --exit-with-x11)"
 export DBUS_SESSION_BUS_ADDRESS
+# GTK applications take their DPI from XSETTINGS. Selkies rewrites
+# ~/.xsettingsd with the browser's DPI and signals xsettingsd; start at 96 DPI
+# like the X resources, so a file left by an earlier session does not apply.
+printf 'Xft/DPI %d\n' $((96 * 1024)) >"${HOME}/.xsettingsd"
+xsettingsd >/tmp/xsettingsd.log 2>&1 &
+
+# IceWM's pixel sizes follow the DPI Selkies sets from the browser: its
+# configuration comes from a runtime folder that desktop_scale.py rewrites.
+export ICEWM_PRIVCFG="${XDG_RUNTIME_DIR}/icewm"
+/opt/selkies/bin/python /opt/scidesktop/desktop_scale.py setup
 # Without icewmbg: painting the oversized screen's background delays Selkies'
 # start by about 0.5 s.
 /usr/bin/icewm-session --nobg >/tmp/icewm.log 2>&1 &
+/opt/selkies/bin/python /opt/scidesktop/desktop_scale.py watch >/tmp/desktop-scale.log 2>&1 &
 echo "[desktop] IceWM session started"
 
 # PulseAudio compatibility: selkies captures the monitor source.

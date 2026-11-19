@@ -38,7 +38,7 @@ for l in libX11-xcb.so libXtst.so libXfixes.so libXdamage.so libxkbcommon.so; do
 for l in libGL.so libEGL.so libGLESv2.so libdrm.so libva.so libva-drm.so libva-x11.so; do check "gl: ${l}" lib "${l}"; done
 
 # desktop
-for b in icewm-session icewm thunar xfce4-terminal; do check "desktop: ${b}" has "${b}"; done
+for b in icewm-session icewm thunar xfce4-terminal xsettingsd; do check "desktop: ${b}" has "${b}"; done
 check "desktop: IceWM theme" test -f /etc/X11/icewm/themes/Arc-Dark/default.theme
 
 # audio

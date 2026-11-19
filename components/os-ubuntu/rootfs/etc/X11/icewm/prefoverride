@@ -1,7 +1,8 @@
 # Settings that take precedence over the theme (Arc-Dark sets one button
 # width for every task). Equal-width task buttons, and a taskbar about 40 px
-# high with 32 px launcher icons. A user's ~/.icewm/prefoverride overrides
-# this file.
+# high with 32 px launcher icons at 96 DPI. A user's ~/.icewm/prefoverride
+# replaces this file. Pixel sizes are scaled to the desktop's DPI by
+# /opt/scidesktop/desktop_scale.py; font sizes in points follow it already.
 TaskbarButtonWidthDivisor=6
 SmallIconSize=32
 NormalTaskBarFontNameXft="DejaVu Sans:size=15"

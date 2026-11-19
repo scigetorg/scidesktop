@@ -77,7 +77,7 @@ print(' '.join(str(p) for p in sorted(ports)))" 2>/dev/null)
 
 # 4. The session is actually up
 # The session and its window manager.
-for proc in Xvfb icewm-session icewm pipewire wireplumber pipewire-pulse; do
+for proc in Xvfb icewm-session icewm xsettingsd pipewire wireplumber pipewire-pulse; do
     docker exec "${NAME}" pgrep -x "${proc}" >/dev/null 2>&1 \
         && pass "${proc} running" || fail "${proc} running"
 done
@@ -86,6 +86,17 @@ docker exec "${NAME}" bash -c 'test -S "${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)
 docker exec "${NAME}" xrdb -query 2>/dev/null | grep -q '^Xcursor.size:[[:space:]]*24$' \
     && pass "pointer size set (not scaled to the virtual screen)" \
     || fail "pointer size set (not scaled to the virtual screen)"
+# A 2x browser: Selkies sets Xft.dpi 192, and IceWM's taskbar icons follow.
+docker exec "${NAME}" bash -c '
+    cfg="${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}/icewm/prefoverride"
+    echo "Xft.dpi: 192" | xrdb -merge
+    for _ in $(seq 1 50); do
+        tail -1 "${cfg}" | grep -qx SmallIconSize=64 && pgrep -x icewm >/dev/null && ok=1 && break
+        sleep 0.1
+    done
+    echo "Xft.dpi: 96" | xrdb -merge
+    [ -n "${ok:-}" ]' >/dev/null 2>&1 \
+    && pass "IceWM sizes follow the desktop DPI" || fail "IceWM sizes follow the desktop DPI"
 
 # Selkies' interpreter, read from its launcher, so the checks below run
 # wherever Selkies is installed.

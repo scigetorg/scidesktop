@@ -42,6 +42,10 @@ fi
 
 echo "[selkies] starting on 127.0.0.1:${PORT} under '${SUBFOLDER:-/}'"
 
+# The pointer size at 96 DPI; Selkies scales it with the DPI it sets from the
+# browser (start_desktop.sh sets the same size before any browser connects).
+export SELKIES_CURSOR_SIZE="${SELKIES_CURSOR_SIZE:-24}"
+
 # Selkies refuses to start without a password; the Jupyter config generates one
 # per container and the proxy sends the matching header.
 exec selkies \

@@ -7,3 +7,5 @@ xfce4-terminal
 # Icons for the taskbar buttons, Thunar and the terminal
 breeze-icon-theme
 fonts-liberation
+# XSETTINGS for GTK applications: Selkies hands it the browser's DPI
+xsettingsd
