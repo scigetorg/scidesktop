@@ -35,6 +35,7 @@ NOT_RENOVATED = {
     "NB_USER": "setting, not a version",
     "NB_UID": "setting, not a version",
     "NB_GID": "setting, not a version",
+    "PLATFORM": "build setting",
     "IMAGE": "output tag",
     "MICRODESKTOP_IMAGE": "output tag",
     "SCIGET_COMMIT": "tracked by its own Renovate rule (git-refs on main)",

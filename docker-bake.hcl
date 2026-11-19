@@ -58,6 +58,11 @@ variable "NB_GID" { default = "100" }
 
 # --- Build settings ---------------------------------------------------------
 
+# The platform to build, for example linux/arm64. Empty builds for the machine
+# the builder runs on, which is what loads into the local image store. One
+# platform per run: CI builds each on its own runner and joins them when it
+# publishes.
+variable "PLATFORM" { default = "" }
 variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
@@ -85,7 +90,7 @@ group "test" {
 }
 
 target "_common" {
-  platforms = ["linux/amd64"]
+  platforms = PLATFORM == "" ? [] : [PLATFORM]
 }
 
 # --- OS layer ---------------------------------------------------------------
