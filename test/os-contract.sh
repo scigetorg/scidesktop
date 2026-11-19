@@ -38,8 +38,8 @@ for l in libX11-xcb.so libXtst.so libXfixes.so libXdamage.so libxkbcommon.so; do
 for l in libGL.so libEGL.so libGLESv2.so libdrm.so libva.so libva-drm.so libva-x11.so; do check "gl: ${l}" lib "${l}"; done
 
 # desktop
-for b in startlxqt lxqt-session lxqt-panel openbox pcmanfm-qt qterminal; do check "desktop: ${b}" has "${b}"; done
-check "desktop: Qt SVG image plugin (themed icons)" bash -c 'ls /usr/lib/*/qt6/plugins/imageformats/libqsvg.so /usr/lib64/qt6/plugins/imageformats/libqsvg.so 2>/dev/null | grep -q .'
+for b in icewm-session icewm thunar xfce4-terminal xsettingsd; do check "desktop: ${b}" has "${b}"; done
+check "desktop: IceWM theme" test -f /etc/X11/icewm/themes/Arc-Dark/default.theme
 
 # audio
 for b in pipewire pipewire-pulse wireplumber; do check "audio: ${b}" has "${b}"; done

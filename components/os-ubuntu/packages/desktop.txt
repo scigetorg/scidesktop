@@ -1,8 +1,11 @@
-# LXQt session on Openbox
-lxqt-core
-openbox
+# IceWM session (settings in rootfs/etc/X11/icewm): a taskbar, applications
+# maximised. A file manager and a terminal on the taskbar; xfce4-terminal also
+# runs sciget's text interface.
+icewm
+thunar
+xfce4-terminal
+# Icons for the taskbar buttons, Thunar and the terminal
 breeze-icon-theme
 fonts-liberation
-# Qt 6 SVG image and icon plugins. A Recommends of libqt6gui6, so skipped by
-# --no-install-recommends; without it LXQt's themed menu button is blank.
-qt6-svg-plugins
+# XSETTINGS for GTK applications: Selkies hands it the browser's DPI
+xsettingsd

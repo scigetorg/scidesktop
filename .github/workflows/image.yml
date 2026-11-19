@@ -41,15 +41,16 @@ jobs:
       - name: Contract (static)
         run: python3 test/contract.py static
 
-      # One bake builds every component, runs every component's test stage and loads the
-      # assembled image. Each component caches in its own GitHub Actions scope, so
+      # One bake builds every component, runs every component's test stage and loads
+      # every image in images/. Each component caches in its own GitHub Actions scope, so
       # an unchanged component is not rebuilt.
       - name: Build components, component tests and image
         env:
           IMAGE: scidesktop:ci
+          MICRODESKTOP_IMAGE: microdesktop:ci
         run: |
           args=()
-          for t in os-ubuntu micromamba startup jupyter-env selkies apptainer lmod sciget scidesktop; do
+          for t in os-ubuntu micromamba startup jupyter-env selkies apptainer lmod sciget scidesktop microdesktop; do
               args+=(--set "${t}.cache-from=type=gha,scope=${t}"
                      --set "${t}.cache-to=type=gha,scope=${t},mode=max")
           done
@@ -67,6 +68,9 @@ jobs:
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           ./test/smoke.sh scidesktop:ci
+
+      - name: Smoke test (microdesktop)
+        run: ./test/smoke.sh microdesktop:ci
 
       - name: Log in to GHCR
         if: github.event_name == 'push'

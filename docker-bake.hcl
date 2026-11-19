@@ -57,14 +57,16 @@ variable "NB_GID" { default = "100" }
 # --- Build settings ---------------------------------------------------------
 
 variable "IMAGE" { default = "scidesktop:latest" }
+variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
 # (Renovate tracks its main branch). For local sciget development, build your
 # working copy instead: SCIGET_SRC=../sciget docker buildx bake --allow=fs.read=..
 variable "SCIGET_COMMIT" { default = "a03f07260ca3f554360c5fcf137be9dbe844467e" }
 variable "SCIGET_SRC" { default = "https://github.com/scigetorg/sciget.git#${SCIGET_COMMIT}" }
 
+# Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop"]
+  targets = ["scidesktop", "microdesktop"]
 }
 
 group "test" {
@@ -247,12 +249,12 @@ target "micromamba-test" {
   output   = ["type=cacheonly"]
 }
 
-# --- Assembly ---------------------------------------------------------------
+# --- Images -----------------------------------------------------------------
 
+# The base: the components assembled on the OS layer.
 target "scidesktop" {
-  inherits   = ["_common"]
-  context    = "."
-  dockerfile = "Dockerfile"
+  inherits = ["_common"]
+  context  = "images/scidesktop"
   contexts = {
     os          = "target:os-ubuntu"
     startup     = "target:startup"
@@ -264,4 +266,14 @@ target "scidesktop" {
   }
   tags   = [IMAGE]
   output = ["type=docker"]
+}
+
+# Domain images build FROM the base by name. The named context hands them the
+# scidesktop target built here, so no registry is involved (docs/images.md).
+target "microdesktop" {
+  inherits = ["_common"]
+  context  = "images/microdesktop"
+  contexts = { scidesktop = "target:scidesktop" }
+  tags     = [MICRODESKTOP_IMAGE]
+  output   = ["type=docker"]
 }

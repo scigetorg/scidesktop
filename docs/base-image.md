@@ -8,8 +8,8 @@ that another distribution or CPU architecture is an addition, not a rewrite.
 ## Goals
 
 - Own the startup path, the Python environment and every installed package.
-- One Python environment we maintain (Jupyter's). The system `python3` stays
-  only as an apt dependency of Openbox and LXQt.
+- One Python environment we maintain (Jupyter's). The OS layer has no system
+  `python3`.
 - Reproducible OS packages from a pinned base digest plus a package snapshot.
 - Keep docker-stacks' runtime contract so JupyterHub, operators and users see
   no change.
@@ -78,8 +78,8 @@ components/
 build/
   arch                TARGETARCH → upstream names
 config/               runtime config and hooks (exists today)
-docker-bake.hcl       component targets + assembly
-Dockerfile            the assembly
+docker-bake.hcl       component targets + images
+images/scidesktop/    the assembly (Dockerfile); domain images beside it
 support.yml           OS × arch × component matrix
 test/
   os-contract.sh      asserts the OS layer's contract
@@ -102,7 +102,7 @@ name.
 | `user` | `jovyan` UID 1000, group `users` GID 100, home `/home/jovyan` |
 | `x11` | Xvfb, xrandr, xdpyinfo, xkb tools, libX11/xcb/Xtst/Xfixes/Xdamage |
 | `gl` | libGL, libEGL, libGLES, libglvnd, libdrm, libva (pixelflux links it) |
-| `desktop` | LXQt session, Openbox, PCManFM-Qt, a terminal, an icon theme, dbus-x11 |
+| `desktop` | IceWM session, Thunar, xfce4-terminal, an icon theme, dbus-x11 |
 | `audio` | PipeWire, pipewire-pulse, WirePlumber, libpulse |
 | `fuse` | fuse3, squashfuse, fuse-overlayfs, uidmap, fakeroot |
 | `cvmfs` | CVMFS client, `cvmfs-config-none` |
@@ -165,7 +165,7 @@ prefixes in.
 
 What stays in `os-<id>` as distro packages: anything wired into system paths,
 dbus or fontconfig, or with hundreds of shared libraries. That is the desktop
-(LXQt, Xvfb, Mesa), audio (PipeWire), FUSE and CVMFS. These are reproducible
+(IceWM, Thunar, Xvfb, Mesa), audio (PipeWire), FUSE and CVMFS. These are reproducible
 through the OS layer's `pinning` mechanism, not through separate components.
 
 Rule for a new component: it installs into its own prefix, and is either static,
@@ -178,8 +178,8 @@ Never copy a dynamically linked binary between distributions.
 components/<component>/
   Dockerfile      builds the component; final stage holds only the prefix
   test            runs inside the component's image
-docker-bake.hcl   one target per component, plus the assembly
-Dockerfile        the assembly: FROM os, COPY --link --from each component
+docker-bake.hcl   one target per component, plus the images
+images/scidesktop/Dockerfile   the assembly: FROM os, COPY --link --from each component
 ```
 
 `docker buildx bake` builds the components in parallel and passes them to the

@@ -5,7 +5,7 @@ Scan of `neurodesk/neurodesktop` at `5a9be54` (Dockerfile, 1873 lines, and
 scientific desktop (neuroimaging, microscopy, ...) and cheap enough to carry in
 the base, or does it belong in a derived image?
 
-scidesktop today ships a deliberately small set: the LXQt desktop, audio,
+scidesktop today ships a deliberately small set: the IceWM desktop, audio,
 Apptainer, CVMFS, Lmod, sciget, and a Jupyter environment of JupyterLab,
 jupyterhub-singleuser, jupyter-server-proxy, ipykernel and mamba. It has no
 git, no editor, no browser and no archive tools.

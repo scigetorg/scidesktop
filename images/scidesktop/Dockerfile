@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
-# scidesktop: JupyterLab, an LXQt desktop streamed by Selkies, Apptainer, Lmod
+# scidesktop: JupyterLab, an IceWM desktop streamed by Selkies, Apptainer, Lmod
 # and sciget on the OS layer. Built with `docker buildx bake`; every component is a
-# named context (see docker-bake.hcl and docs/components.md).
+# named context (see docker-bake.hcl and docs/components.md). Domain images in
+# images/ build FROM this one (docs/images.md).
 #
 # This file only assembles. Each component ships its own files, hooks, symlinks and
 # manifest entry; what stays here is image metadata that only a Dockerfile can

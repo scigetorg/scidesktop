@@ -35,3 +35,44 @@ c.ServerProxy.servers = {
         },
     }
 }
+
+# App mode: one launcher tile per desktop entry in SCIDESKTOP_APP_DIRS
+# (default: the launchers sciget writes). A tile starts its application on the
+# desktop display, maximised, and opens the stream (desktop_app.py). Entries
+# are read when Jupyter starts.
+import configparser
+import glob
+import re
+
+
+def _app_entries():
+    dirs = os.environ.get("SCIDESKTOP_APP_DIRS", "/opt/sciget/applications")
+    for path in sorted(p for d in dirs.split(":") if d for p in glob.glob(f"{d}/*.desktop")):
+        entry = configparser.ConfigParser(interpolation=None, strict=False)
+        entry.optionxform = str
+        try:
+            entry.read(path)
+            de = entry["Desktop Entry"]
+        except (configparser.Error, KeyError):
+            continue
+        if de.get("Type", "Application") != "Application" or not de.get("Exec") \
+                or de.get("NoDisplay", "false") == "true" or de.get("Hidden", "false") == "true":
+            continue
+        name = "app-" + re.sub(r"[^a-z0-9-]+", "-", os.path.basename(path)[:-8].lower()).strip("-")
+        icon = de.get("Icon", "")
+        yield name, {
+            'command': [
+                '/opt/selkies/bin/python', '/opt/scidesktop/desktop_app.py',
+                '{port}', '{base_url}desktop/', path,
+            ],
+            'timeout': 30,
+            'launcher_entry': {
+                'path_info': f'{name}/launch',
+                'title': de.get("Name", name),
+                'category': 'Desktop applications',
+                **({'icon_path': icon} if icon.endswith(".svg") and os.path.isfile(icon) else {}),
+            },
+        }
+
+
+c.ServerProxy.servers.update(dict(_app_entries()))

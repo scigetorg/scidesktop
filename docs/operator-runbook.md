@@ -96,7 +96,7 @@ derived image replaces `/etc/sciget/catalogues.json` with its own.
 1. Start a single-user server. In its log, read the `[apptainer]` line (`user
    namespaces=yes` expected) and the `[cvmfs]` line, and check there is no
    `[apptainer] WARNING`.
-2. Open JupyterLab, then **Desktop** from the launcher; the LXQt desktop
+2. Open JupyterLab, then **Desktop** from the launcher; the IceWM desktop
    should render within a few seconds.
 3. In a terminal: no yellow "Containers are unavailable" message; `sciget find`
    lists the catalogue; `apptainer exec` of a container from `/cvmfs` runs.

@@ -1,0 +1,5 @@
+# Taskbar buttons. Applications start from JupyterLab's launcher tiles; these
+# open sciget's text interface, the file manager and a terminal.
+prog "Apps (sciget)" /usr/share/icons/hicolor/scalable/apps/sciget.svg xfce4-terminal --title=Apps -x sciget
+prog "Files" system-file-manager thunar
+prog "Terminal" utilities-terminal xfce4-terminal
