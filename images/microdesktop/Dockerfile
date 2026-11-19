@@ -10,7 +10,7 @@
 # notebook user; switch to root for system changes and back at the end:
 #
 #   USER root
-#   COPY catalogues.json /etc/sciget/catalogues.json
+#   RUN sciget catalog add --system microscopy https://example.org/apps.json
 #   USER ${NB_UID}
 #
 # Changes every image needs belong in the base (components/), not here; see

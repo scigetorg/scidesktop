@@ -44,8 +44,9 @@ build would take whatever version is stored there.)
 
 ## What a domain image may do
 
-Anything a Dockerfile can, inside its own folder: install packages, copy
-catalogues, configuration, branding and hooks. The base is built as the notebook
+Anything a Dockerfile can, inside its own folder: install packages, add
+sciget catalogs and settings for every user (`sciget catalog add --system`,
+`sciget config set --system`), configuration, branding and hooks. The base is built as the notebook
 user, so switch to `USER root` for system changes and end with `USER ${NB_UID}`.
 
 What it should not do is work around the base. A change every image would want
