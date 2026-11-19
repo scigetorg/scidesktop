@@ -93,6 +93,7 @@ Components meet in a few shared folders. Each file in them has one owner.
 | `/etc/jupyter/` | Jupyter server settings, the lowest-priority config folder | `jupyter_server_config.py` is startup's (docker-stacks); `jupyter_server_config.json` is jupyter-env's |
 | `/usr/local/etc/jupyter/` | Jupyter config from components outside the Jupyter environment | `jupyter_server_config.py` is Selkies'; `jupyter_server_config.d/<component>.json` only enables server extensions (Jupyter ignores other settings there) |
 | `/opt/scidesktop/` | scidesktop's own scripts; `manifest.d/<component>.json` | `<component>.json` |
+| `/etc/scidesktop/modulepath.d/` | executables that print module folders to add to `MODULEPATH`, one per line; run as the user by every shell and at server start, so keep them fast | `NN-<component>`: order of the folders on the path |
 | `/etc/scidesktop/home-defaults/` | files copied into each user's home at start, never overwriting the user's own (derived images' default settings) | the path the file should have in the home |
 
 The layer check enforces what it can:
