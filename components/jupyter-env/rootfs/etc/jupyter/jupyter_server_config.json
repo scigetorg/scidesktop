@@ -4,7 +4,7 @@
   },
   "ServerApp": {
     "terminado_settings": {
-      "shell_command": ["/bin/bash"]
+      "shell_command": ["/bin/bash", "-l"]
     }
   },
   "LabApp": {

@@ -273,7 +273,7 @@ target "scidesktop" {
 target "microdesktop" {
   inherits = ["_common"]
   context  = "images/microdesktop"
-  contexts = { scidesktop = "target:scidesktop" }
+  contexts = { scidesktop-base = "target:scidesktop" }
   tags     = [MICRODESKTOP_IMAGE]
   output   = ["type=docker"]
 }

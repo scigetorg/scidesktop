@@ -125,28 +125,50 @@ def static():
                 fail("S4", f"{u}: ARG with a value; put it in docker-bake.hcl: {line}")
 
     # S6: every folder in images/ is a bake target of the same name in group
-    # "default", built from that folder. A domain image's final stage is FROM
-    # another image in images/, handed in as a bake target; a registry image
-    # would bypass the base built alongside it.
-    images = sorted(p.parent.name for p in IMAGES.glob("*/Dockerfile"))
+    # "default", built from that folder. The stage a domain image builds is
+    # FROM <base>-base, a bake context naming another image in images/: a
+    # registry image would bypass the base built alongside it, and the base's
+    # own name would resolve to whatever image of that tag is stored locally.
+    images = sorted(p.name for p in IMAGES.iterdir() if p.is_dir())
     for name in images:
-        df = IMAGES / name / "Dockerfile"
         t = targets.get(name)
         if t is None:
-            fail("S6", f"{rel(df)}: no bake target {name}")
+            fail("S6", f"images/{name}: no bake target {name}")
             continue
         if name not in groups["default"]["targets"]:
             fail("S6", f"{name}: not in the bake group \"default\"")
-        if (ROOT / t.get("context", ".")).resolve() != df.parent.resolve():
+        if (ROOT / t.get("context", ".")).resolve() != (IMAGES / name).resolve():
             fail("S6", f"{name}: the bake target's context is {t.get('context')}, not images/{name}")
+            continue
         if name == BASE_IMAGE:
             continue
-        from_lines = [[w for w in text.split()[1:] if not w.startswith("--")] for ins, text in instructions(df) if ins == "FROM"]
-        base = from_lines[-1][0] if from_lines else None
-        if base not in images or base == name:
-            fail("S6", f"{rel(df)}: the final stage must be FROM another image in images/, not {base}")
-        elif t.get("contexts", {}).get(base) != f"target:{base}":
-            fail("S6", f"{name}: FROM {base} needs `contexts = {{ {base} = \"target:{base}\" }}` in its bake target")
+        df = IMAGES / name / t.get("dockerfile", "Dockerfile")
+        if not df.is_file():
+            fail("S6", f"{name}: no Dockerfile at {rel(df)}")
+            continue
+        # (stage name, FROM image) per stage; follow the built stage back
+        # through earlier stages to the image it starts from.
+        stages = []
+        for ins, text in instructions(df):
+            if ins == "FROM":
+                words = [w for w in text.split()[1:] if not w.startswith("--")]
+                stages.append((words[2].lower() if len(words) > 2 and words[1].lower() == "as" else None, words[0]))
+        names = [s for s, _ in stages]
+        i = len(stages) - 1
+        if t.get("target"):
+            i = names.index(t["target"].lower()) if t["target"].lower() in names else -1
+        if i < 0:
+            fail("S6", f"{name}: {rel(df)} has no stage {t.get('target')}")
+            continue
+        base = stages[i][1]
+        while base.lower() in names[:i]:
+            i = names.index(base.lower())
+            base = stages[i][1]
+        parent = base[:-len("-base")] if base.endswith("-base") else None
+        if parent not in images or parent == name:
+            fail("S6", f"{rel(df)}: the image must be FROM <image>-base for another image in images/, not {base}")
+        elif t.get("contexts", {}).get(base) != f"target:{parent}":
+            fail("S6", f"{name}: FROM {base} needs `contexts = {{ {base} = \"target:{parent}\" }}` in its bake target")
 
     # S5: every bake variable is one line, and tracked by Renovate unless
     # listed in NOT_RENOVATED.

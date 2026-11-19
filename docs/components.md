@@ -90,7 +90,8 @@ Components meet in a few shared folders. Each file in them has one owner.
 | `/usr/local/bin/` | command links into the component's prefix | the command's own name |
 | `/etc/profile.d/` | login shell setup | `<component>.sh` or the upstream name |
 | `/etc/bash.bashrc.d/` | interactive shell setup (all bash terminals) | `<component>.sh` |
-| `/usr/local/etc/jupyter/` | Jupyter config from components outside the Jupyter environment | `jupyter_server_config.py` is Selkies'; others use `jupyter_server_config.d/<component>.json` |
+| `/etc/jupyter/` | Jupyter server settings, the lowest-priority config folder | `jupyter_server_config.py` is startup's (docker-stacks); `jupyter_server_config.json` is jupyter-env's |
+| `/usr/local/etc/jupyter/` | Jupyter config from components outside the Jupyter environment | `jupyter_server_config.py` is Selkies'; `jupyter_server_config.d/<component>.json` only enables server extensions (Jupyter ignores other settings there) |
 | `/opt/scidesktop/` | scidesktop's own scripts; `manifest.d/<component>.json` | `<component>.json` |
 | `/etc/scidesktop/home-defaults/` | files copied into each user's home at start, never overwriting the user's own (derived images' default settings) | the path the file should have in the home |
 
