@@ -1,14 +1,13 @@
 #!/bin/bash
-# Gives each user the image's sciget defaults (/etc/sciget) on first start,
-# then downloads the catalogues in the background. Files the user already has
-# are left alone, so persistent homes keep their own catalogues.
+# Downloads the sciget catalogs into the user's cache in the background, so
+# `sciget find` works from the first terminal. The image's settings and
+# catalogs are sciget's system layer (/etc/sciget), read on every run under
+# the user's own; nothing is copied into the home.
 #
 # SCIDESKTOP_SCIGET_REFRESH: yes (default) | no
 set -u
-DEFAULTS=/etc/sciget
 
-[ -n "${SCIGET_CONFIG:-}" ] && { echo "[sciget] SCIGET_CONFIG set; not seeding"; exit 0; }
-[ -d "${DEFAULTS}" ] || exit 0
+[ "${SCIDESKTOP_SCIGET_REFRESH:-yes}" = yes ] || exit 0
 
 if [ "$(id -u)" -eq 0 ]; then
     user="${NB_USER:-jovyan}"
@@ -18,20 +17,9 @@ else
     home="${HOME}"
     as_user() { "$@"; }
 fi
-dest="${home}/.config/sciget"
 
-seeded=no
-for f in config.json catalogues.json; do
-    [ -f "${DEFAULTS}/${f}" ] || continue
-    [ -e "${dest}/${f}" ] && continue
-    as_user install -D -m 0644 "${DEFAULTS}/${f}" "${dest}/${f}" && seeded=yes
-done
-[ "${seeded}" = yes ] && echo "[sciget] defaults copied to ${dest}"
-
-if [ "${seeded}" = yes ] && [ "${SCIDESKTOP_SCIGET_REFRESH:-yes}" = yes ]; then
-    # The log is opened by the user's shell, so root never owns it.
-    as_user bash -c 'mkdir -p "$1" && exec timeout 300 sciget refresh >"$1/first-refresh.log" 2>&1' \
-        _ "${home}/.cache/sciget" </dev/null &
-    echo "[sciget] refreshing catalogues in the background"
-fi
+# The log is opened by the user's shell, so root never owns it.
+as_user bash -c 'mkdir -p "$1" && exec timeout 300 sciget refresh >"$1/refresh.log" 2>&1' \
+    _ "${home}/.cache/sciget" </dev/null &
+echo "[sciget] refreshing catalogs in the background"
 exit 0

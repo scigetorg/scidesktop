@@ -70,7 +70,7 @@ to build one for your own community in a fork, see [docs/images.md](docs/images.
 | Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked) |
 | Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio |
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
-| Containers | Apptainer built from source; sciget with a default catalogue |
+| Containers | Apptainer built from source; sciget with a default catalog |
 | Modules | Lmod, built from the upstream release |
 
 `/opt/scidesktop/manifest.d/` holds one JSON file per component with its versions. Design and rationale:
@@ -90,7 +90,7 @@ publisher provides one. Renovate proposes updates rather than builds drifting si
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | Desktop credential; generated per container if unset |
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`, `internal` or `disabled`; see the runbook |
 | `SCIDESKTOP_APPTAINER_SETUID` | `auto` | `auto`, `yes` or `no`; applies only when the container starts as root |
-| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download the sciget catalogues in the background on a user's first start |
+| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download the sciget catalogs in the background at start |
 
 ## Operations
 

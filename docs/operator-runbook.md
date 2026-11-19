@@ -83,13 +83,15 @@ when the user first opens **Desktop** from the launcher.
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`: use the `/cvmfs` the platform mounts. `internal`: mount inside the container (needs root, `/dev/fuse`, mount capability, repository config and keys under `/etc/cvmfs`). `disabled`: skip. |
 | `SCIDESKTOP_CVMFS_REPOSITORIES` | empty | Repositories to mount in `internal` mode, comma-separated. |
 | `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
-| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogues in the background on a user's first start. |
+| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. |
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | The desktop's internal credential; generated per container when unset. |
 | `CPU_LIMIT`, `MEM_LIMIT` | from the pod's cgroup | Set by KubeSpawner, or derived at start from the cgroup when it does not. `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS` and `NUMEXPR_NUM_THREADS` follow `CPU_LIMIT` unless set, so numerical libraries use the pod's CPUs. |
 
-sciget ships with a default catalogue in `/etc/sciget/`, copied to each user's
-`~/.config/sciget/` on first start (files a user already has are kept). A
-derived image replaces `/etc/sciget/catalogues.json` with its own.
+sciget's settings and catalog for every user are its system layer in
+`/etc/sciget/`, read on every run beneath each user's own files: a user's
+settings win and their catalogs come first, and `sciget doctor` names a user
+file that hides a system one. A derived image adds its own with
+`sciget catalog add --system` and `sciget config set --system`.
 
 ## Deployment check
 
@@ -99,7 +101,7 @@ derived image replaces `/etc/sciget/catalogues.json` with its own.
 2. Open JupyterLab, then **Desktop** from the launcher; the IceWM desktop
    should render within a few seconds.
 3. In a terminal: no yellow "Containers are unavailable" message; `sciget find`
-   lists the catalogue; `apptainer exec` of a container from `/cvmfs` runs.
+   lists the catalog; `apptainer exec` of a container from `/cvmfs` runs.
 4. `cat /opt/scidesktop/manifest.d/*.json` shows the version of every part.
 
 ## Triage
@@ -109,7 +111,7 @@ derived image replaces `/etc/sciget/catalogues.json` with its own.
 | "Containers are unavailable" in terminals, or tools do nothing | User namespaces are blocked for the pod: see "Platform requirements". If `unshare -U true` fails in a terminal, that confirms it; if it succeeds, the host may still refuse Apptainer's user mapping. |
 | SIF files fail to mount; unpacked containers work | No `/dev/fuse` in the pod. |
 | Browser stuck at "waiting for stream" | Request `/desktop/` again and read the Selkies log; check `/opt/selkies/bin/python -c 'import pixelflux, pcmflux'` succeeds. |
-| sciget lists nothing | `sciget catalogue list`; `~/.cache/sciget/first-refresh.log` for the first download; whether the catalogue's `dir` exists under `/cvmfs`. |
+| sciget lists nothing | `sciget catalog list`; `~/.cache/sciget/refresh.log` for the download at start; `sciget doctor`; whether the catalog's `dir` exists under `/cvmfs`. |
 | `[cvmfs] /cvmfs is empty` | The pod's CVMFS volume and mount path; whether the node or CSI mount is populated before the pod starts. |
 | Internal CVMFS does not mount | The pod starts as root, has `/dev/fuse` and mount capability, names repositories in `SCIDESKTOP_CVMFS_REPOSITORIES`, and has their config and keys under `/etc/cvmfs`. |
 | `/desktop/` returns an error | jupyter-server-proxy and Selkies logs; that no deployment override replaced `start.sh`. |

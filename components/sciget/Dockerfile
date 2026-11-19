@@ -26,8 +26,9 @@ FROM ${UBUNTU_IMAGE} AS rootfs
 COPY rootfs/ /rootfs/
 RUN chmod -R go-w /rootfs
 
-# sciget, its default catalogue (/etc/sciget) and the hook that copies it to
-# each user on first start (30-sciget).
+# sciget, its system settings and catalogs (/etc/sciget, read on every run
+# under each user's own) and the hook that downloads the catalogs at start
+# (30-sciget).
 FROM scratch AS component
 COPY --from=rootfs /rootfs/ /
 COPY --from=build /out/sciget /usr/local/bin/sciget
@@ -38,4 +39,7 @@ FROM os AS test
 COPY --from=component / /
 RUN sciget --version \
     && test -x /usr/local/bin/before-notebook.d/30-sciget \
+    # sciget reads the system files: a misnamed or malformed one is ignored.
+    && sciget catalog list | grep -q neuroimaging \
+    && sciget config get display_start_command | grep -q /opt/scidesktop/start_desktop.sh \
     && test "$(stat -c %u /opt/sciget/applications)" = "${NB_UID}"

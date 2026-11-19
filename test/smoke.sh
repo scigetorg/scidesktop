@@ -178,18 +178,25 @@ for mode in -ic -lic; do
         fail "bash ${mode}: clean, module and mamba"; printf '%s\n' "${out}" | head -5 | sed 's/^/        /'
     fi
 done
-# sciget arrives configured: the image's catalogue is copied to the user.
-docker exec -u "$(docker exec "${NAME}" printenv NB_USER 2>/dev/null || echo jovyan)" "${NAME}" \
-    bash -c 'cmp -s /etc/sciget/catalogues.json ~/.config/sciget/catalogues.json && sciget catalogue list | grep -q .' 2>/dev/null \
-    && pass "sciget catalogue configured for the user" \
-    || fail "sciget catalogue configured for the user"
+# sciget arrives configured: the user sees the image's catalog from sciget's
+# system layer, with nothing copied into the home, and the start-up refresh
+# downloads it.
+docker exec -u "${NB_USER}" "${NAME}" bash -c '
+    sciget catalog list | grep -q neuroimaging && [ ! -e ~/.config/sciget/catalogs.json ]' 2>/dev/null \
+    && pass "sciget catalog from the system layer" \
+    || fail "sciget catalog from the system layer"
+docker exec -u "${NB_USER}" "${NAME}" bash -c '
+    for _ in $(seq 1 60); do ls ~/.cache/sciget/catalogs/neuroimaging-*/ >/dev/null 2>&1 && exit 0; sleep 1; done
+    exit 1' 2>/dev/null \
+    && pass "sciget catalog downloaded at start" \
+    || fail "sciget catalog downloaded at start (see ~/.cache/sciget/refresh.log)"
 
 # Files that component tests cannot check on the OS layer, which has no
 # Python: sciget's system settings are valid JSON (sciget ignores a malformed
 # file) and the startup scripts parse.
 docker exec "${NAME}" python3 -c '
 import ast, json
-json.load(open("/etc/sciget/catalogues.json")); json.load(open("/etc/sciget/config.json"))
+json.load(open("/etc/sciget/catalogs.json")); json.load(open("/etc/sciget/config.json"))
 for f in ("/usr/local/bin/start-notebook.py", "/usr/local/bin/start-singleuser.py"):
     ast.parse(open(f).read())
 ' >/dev/null 2>&1 && pass "sciget settings valid JSON, startup scripts parse" \
@@ -314,9 +321,14 @@ for _ in $(seq 1 100); do
     docker exec "${NAME}" pgrep -x pipewire >/dev/null 2>&1 || break
     sleep 0.1
 done
-code=$(curl -s -o /dev/null -w '%{http_code}' -m 180 \
-    -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/desktop/")
 restarted=$(session_back)
+# Selkies restarts with the session: the route answers once it is back.
+for _ in $(seq 1 30); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' -m 60 \
+        -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/desktop/")
+    [ "${code}" = 200 ] && break
+    sleep 1
+done
 [ "${code}" = 200 ] && [ "${restarted}" = yes ] && pass "desktop returns after its X server dies" \
     || fail "desktop returns after its X server dies (HTTP ${code}, ${restarted})"
 
