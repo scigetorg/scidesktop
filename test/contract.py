@@ -134,7 +134,8 @@ def static():
             if ins == "ARG" and "=" in line:
                 fail("S4", f"{u}: ARG with a value; put it in docker-bake.hcl: {line}")
 
-    # S7: the architecture comes from buildx. Nothing asks the machine.
+    # S7: the architecture comes from buildx. Nothing asks the machine, and a
+    # conda environment has a lock for every architecture.
     arches = target_arch("list")
     for path in sorted(COMPONENTS.rglob("*")):
         if not path.is_file() or path == TARGET_ARCH or path.suffix == ".lock":
@@ -148,6 +149,11 @@ def static():
             if ARCH_PROBE.search(code):
                 fail("S7", f"{rel(path)}:{n}: asks the machine for its architecture; "
                            f"use TARGETARCH and components/target-arch: {line.strip()[:70]}")
+    for env in sorted(COMPONENTS.glob("*/environment.yml")):
+        for arch in arches:
+            lock = env.with_name(f"{target_arch('conda', arch)[0]}.lock")
+            if not lock.is_file():
+                fail("S7", f"{rel(env.parent)}: no {lock.name} for {arch}; run ./lock")
 
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is
