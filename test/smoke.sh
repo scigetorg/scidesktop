@@ -80,6 +80,21 @@ print(' '.join(str(p) for p in sorted(ports)))" 2>/dev/null)
 [ "${external}" = "8888" ] && pass "only 8888 listens externally" \
     || fail "only 8888 listens externally (got: ${external:-none})"
 
+# Selkies' interpreter, read from its launcher, so the checks below run
+# wherever Selkies is installed; XPY opens the desktop with its python-xlib.
+SELKIES_PY=$(docker exec "${NAME}" bash -c 'head -1 "$(readlink -f "$(command -v selkies)")" | sed "s/^#! *//"' 2>/dev/null)
+XPY="import sys, os, selkies
+sys.path.insert(0, os.path.dirname(selkies.__file__))
+from Xlib import X, display as xd
+d = xd.Display(':20'); r = d.screen().root"
+NB_USER=$(docker exec "${NAME}" printenv NB_USER 2>/dev/null || echo jovyan)
+# PipeWire has an output for Selkies to capture.
+audio_ok() {
+    docker exec -u "${NB_USER}" "$1" bash -c \
+        'XDG_RUNTIME_DIR=/tmp/runtime-$(id -u) wpctl inspect @DEFAULT_AUDIO_SINK@' 2>/dev/null \
+        | grep -q 'node.name'
+}
+
 # 4. The session is actually up
 # The session and its window manager.
 for proc in Xvfb icewm-session icewm xsettingsd pipewire wireplumber pipewire-pulse; do
@@ -88,33 +103,37 @@ for proc in Xvfb icewm-session icewm xsettingsd pipewire wireplumber pipewire-pu
 done
 docker exec "${NAME}" bash -c 'test -S "${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}/pulse/native"' 2>/dev/null \
     && pass "pulseaudio socket up" || fail "pulseaudio socket up"
+audio_ok "${NAME}" && pass "audio output present" || fail "audio output present"
 docker exec "${NAME}" xrdb -query 2>/dev/null | grep -q '^Xcursor.size:[[:space:]]*24$' \
     && pass "pointer size set (not scaled to the virtual screen)" \
     || fail "pointer size set (not scaled to the virtual screen)"
-# A 2x browser: Selkies sets Xft.dpi 192, and IceWM's taskbar icons follow.
-docker exec "${NAME}" bash -c '
-    cfg="${XDG_RUNTIME_DIR:-/tmp/runtime-$(id -u)}/icewm/prefoverride"
-    echo "Xft.dpi: 192" | xrdb -merge
-    for _ in $(seq 1 50); do
-        tail -1 "${cfg}" | grep -qx SmallIconSize=64 && pgrep -x icewm >/dev/null && ok=1 && break
-        sleep 0.1
-    done
-    echo "Xft.dpi: 96" | xrdb -merge
-    [ -n "${ok:-}" ]' >/dev/null 2>&1 \
-    && pass "IceWM sizes follow the desktop DPI" || fail "IceWM sizes follow the desktop DPI"
-
-# Selkies' interpreter, read from its launcher, so the checks below run
-# wherever Selkies is installed.
-SELKIES_PY=$(docker exec "${NAME}" bash -c 'head -1 "$(readlink -f "$(command -v selkies)")" | sed "s/^#! *//"' 2>/dev/null)
+# A 2x browser: Selkies sets Xft.dpi 192, and IceWM's taskbar grows with it
+# (read from the work area IceWM leaves beside it), then shrinks back.
+docker exec "${NAME}" "${SELKIES_PY:-python3}" -c "${XPY}
+import subprocess, time
+a = d.intern_atom('_NET_WORKAREA')
+def taskbar(test):
+    for _ in range(100):
+        p = r.get_full_property(a, X.AnyPropertyType)
+        h = r.get_geometry().height - p.value[3] if p else None
+        if h is not None and test(h):
+            break
+        time.sleep(0.1)
+    return h
+def dpi(v): subprocess.run(['xrdb', '-merge'], input=f'Xft.dpi: {v}\\n', text=True, check=True)
+small = taskbar(lambda h: h > 0)
+dpi(192); big = taskbar(lambda h: h > small)
+dpi(96); back = taskbar(lambda h: h == small)
+print(f'taskbar {small} px at 96 DPI, {big} px at 192, {back} px back at 96')
+sys.exit(0 if small and big > small and back == small else 1)" 2>&1 | sed 's/^/        /'
+[ "${PIPESTATUS[0]}" = "0" ] && pass "IceWM's taskbar follows the desktop DPI" \
+    || fail "IceWM's taskbar follows the desktop DPI"
 
 # 5. Real pixels. A desktop that fails to draw still serves HTTP, so read the
 #    framebuffer rather than trusting the status code.
-docker exec "${NAME}" "${SELKIES_PY:-python3}" -c "
-import sys, os, selkies
-sys.path.insert(0, os.path.dirname(selkies.__file__))
-from Xlib import display as xd
+framebuffer_ok() {
+    docker exec "$1" "${SELKIES_PY:-python3}" -c "${XPY}
 from collections import Counter
-r = xd.Display(':20').screen().root
 g = r.get_geometry()
 data = r.get_image(0, 0, min(g.width, 400), min(g.height, 300), 2, 0xffffffff).data
 if isinstance(data, str): data = data.encode('latin-1')
@@ -122,7 +141,9 @@ px = [tuple(data[i:i+3]) for i in range(0, 4*400, 4)]
 top, count = Counter(px).most_common(1)[0]
 print(f'geometry {g.width}x{g.height} dominant {top} n={count}')
 sys.exit(0 if g.width > 0 else 1)" 2>/dev/null | sed 's/^/        /'
-[ "${PIPESTATUS[0]}" = "0" ] && pass "framebuffer readable" || fail "framebuffer readable"
+    return "${PIPESTATUS[0]}"
+}
+framebuffer_ok "${NAME}" && pass "framebuffer readable" || fail "framebuffer readable"
 
 # 5b. The encoders import. The framebuffer check above passes even when
 #     selkies cannot encode it, so the desktop serves, renders, and streams
@@ -266,17 +287,38 @@ for _ in $(seq 1 120); do
 done
 code=$(curl -s -o /dev/null -w '%{http_code}' -m 180 \
     -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/desktop/")
-restarted=yes
-for proc in Xvfb icewm pipewire-pulse; do
-    up=
-    for _ in $(seq 1 100); do
-        docker exec "${NAME}" pgrep -x "${proc}" >/dev/null 2>&1 && up=1 && break
-        sleep 0.1
+session_back() {
+    local proc up
+    for proc in Xvfb icewm pipewire wireplumber pipewire-pulse; do
+        up=
+        for _ in $(seq 1 100); do
+            docker exec "${NAME}" pgrep -x "${proc}" >/dev/null 2>&1 && up=1 && break
+            sleep 0.1
+        done
+        [ -n "${up}" ] || { echo "no (${proc} not running)"; return; }
     done
-    [ -n "${up}" ] || restarted="no (${proc} not running)"
-done
+    for _ in $(seq 1 50); do audio_ok "${NAME}" && break; sleep 0.1; done
+    audio_ok "${NAME}" || { echo "no (no audio output)"; return; }
+    framebuffer_ok "${NAME}" >/dev/null || { echo "no (framebuffer unreadable)"; return; }
+    echo yes
+}
+restarted=$(session_back)
 [ "${code}" = 200 ] && [ "${restarted}" = yes ] && pass "desktop returns after a container restart" \
     || fail "desktop returns after a container restart (HTTP ${code}, ${restarted})"
+
+# 8c. The desktop comes back when its X server dies in a running container
+#     (an out-of-memory kill, say): the session ends and Selkies' launcher
+#     starts a new one.
+docker exec "${NAME}" pkill -x Xvfb
+for _ in $(seq 1 100); do
+    docker exec "${NAME}" pgrep -x pipewire >/dev/null 2>&1 || break
+    sleep 0.1
+done
+code=$(curl -s -o /dev/null -w '%{http_code}' -m 180 \
+    -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/desktop/")
+restarted=$(session_back)
+[ "${code}" = 200 ] && [ "${restarted}" = yes ] && pass "desktop returns after its X server dies" \
+    || fail "desktop returns after its X server dies (HTTP ${code}, ${restarted})"
 
 # 9. JupyterHub spawn. KubeSpawner runs start-singleuser.py with the Hub's
 #    environment; the server checks the Hub API before serving, so a stand-in
@@ -339,6 +381,25 @@ if [ "${tile_code}" = 200 ] && docker logs "${NAME}-tile" 2>&1 | grep -q "window
     pass "app tile starts its application maximised"
 else
     fail "app tile starts its application maximised (HTTP ${tile_code})"
+    docker logs "${NAME}-tile" 2>&1 | grep -E "desktop-app|\[desktop\]" | tail -5 | sed 's/^/        /'
+fi
+# After a container restart the tile, not the desktop route, is the first to
+# find the stale session.
+docker restart "${NAME}-tile" >/dev/null
+for _ in $(seq 1 120); do
+    curl -fsS -o /dev/null "http://127.0.0.1:${TILE_PORT}/api" 2>/dev/null && break
+    sleep 0.5
+done
+tile_code=$(curl -s -o /dev/null -w '%{http_code}' -m 120 \
+    "http://127.0.0.1:${TILE_PORT}/app-smoke-terminal/launch?token=${TOKEN}" 2>/dev/null)
+for _ in $(seq 1 60); do
+    [ "$(docker logs "${NAME}-tile" 2>&1 | grep -c "window 0x[0-9a-f]* maximised")" -ge 2 ] && break
+    sleep 0.5
+done
+if [ "${tile_code}" = 200 ] && [ "$(docker logs "${NAME}-tile" 2>&1 | grep -c "window 0x[0-9a-f]* maximised")" -ge 2 ]; then
+    pass "app tile starts its application after a container restart"
+else
+    fail "app tile starts its application after a container restart (HTTP ${tile_code})"
     docker logs "${NAME}-tile" 2>&1 | grep -E "desktop-app|\[desktop\]" | tail -5 | sed 's/^/        /'
 fi
 docker rm -f "${NAME}-tile" >/dev/null 2>&1 || true
