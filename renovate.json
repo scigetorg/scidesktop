@@ -372,6 +372,20 @@
       "currentValueTemplate": "main"
     },
     {
+      "description": "FreeBrowse fork commit; the build stops if the patched viewer registration moved.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"FREEBROWSE_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "freebrowse",
+      "packageNameTemplate": "https://github.com/neurodesk/freebrowse",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    },
+    {
       "description": "Exact pins in conda environment files; regenerate the lock with ./lock.",
       "customType": "regex",
       "managerFilePatterns": [

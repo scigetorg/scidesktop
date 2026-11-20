@@ -2,20 +2,23 @@
 
 `neurodesktop` gives users what
 [neurodesk/neurodesktop](https://github.com/neurodesk/neurodesktop) gives
-them, built from scidesktop components. It is scidesktop plus six optional
+them, built from scidesktop components. It is scidesktop plus nine optional
 components (see [images.md](images.md#optional-components)). Each one is
 reusable: another image copies it with one line.
 
 | Component | What it adds | Where |
 | --- | --- | --- |
+| `sciget-neuroimaging` | the `neuroimaging` catalog for sciget, and the Neurodesk module folders on CVMFS for `MODULEPATH` ([images.md](images.md#tool-catalogs)) | `/etc/sciget/catalogs.json` |
 | `neurodesk-cvmfs` | the Neurodesk CVMFS repository for the base's CVMFS client: its mirrors, its public key, and the repository as the one to mount in internal mode | `/etc/cvmfs` |
 | `datalad` | [DataLad](https://www.datalad.org), datalad-container and git-annex | `/opt/datalad`, commands `datalad`, `git-annex` |
+| `jupyterlab-niivue`, `jupyterlab-freebrowse` | the NiiVue and FreeBrowse viewers for NIfTI files in JupyterLab ([viewers.md](viewers.md)) | `/opt/jupyterlab-niivue`, `/opt/jupyterlab-freebrowse` |
 | `code-server` | [code-server](https://github.com/coder/code-server) (VS Code in the browser), opened from the **VS Code** launcher tile | `/opt/code-server`, command `code-server` |
 | `coding-agents`, `t3-code` | Codex, Claude Code, OpenCode and the **scigent.ai** tile ([coding-agents.md](coding-agents.md)) | `/opt/coding-agents`, `/opt/t3-code` |
 | `neurodesk-agents` | Neurodesk's defaults for those agents: instructions for working with Neurodesk tools, and the Neurodesk model provider for OpenCode | `/opt/neurodesk-agents` |
 
-`code-server` and `datalad` are generic. The two `neurodesk-*` components hold
-everything that is specific to Neurodesk.
+`code-server`, `datalad` and the viewers are generic. `sciget-neuroimaging`
+and the two `neurodesk-*` components hold everything that is specific to
+Neurodesk.
 
 ## Using the tools
 
@@ -142,9 +145,9 @@ earlier review of what belongs in the base is in
 | Apptainer, `singularity` command, GPU binding (`APPTAINER_NV`) | `apptainer` |
 | CVMFS client and its mount at start | the OS layer's client and `20-cvmfs` hook |
 | Lmod, the module panel in JupyterLab (`jupyterlmod`) | `lmod`, `jupyter-env` |
-| `MODULEPATH` with one folder per Neurodesk category | `sciget`'s `/etc/scidesktop/modulepath.d/60-neurodesk-cvmfs` |
+| `MODULEPATH` with one folder per Neurodesk category | `sciget-neuroimaging`'s `/etc/scidesktop/modulepath.d/60-neurodesk-cvmfs` |
 | Offline modules in `/neurodesktop-storage/containers` when CVMFS is missing | `sciget install` into the home |
-| neurocommand: the application menu, launchers and `fetch_and_run.sh` | sciget with the `neuroimaging` catalog (built from the same `apps.json`): `sciget ui` on the taskbar, and a launcher tile per installed graphical application |
+| neurocommand: the application menu, launchers and `fetch_and_run.sh` | sciget with `sciget-neuroimaging`'s `neuroimaging` catalog (built from the same `apps.json`): `sciget ui` on the taskbar, and a launcher tile per installed graphical application |
 | Home defaults restored at start | `startup`'s `/etc/scidesktop/home-defaults` |
 | CPU and memory limits read from cgroups | `startup`'s `05-resource-limits.sh` |
 | git, ssh client, nano, tmux, `jupyterlab-git` | the OS layer and `jupyter-env` |
@@ -163,6 +166,7 @@ earlier review of what belongs in the base is in
 | neurodesktop | Component |
 | --- | --- |
 | CVMFS configuration and public key for `neurodesk.ardc.edu.au` | `neurodesk-cvmfs` |
+| The NiiVue viewer (`jupyterlab-niivue`) and FreeBrowse, with NiiVue the default for NIfTI files | `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)); generic, added after the first port |
 | `AGENTS.md` for the agents; the Neurodesk LLM provider for OpenCode | `neurodesk-agents`. The instructions are written for this image, not copied: neurodesktop's describe Slurm, ASTRA and wrapper scripts this image does not have |
 
 **(d) Deliberately not ported**
@@ -185,7 +189,6 @@ Each of these is a follow-up of its own. None blocks using the image.
 | neurodesktop | Why it waits |
 | --- | --- |
 | A neuroimaging Python kernel (`nipype`, `nibabel`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`) | A kernel component with a large lock, like `ai-ready`'s. It needs its own review |
-| NiiVue and FreeBrowse viewers in JupyterLab | Lab extensions go into `jupyter-env`, which every image shares |
 | Jupyter AI and Notebook Intelligence | Server extensions in `jupyter-env`, with neurodesktop's patches to carry |
 | Slurm (a local single-node cluster) and `jupyterlab-slurm` | System services and munge; a component that starts daemons |
 | SSH into the session (`openssh-server`, `jupyter-sshd-proxy`) | A system service and a server extension |
@@ -210,7 +213,7 @@ environment (`{env:BR_MCP_TOKEN}`) and never written into the file.
 Everything in the [operator runbook](operator-runbook.md) applies as for
 scidesktop. No `cmd` or extra port is needed in a JupyterHub profile.
 
-**Sizing.** The six components add 2.3 GB on disk to the base: 0.9 GB for the agents,
+**Sizing.** The components add 2.4 GB on disk to the base: under 0.1 GB for the two viewers, 0.9 GB for the agents,
 0.7 GB for code-server, 0.4 GB for T3 Code and 0.3 GB for DataLad. An open
 VS Code tab holds a code-server process of a few hundred MB.
 
@@ -241,5 +244,7 @@ checks only the configuration.
 | --- | --- | --- |
 | code-server | MIT; VS Code's and its bundled packages' notices come with the release | `/opt/code-server/LICENSE`, `/opt/code-server/ThirdPartyNotices.txt` |
 | DataLad, datalad-container | MIT | `/opt/datalad/lib/python3.13/site-packages/datalad-*.dist-info/licenses` |
+| jupyterlab-niivue | BSD-2-Clause | `/opt/jupyterlab-niivue/lib/jupyterlab_niivue-*.dist-info/licenses/LICENSE` |
+| FreeBrowse (Neurodesk's fork) | BSD-2-Clause; its Jupyter extension declares MIT | `/opt/jupyterlab-freebrowse/LICENSE` |
 | git-annex | AGPL-3.0-or-later. The image carries its upstream's PyPI build, unmodified | `/opt/datalad/licenses/git-annex-AGPL`, and `git-annex-SOURCE`, which says where the source of this version is |
 | The CVMFS configuration, the public key and the provider definition | MIT, from neurodesktop (Copyright (c) 2021 NeuroDesk) | `/etc/cvmfs`, `/opt/neurodesk-agents/opencode.json` |

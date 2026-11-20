@@ -9,15 +9,21 @@ that builds on it and adds what its community needs.
 ```
 images/
   scidesktop/      the base; its Dockerfile only assembles components
-  microdesktop/    FROM scidesktop, plus coding-agents and t3-code: microscopy
-  aidesktop/       FROM scidesktop, plus ai-ready, coding-agents and t3-code
-  neurodesktop/    FROM scidesktop, plus neurodesk-cvmfs, datalad, code-server,
-                   coding-agents, t3-code and neurodesk-agents: neuroimaging
+  microdesktop/    FROM scidesktop, plus sciget-microscopy, the viewers,
+                   coding-agents and t3-code: microscopy
+  aidesktop/       FROM scidesktop, plus sciget-neuroimaging, ai-ready,
+                   coding-agents and t3-code
+  neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
+                   datalad, the viewers, code-server, coding-agents, t3-code
+                   and neurodesk-agents: neuroimaging
 ```
 
 | Component | scidesktop | microdesktop | aidesktop | neurodesktop |
 | --- | --- | --- | --- | --- |
 | the base's components | yes | yes | yes | yes |
+| `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | yes | yes |
+| `sciget-microscopy` ([tool catalogs](#tool-catalogs)) | no | yes | no | no |
+| `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)) | no | yes | no | yes |
 | `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)) | no | yes | yes | yes |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no |
 | `code-server`, `datalad` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
@@ -106,11 +112,36 @@ optional components out of `scidesktop`.
 An optional component keeps to its own prefix (`/opt/<component>`) and the
 [shared places](components.md#shared-places).
 
+## Tool catalogs
+
+sciget offers the tools of its catalogs. The catalogs every user of an image
+gets are sciget's system layer, one file: `/etc/sciget/catalogs.json`. A
+file has one owner, so the list is a component of its own, and an image
+copies the one for its domain:
+
+| Component | Catalog | Also |
+| --- | --- | --- |
+| `sciget-neuroimaging` | `neuroimaging` | the module folders of its containers on the Neurodesk CVMFS repository |
+| `sciget-microscopy` | `microscopy` | |
+
+The base's `sciget` component ships no catalog, as sciget itself does: plain
+`scidesktop` offers no tools until its user adds a catalog
+(`sciget catalog add <name> <url>`). An image with `sciget-microscopy`
+offers the microscopy tools and no neuroimaging tool, which
+`test/sciget-microscopy-smoke.sh` checks from a session. Copying two catalog
+components into one image fails rule L1.
+
+Both catalogs are published by the
+[sciget catalog service](https://apps-catalog.scigetorg.workers.dev/domains.json).
+A new domain there becomes an image here with a component like
+`components/sciget-microscopy` (one JSON file) and its two-line smoke test.
+
 ## What a domain image may do
 
-Anything a Dockerfile can, inside its own folder: install packages, add
-sciget catalogs and settings for every user (`sciget catalog add --system`,
-`sciget config set --system`), configuration, branding and hooks. The base is built as the notebook
+Anything a Dockerfile can, inside its own folder: install packages,
+configuration, branding and hooks. What can be a component is better as
+one: the images here only assemble, and their tool catalog is a component
+([Tool catalogs](#tool-catalogs)). The base is built as the notebook
 user, so switch to `USER root` for system changes and end with `USER ${NB_UID}`.
 
 What it should not do is work around the base. A change every image would want
@@ -174,7 +205,7 @@ to the workflow.
   longer the head of `main`, publishes its `<short sha>` and leaves them too. The candidate tags stay in the registry: the multi-arch
   image points at them.
 
-`PUBLISH` lists `scidesktop`, `aidesktop` and `neurodesktop`. A published
+`PUBLISH` lists `scidesktop`, `microdesktop`, `aidesktop` and `neurodesktop`. A published
 domain image gets its own package, `ghcr.io/<owner>/<name>`.
 
 ## Forks

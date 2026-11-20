@@ -54,7 +54,8 @@ components/<component>/
 - **`test` stage (S3):** `FROM os`, copies the component in, and checks it works on
   its own. Add a `<component>-test` target to the bake group `test`.
 - **Configuration only:** a component that adds no software (settings for
-  another component, as `neurodesk-cvmfs` and `neurodesk-agents` do) has just
+  another component, as `neurodesk-cvmfs`, `neurodesk-agents` and the
+  `sciget-*` catalogs do) has just
   the `rootfs`, `component` and `test` stages. Its manifest entry identifies
   what it ships (a key's fingerprint, a file's checksum) where there is no
   version to report.
@@ -139,6 +140,8 @@ Components meet in a few shared folders. Each file in them has one owner.
 | `/etc/scidesktop/jupyter_server_config.d/` | a component's part of the notebook server's configuration: launcher tiles, proxied services, handlers (S8) | `<component>.py`; it adds to shared settings (`c.ServerProxy.servers.update(...)`) and never assigns them |
 | `/usr/local/etc/jupyter/` | the loader of those parts, and server extension switches | `jupyter_server_config.py` is jupyter-env's and only loads the parts; `jupyter_server_config.d/<component>.json` only enables server extensions (Jupyter ignores other settings there) |
 | `/usr/local/share/jupyter/kernels/` | notebook kernels from components outside the Jupyter environment | `<component>/` |
+| `/usr/local/share/jupyter/labextensions/` | JupyterLab extensions from optional components, which cannot install into the Jupyter environment every image shares; a link into the component's prefix. A server extension that comes with one is imported from the prefix and switched on in the component's part of the server configuration | the extension's own name |
+| `/etc/sciget/` | sciget's system layer: `config.json` is `sciget`'s, `catalogs.json` belongs to the one catalog component an image copies ([images.md](images.md#tool-catalogs)) | sciget's file names |
 | `/opt/scidesktop/` | scidesktop's own scripts; `manifest.d/<component>.json` | `<component>.json` |
 | `/etc/scidesktop/modulepath.d/` | executables that print module folders to add to `MODULEPATH`, one per line; run as the user by every shell and at server start, so keep them fast | `NN-<component>`: order of the folders on the path |
 | `/etc/scidesktop/home-defaults/` | files copied into each user's home at start, never overwriting the user's own (derived images' default settings) | the path the file should have in the home |

@@ -33,6 +33,9 @@ Open <http://localhost:8888/lab?token=scidesktop> and choose **Desktop** from th
 The desktop session starts on first use, so a session that only ever uses notebooks never
 pays for it.
 
+**Tools** come from sciget's catalog. A domain image chooses it; plain
+scidesktop has none until you add one (`sciget catalog add <name> <url>`).
+
 **Applications** start from launcher tiles: each desktop entry in `/opt/sciget/applications`
 (where sciget writes its launchers) becomes a tile under *Desktop applications*, which
 starts the application maximised on the desktop and opens the stream. The desktop's
@@ -55,9 +58,9 @@ enough for a large virtual screen.
 | Image | Folder | What it adds |
 |---|---|---|
 | scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below |
-| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy (a shell for now), and the [coding agents and T3 Code](docs/coding-agents.md) |
+| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: sciget offers the microscopy tools and no others. The [NiiVue and FreeBrowse viewers](docs/viewers.md), and the [coding agents and T3 Code](docs/coding-agents.md) |
 | aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL. Also the coding agents and T3 Code |
-| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): the Neurodesk tools as modules from CVMFS, DataLad, VS Code, and the coding agents with Neurodesk's defaults |
+| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): the Neurodesk tools as modules from CVMFS, DataLad, VS Code, the NiiVue and FreeBrowse viewers, and the coding agents with Neurodesk's defaults |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
 [docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
@@ -65,7 +68,7 @@ base alongside them, so nothing needs publishing first. To start a new one, or
 to build one for your own community in a fork, see [docs/images.md](docs/images.md).
 
 CI builds and tests every image on amd64 and arm64. On `main` it publishes
-scidesktop, aidesktop and neurodesktop to
+scidesktop, microdesktop, aidesktop and neurodesktop to
 `ghcr.io/scigetorg/<image>`, each as one multi-arch image, tagged with the
 commit's short SHA, the date and `latest`.
 
@@ -78,7 +81,7 @@ commit's short SHA, the date and `latest`.
 | Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked) |
 | Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio |
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
-| Containers | Apptainer built from source; sciget with a default catalog |
+| Containers | Apptainer built from source; sciget, which gets its catalog of tools from the domain image |
 | Modules | Lmod, built from the upstream release |
 
 The domain images add components the base leaves out
@@ -86,6 +89,8 @@ The domain images add components the base leaves out
 
 | | |
 |---|---|
+| Tool catalogs | Which tools sciget offers: `sciget-neuroimaging` or `sciget-microscopy`, one per image ([docs/images.md](docs/images.md#tool-catalogs)) |
+| Viewers | [NiiVue and FreeBrowse](docs/viewers.md) for NIfTI files in JupyterLab, at `/opt/jupyterlab-niivue` and `/opt/jupyterlab-freebrowse` |
 | Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
 | T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
 | VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile; at `/opt/code-server` |

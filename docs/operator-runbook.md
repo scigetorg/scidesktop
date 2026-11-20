@@ -103,8 +103,9 @@ when the user first opens **Desktop** from the launcher.
 sciget's settings and catalog for every user are its system layer in
 `/etc/sciget/`, read on every run beneath each user's own files: a user's
 settings win and their catalogs come first, and `sciget doctor` names a user
-file that hides a system one. A derived image adds its own with
-`sciget catalog add --system` and `sciget config set --system`.
+file that hides a system one. The catalog is the domain image's: `neuroimaging`
+in neurodesktop and aidesktop, `microscopy` in microdesktop, none in plain
+scidesktop ([images.md](images.md#tool-catalogs)).
 
 ## Deployment check
 

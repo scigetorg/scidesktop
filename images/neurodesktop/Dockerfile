@@ -15,6 +15,7 @@
 #   sciget-neuroimaging  the neuroimaging catalog for sciget, and its modules
 #   neurodesk-cvmfs   the Neurodesk CVMFS repository: its mirrors and key
 #   datalad           DataLad and git-annex
+#   jupyterlab-niivue, jupyterlab-freebrowse  viewers for NIfTI files in JupyterLab
 #   code-server       the VS Code tile
 #   coding-agents     Codex, Claude Code and OpenCode (docs/coding-agents.md)
 #   t3-code           the scigent.ai tile
@@ -25,6 +26,8 @@ FROM scidesktop-base
 COPY --link --from=sciget-neuroimaging / /
 COPY --link --from=neurodesk-cvmfs / /
 COPY --link --from=datalad / /
+COPY --link --from=jupyterlab-niivue / /
+COPY --link --from=jupyterlab-freebrowse / /
 COPY --link --from=code-server / /
 COPY --link --from=coding-agents / /
 COPY --link --from=t3-code / /

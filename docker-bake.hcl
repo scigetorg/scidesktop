@@ -79,6 +79,17 @@ variable "CODE_SERVER_VERSION" { default = "4.145.2" }
 variable "CODE_SERVER_SHA256_AMD64" { default = "2f6db6c3e8b733dd6b3aeee83532e148b2bae2e392353ba85452d03572348962" }
 variable "CODE_SERVER_SHA256_ARM64" { default = "e867a34416e2da4a83496b09580001893e7a4e5bb58a0624c4fcd22819e7d53d" }
 
+# The NiiVue viewer for JupyterLab (components/jupyterlab-niivue): the wheel
+# on PyPI, one file for every architecture.
+# renovate: datasource=pypi depName=jupyterlab-niivue
+variable "JUPYTERLAB_NIIVUE_VERSION" { default = "0.2.7" }
+variable "JUPYTERLAB_NIIVUE_SHA256" { default = "192d71973065358fd6151ad2c6fef2e207275d3323f175e682ab7d30686b33a7" }
+
+# FreeBrowse for JupyterLab (components/jupyterlab-freebrowse) is built with
+# this Node.js. Its source is FREEBROWSE_COMMIT below.
+# renovate: datasource=docker depName=freebrowse-node packageName=node
+variable "FREEBROWSE_NODE_VERSION" { default = "24.22.3-bookworm-slim" }
+
 # The notebook user, set in the OS layer and used by components that own files.
 variable "NB_USER" { default = "jovyan" }
 variable "NB_UID" { default = "1000" }
@@ -106,6 +117,11 @@ variable "SCIGET_SRC" { default = "https://github.com/scigetorg/sciget.git#${SCI
 variable "AI_READY_COMMIT" { default = "26250b89d323c9981fc1a88c9fe2c0f69993b58d" }
 variable "AI_READY_SRC" { default = "https://github.com/IntersectAustralia/ai-ready-containers.git#${AI_READY_COMMIT}" }
 
+# FreeBrowse is built from Neurodesk's fork (BSD-2-Clause), which has no
+# release, at this commit (Renovate tracks its main branch).
+variable "FREEBROWSE_COMMIT" { default = "5f64059c81b7b9eb01ca6a0d261aeb17d27053d2" }
+variable "FREEBROWSE_SRC" { default = "https://github.com/neurodesk/freebrowse.git#${FREEBROWSE_COMMIT}" }
+
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
   targets = ["scidesktop", "microdesktop", "aidesktop", "neurodesktop"]
@@ -122,6 +138,8 @@ group "test" {
     "sciget-test",
     "sciget-neuroimaging-test",
     "sciget-microscopy-test",
+    "jupyterlab-niivue-test",
+    "jupyterlab-freebrowse-test",
     "micromamba-test",
     "ai-ready-test",
     "coding-agents-test",
@@ -331,6 +349,46 @@ target "sciget-microscopy-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: file viewers for JupyterLab. Each is a JupyterLab extension and a
+# server extension outside the Jupyter environment; their builds and tests
+# borrow that environment.
+target "jupyterlab-niivue" {
+  inherits = ["_component"]
+  context  = "components/jupyterlab-niivue"
+  target   = "component"
+  contexts = { jupyter-env = "target:jupyter-env" }
+  args = {
+    JUPYTERLAB_NIIVUE_VERSION = JUPYTERLAB_NIIVUE_VERSION
+    JUPYTERLAB_NIIVUE_SHA256  = JUPYTERLAB_NIIVUE_SHA256
+  }
+}
+
+target "jupyterlab-niivue-test" {
+  inherits = ["jupyterlab-niivue"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+target "jupyterlab-freebrowse" {
+  inherits = ["_component"]
+  context  = "components/jupyterlab-freebrowse"
+  target   = "component"
+  contexts = {
+    jupyter-env    = "target:jupyter-env"
+    freebrowse-src = FREEBROWSE_SRC
+  }
+  args = {
+    FREEBROWSE_NODE_VERSION = FREEBROWSE_NODE_VERSION
+    FREEBROWSE_COMMIT       = FREEBROWSE_COMMIT
+  }
+}
+
+target "jupyterlab-freebrowse-test" {
+  inherits = ["jupyterlab-freebrowse"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 target "micromamba-test" {
   inherits = ["micromamba"]
   target   = "test"
@@ -489,10 +547,12 @@ target "microdesktop" {
   inherits = ["_common"]
   context  = "images/microdesktop"
   contexts = {
-    scidesktop-base   = "target:scidesktop"
-    sciget-microscopy = "target:sciget-microscopy"
-    coding-agents     = "target:coding-agents"
-    t3-code           = "target:t3-code"
+    scidesktop-base       = "target:scidesktop"
+    sciget-microscopy     = "target:sciget-microscopy"
+    jupyterlab-niivue     = "target:jupyterlab-niivue"
+    jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
+    coding-agents         = "target:coding-agents"
+    t3-code               = "target:t3-code"
   }
   tags   = [MICRODESKTOP_IMAGE]
   output = ["type=docker"]
@@ -518,14 +578,16 @@ target "neurodesktop" {
   inherits = ["_common"]
   context  = "images/neurodesktop"
   contexts = {
-    scidesktop-base     = "target:scidesktop"
-    sciget-neuroimaging = "target:sciget-neuroimaging"
-    neurodesk-cvmfs     = "target:neurodesk-cvmfs"
-    datalad             = "target:datalad"
-    code-server         = "target:code-server"
-    coding-agents       = "target:coding-agents"
-    t3-code             = "target:t3-code"
-    neurodesk-agents    = "target:neurodesk-agents"
+    scidesktop-base       = "target:scidesktop"
+    sciget-neuroimaging   = "target:sciget-neuroimaging"
+    neurodesk-cvmfs       = "target:neurodesk-cvmfs"
+    datalad               = "target:datalad"
+    jupyterlab-niivue     = "target:jupyterlab-niivue"
+    jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
+    code-server           = "target:code-server"
+    coding-agents         = "target:coding-agents"
+    t3-code               = "target:t3-code"
+    neurodesk-agents      = "target:neurodesk-agents"
   }
   tags   = [NEURODESKTOP_IMAGE]
   output = ["type=docker"]

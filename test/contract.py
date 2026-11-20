@@ -53,6 +53,8 @@ NOT_RENOVATED = {
     "SCIGET_SRC": "built from SCIGET_COMMIT",
     "AI_READY_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "AI_READY_SRC": "built from AI_READY_COMMIT",
+    "FREEBROWSE_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
+    "FREEBROWSE_SRC": "built from FREEBROWSE_COMMIT",
 }
 # Instructions the assembly may use: image metadata a component cannot provide.
 ASSEMBLY_ALLOWED = {"FROM", "COPY", "LABEL", "ENV", "EXPOSE", "HEALTHCHECK",
