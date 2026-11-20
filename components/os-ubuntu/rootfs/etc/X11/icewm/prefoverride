@@ -7,3 +7,7 @@ TaskbarButtonWidthDivisor=6
 SmallIconSize=32
 NormalTaskBarFontNameXft="DejaVu Sans:size=15"
 ActiveTaskBarFontNameXft="DejaVu Sans:size=15:bold"
+# IceWM 4.0's own defaults for these run two font names together (a missing
+# comma) and log "Could not load font" at every start.
+QuickSwitchFontNameXft="DejaVu Sans Mono:monospace:size=12:bold,Sans Mono:monospace:size=12"
+StatusFontNameXft="DejaVu Sans Mono:monospace:size=12:bold,Sans Mono:monospace:size=12"
