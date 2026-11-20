@@ -11,14 +11,13 @@ images/
   scidesktop/      the base; its Dockerfile only assembles components
   microdesktop/    FROM scidesktop, plus coding-agents and t3-code: microscopy
   aidesktop/       FROM scidesktop, plus ai-ready, coding-agents and t3-code
-  aimicrodesktop/  FROM microdesktop, plus ai-ready
 ```
 
-| Component | scidesktop | microdesktop | aidesktop | aimicrodesktop |
-| --- | --- | --- | --- | --- |
-| the base's components | yes | yes | yes | yes |
-| `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)) | no | yes | yes | from microdesktop |
-| `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | yes |
+| Component | scidesktop | microdesktop | aidesktop |
+| --- | --- | --- | --- |
+| the base's components | yes | yes | yes |
+| `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)) | no | yes | yes |
+| `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes |
 
 ## How a domain image gets the base
 
@@ -85,8 +84,7 @@ its kernels, start hooks, home defaults, manifest entry and smoke test.
 
 Several images can copy the same component, as `microdesktop` and `aidesktop`
 do, and nodes download its layer once. An image gets the components of the
-image it is `FROM`: `aimicrodesktop` has the coding agents through
-`microdesktop` and must not copy them again. Rule S6 checks the `COPY` line,
+image it is `FROM` and must not copy them again. Rule S6 checks the `COPY` line,
 the bake context, and that nothing is copied twice. The layer rules (L1 to L5)
 cover every component an image copies, so an optional component may not
 overwrite a file of the base's components either. Rule I1 checks the built
@@ -161,7 +159,7 @@ to the workflow.
   nothing is tagged. The candidate tags stay in the registry: the multi-arch
   image points at them.
 
-`PUBLISH` lists `scidesktop`, `aidesktop` and `aimicrodesktop`. A published
+`PUBLISH` lists `scidesktop` and `aidesktop`. A published
 domain image gets its own package, `ghcr.io/<owner>/<name>`.
 
 ## Forks

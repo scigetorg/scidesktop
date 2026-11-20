@@ -7,8 +7,7 @@
 # pulled from a registry. A plain `docker build` of this folder fails, because
 # no image of those names exists outside bake.
 #
-# The workshop itself is the ai-ready component (components/ai-ready), shared
-# with aimicrodesktop. The coding agents and T3 Code are the coding-agents and
+# The workshop itself is the ai-ready component (components/ai-ready). The coding agents and T3 Code are the coding-agents and
 # t3-code components, shared with microdesktop. Changes to them belong there,
 # not here. Copying a component is all an image does for it; see
 # docs/images.md.

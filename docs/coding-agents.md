@@ -1,6 +1,6 @@
 # Coding agents and T3 Code
 
-`microdesktop`, `aidesktop` and `aimicrodesktop` come with three command-line
+`microdesktop` and `aidesktop` come with three command-line
 coding agents and a browser interface for them. The base image, `scidesktop`,
 has neither. They are two optional components
 (see [images.md](images.md#optional-components)):

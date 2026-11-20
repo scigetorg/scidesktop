@@ -57,7 +57,6 @@ enough for a large virtual screen.
 | scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below |
 | microdesktop | [images/microdesktop](images/microdesktop) | Microscopy (a shell for now), and the [coding agents and T3 Code](docs/coding-agents.md) |
 | aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL. Also the coding agents and T3 Code |
-| aimicrodesktop | [images/aimicrodesktop](images/aimicrodesktop) | The same workshop on microdesktop |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
 [docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
