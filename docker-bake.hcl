@@ -65,6 +65,8 @@ variable "NB_GID" { default = "100" }
 variable "PLATFORM" { default = "" }
 variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
+variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
+variable "AIMICRODESKTOP_IMAGE" { default = "aimicrodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
 # (Renovate tracks its main branch). For local sciget development, build your
 # working copy instead: SCIGET_SRC=../sciget docker buildx bake --allow=fs.read=..
@@ -78,7 +80,7 @@ variable "AI_READY_SRC" { default = "https://github.com/IntersectAustralia/ai-re
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop"]
+  targets = ["scidesktop", "microdesktop", "aidesktop", "aimicrodesktop"]
 }
 
 group "test" {
@@ -315,4 +317,27 @@ target "microdesktop" {
   contexts = { scidesktop-base = "target:scidesktop" }
   tags     = [MICRODESKTOP_IMAGE]
   output   = ["type=docker"]
+}
+
+# Domain images may also copy components the base leaves out (docs/images.md).
+target "aidesktop" {
+  inherits = ["_common"]
+  context  = "images/aidesktop"
+  contexts = {
+    scidesktop-base = "target:scidesktop"
+    ai-ready        = "target:ai-ready"
+  }
+  tags   = [AIDESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
+target "aimicrodesktop" {
+  inherits = ["_common"]
+  context  = "images/aimicrodesktop"
+  contexts = {
+    microdesktop-base = "target:microdesktop"
+    ai-ready          = "target:ai-ready"
+  }
+  tags   = [AIMICRODESKTOP_IMAGE]
+  output = ["type=docker"]
 }
