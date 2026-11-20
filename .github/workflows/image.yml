@@ -19,7 +19,7 @@ env:
   # Images pushed to GHCR as ghcr.io/<owner>/<image>. Every folder in images/
   # is built and smoke-tested on every architecture; add a name here to
   # publish it too.
-  PUBLISH: scidesktop aidesktop aimicrodesktop
+  PUBLISH: scidesktop aidesktop aimicrodesktop neurodesktop
   # This run's images before they are published: <candidate>-<arch>.
   CANDIDATE: run-${{ github.run_id }}
 

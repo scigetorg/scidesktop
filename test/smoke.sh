@@ -301,11 +301,18 @@ for mode in disabled external internal; do
     docker rm "${mode_name}" >/dev/null 2>&1 || true
 done
 
-# 8. Nothing from the neurodesk lineage came along
-if docker exec "${NAME}" bash -c 'ls -d /opt/neurodesk* /neurocommand /cvmfs/neurodesk* 2>/dev/null | head -1' 2>/dev/null | grep -q .; then
-    fail "no neurodesk payload"
+# 8. Nothing from the neurodesk lineage came along. An image that copies a
+#    neurodesk-* component holds that component's /opt/neurodesk-* folder,
+#    which rule I1 accounts for; nothing else of the lineage belongs in any
+#    image.
+if docker exec "${NAME}" bash -c '
+    for path in /opt/neurodesk* /neurocommand /cvmfs/neurodesk*; do
+        [ -e "${path}" ] || continue
+        [ -e "/opt/scidesktop/manifest.d/${path#/opt/}.json" ] || echo "${path}"
+    done' 2>/dev/null | grep -q .; then
+    fail "no neurodesk payload outside a neurodesk-* component"
 else
-    pass "no neurodesk payload"
+    pass "no neurodesk payload outside a neurodesk-* component"
 fi
 
 # 8b. The desktop comes back after a container restart, which kills the

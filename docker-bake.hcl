@@ -95,6 +95,7 @@ variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
 variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
 variable "AIMICRODESKTOP_IMAGE" { default = "aimicrodesktop:latest" }
+variable "NEURODESKTOP_IMAGE" { default = "neurodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
 # (Renovate tracks its main branch). For local sciget development, build your
 # working copy instead: SCIGET_SRC=../sciget docker buildx bake --allow=fs.read=..
@@ -108,7 +109,7 @@ variable "AI_READY_SRC" { default = "https://github.com/IntersectAustralia/ai-re
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop", "aidesktop", "aimicrodesktop"]
+  targets = ["scidesktop", "microdesktop", "aidesktop", "aimicrodesktop", "neurodesktop"]
 }
 
 group "test" {
@@ -488,5 +489,23 @@ target "aimicrodesktop" {
     ai-ready          = "target:ai-ready"
   }
   tags   = [AIMICRODESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
+# scidesktop for neuroimaging: what neurodesk/neurodesktop gives its users,
+# from components (docs/neurodesktop.md).
+target "neurodesktop" {
+  inherits = ["_common"]
+  context  = "images/neurodesktop"
+  contexts = {
+    scidesktop-base  = "target:scidesktop"
+    neurodesk-cvmfs  = "target:neurodesk-cvmfs"
+    datalad          = "target:datalad"
+    code-server      = "target:code-server"
+    coding-agents    = "target:coding-agents"
+    t3-code          = "target:t3-code"
+    neurodesk-agents = "target:neurodesk-agents"
+  }
+  tags   = [NEURODESKTOP_IMAGE]
   output = ["type=docker"]
 }

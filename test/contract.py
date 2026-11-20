@@ -49,6 +49,7 @@ NOT_RENOVATED = {
     "MICRODESKTOP_IMAGE": "output tag",
     "AIDESKTOP_IMAGE": "output tag",
     "AIMICRODESKTOP_IMAGE": "output tag",
+    "NEURODESKTOP_IMAGE": "output tag",
     "SCIGET_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "SCIGET_SRC": "built from SCIGET_COMMIT",
     "AI_READY_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
