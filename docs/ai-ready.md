@@ -108,7 +108,7 @@ in the [operator runbook](operator-runbook.md) applies as for scidesktop.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AI_READY_PUBLIC_ORIGIN` | `http://127.0.0.1:8888` | The origin (scheme, host and port) users reach the Hub at. Airflow builds its links from it, and MLflow accepts requests for this host only. |
+| `AI_READY_PUBLIC_ORIGIN` | `http://127.0.0.1:8888` | The origin (scheme, host and port) users reach the Hub at. Airflow builds its links from it. MLflow accepts requests for this host only, and a browser's changes from this origin only: with the wrong value its pages load and saving in them fails with 403. |
 | `JUPYTERHUB_SERVICE_PREFIX` | `/` | Set by JupyterHub. The services serve under this path. |
 
 **Sizing.** CI tests a session at 2 CPUs and 4 GB, where the workshop's training
