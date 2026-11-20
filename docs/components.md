@@ -53,6 +53,11 @@ components/<component>/
   permission, so the result does not depend on the checkout's umask.
 - **`test` stage (S3):** `FROM os`, copies the component in, and checks it works on
   its own. Add a `<component>-test` target to the bake group `test`.
+- **Configuration only:** a component that adds no software (settings for
+  another component, as `neurodesk-cvmfs` and `neurodesk-agents` do) has just
+  the `rootfs`, `component` and `test` stages. Its manifest entry identifies
+  what it ships (a key's fingerprint, a file's checksum) where there is no
+  version to report.
 - **`test/<component>-smoke.sh` (optional):** end-to-end checks of the
   component in an assembled image, taking the image as its argument.
   `test/image-smoke.sh` runs it on every image that holds the component.

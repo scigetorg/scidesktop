@@ -58,6 +58,7 @@ enough for a large virtual screen.
 | microdesktop | [images/microdesktop](images/microdesktop) | Microscopy (a shell for now), and the [coding agents and T3 Code](docs/coding-agents.md) |
 | aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL. Also the coding agents and T3 Code |
 | aimicrodesktop | [images/aimicrodesktop](images/aimicrodesktop) | The same workshop on microdesktop |
+| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): the Neurodesk tools as modules from CVMFS, DataLad, VS Code, and the coding agents with Neurodesk's defaults |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
 [docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
@@ -65,7 +66,8 @@ base alongside them, so nothing needs publishing first. To start a new one, or
 to build one for your own community in a fork, see [docs/images.md](docs/images.md).
 
 CI builds and tests every image on amd64 and arm64. On `main` it publishes
-scidesktop to `ghcr.io/scigetorg/scidesktop` as one multi-arch image, tagged with the
+scidesktop, aidesktop, aimicrodesktop and neurodesktop to
+`ghcr.io/scigetorg/<image>`, each as one multi-arch image, tagged with the
 commit's short SHA, the date and `latest`.
 
 ## What is in it
@@ -87,6 +89,9 @@ The domain images add components the base leaves out
 |---|---|
 | Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
 | T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
+| VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile; at `/opt/code-server` |
+| DataLad | DataLad and git-annex for terminals, in their own locked environment at `/opt/datalad` |
+| Neurodesk | The Neurodesk CVMFS repository's mirrors and key, and Neurodesk's instructions and model provider for the coding agents |
 | AI Ready | A Python 3.12 kernel with the workshop's libraries and MLflow, Airflow in its own environment, PostgreSQL from conda-forge; all locked, at `/opt/ai-ready` |
 
 `/opt/scidesktop/manifest.d/` holds one JSON file per component with its versions. Design and rationale:
@@ -109,6 +114,8 @@ publisher provides one. Renovate proposes updates rather than builds drifting si
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download the sciget catalogs in the background at start |
 | `AI_READY_PUBLIC_ORIGIN` | `http://127.0.0.1:8888` | AI images only: the origin users reach the session at; see [docs/ai-ready.md](docs/ai-ready.md) |
 | `T3_CODE_WORKDIR` | the home folder | Images with T3 Code: the folder it starts in; see [docs/coding-agents.md](docs/coding-agents.md) |
+| `CODE_SERVER_WORKDIR` | the home folder | Images with code-server: the folder VS Code opens |
+| `NEURODESK_API_KEY` | unset | neurodesktop: the key for the Neurodesk model provider; see [docs/neurodesktop.md](docs/neurodesktop.md#coding-agents) |
 
 ## Operations
 

@@ -129,7 +129,8 @@ supplies them through the same places, without changing a component:
 
 | To set | Put |
 | --- | --- |
-| an agent's default settings (a provider, an MCP server, instructions) | the file at its home path under `/etc/scidesktop/home-defaults/`, for example `.codex/config.toml`, `.claude/settings.json`, `.config/opencode/opencode.json`, `AGENTS.md`. Replacing one of the three this component ships is allowed: the image's layer wins |
+| an agent's default settings (a provider, an MCP server, instructions) | the file at its home path under `/etc/scidesktop/home-defaults/`, for example `.codex/AGENTS.md`, `.claude/CLAUDE.md`, `.config/opencode/AGENTS.md`. An image's own Dockerfile may also replace one of the three settings files this component ships: the image's layer wins. Another component may not (rule L1) |
+| an OpenCode provider or MCP server, from a component | a JSON file of its own, and a start hook in `/usr/local/bin/before-notebook.d/` that sets `OPENCODE_CONFIG` to it. OpenCode merges that file with the user's `~/.config/opencode/opencode.json` |
 | T3 Code's default settings (provider instances, binary paths) | a JSON file in `/etc/scidesktop/t3-code/settings.d/`. The files are merged in name order into the user's `~/.t3/userdata/settings.json` when T3 starts. They only fill gaps: a value already in the user's file is never changed, at any depth |
 | environment for T3 Code and the agents it starts | `ENV` in the image's Dockerfile, or a start hook in `/usr/local/bin/before-notebook.d/` |
 
@@ -145,9 +146,11 @@ integration were not:
 - **T3 Connect, cloudflared and Tailscale.** Remote pairing through T3's
   relay needs a relay client and a sign-in flow that T3 accepts only from its
   own origins. T3 Code works without them.
-- **Neurodesk's defaults**: its model endpoint, MCP server, agent instructions
-  and provider wrappers. The extension points above are where a later image
-  puts its own.
+- **Neurodesk's defaults** are not in these components. The `neurodesktop`
+  image gets its instructions and model provider from the `neurodesk-agents`
+  component, through the extension points above
+  ([neurodesktop.md](neurodesktop.md#coding-agents)). The provider wrappers
+  and the MCP server, which needs a personal token, were not ported.
 - **The launcher extension.** The tile is a Jupyter Server Proxy launcher
   entry. Links in T3's chat do not open files in JupyterLab, and there is no
   retry dialog: if T3 exits, the next request starts it again.

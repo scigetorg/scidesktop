@@ -12,13 +12,17 @@ images/
   microdesktop/    FROM scidesktop, plus coding-agents and t3-code: microscopy
   aidesktop/       FROM scidesktop, plus ai-ready, coding-agents and t3-code
   aimicrodesktop/  FROM microdesktop, plus ai-ready
+  neurodesktop/    FROM scidesktop, plus neurodesk-cvmfs, datalad, code-server,
+                   coding-agents, t3-code and neurodesk-agents: neuroimaging
 ```
 
-| Component | scidesktop | microdesktop | aidesktop | aimicrodesktop |
-| --- | --- | --- | --- | --- |
-| the base's components | yes | yes | yes | yes |
-| `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)) | no | yes | yes | from microdesktop |
-| `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | yes |
+| Component | scidesktop | microdesktop | aidesktop | aimicrodesktop | neurodesktop |
+| --- | --- | --- | --- | --- | --- |
+| the base's components | yes | yes | yes | yes | yes |
+| `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)) | no | yes | yes | from microdesktop | yes |
+| `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | yes | no |
+| `code-server`, `datalad` ([neurodesktop.md](neurodesktop.md)) | no | no | no | no | yes |
+| `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | no | yes |
 
 ## How a domain image gets the base
 
@@ -82,6 +86,14 @@ Those two places are all an image writes for a component. The component
 brings the rest: its Jupyter tiles and services
 ([one mechanism for every component](components.md#jupyter-configuration-s8)),
 its kernels, start hooks, home defaults, manifest entry and smoke test.
+
+A component can be configuration only, with no software of its own:
+`neurodesk-cvmfs` is two files for the base's CVMFS client, and
+`neurodesk-agents` supplies one community's defaults for `coding-agents`
+through that component's
+[extension points](coding-agents.md#extending-them-in-a-domain-image). A
+community's defaults then stay out of the generic component, and the image
+still only assembles.
 
 Several images can copy the same component, as `microdesktop` and `aidesktop`
 do, and nodes download its layer once. An image gets the components of the
@@ -161,7 +173,8 @@ to the workflow.
   nothing is tagged. The candidate tags stay in the registry: the multi-arch
   image points at them.
 
-`PUBLISH` lists `scidesktop`, `aidesktop` and `aimicrodesktop`. A published
+`PUBLISH` lists `scidesktop`, `aidesktop`, `aimicrodesktop` and
+`neurodesktop`. A published
 domain image gets its own package, `ghcr.io/<owner>/<name>`.
 
 ## Forks

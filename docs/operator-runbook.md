@@ -93,7 +93,7 @@ when the user first opens **Desktop** from the launcher.
 | `APPTAINER_HOME` | the notebook user's home | Set at start so Apptainer does not look the home up for the host uid, which fails under rootless Podman ("failed to add  as session directory"). An explicit value is kept. |
 | `APPTAINER_NV` | `1` when the NVIDIA driver is loaded | Binds the host's NVIDIA devices and libraries into tool containers. Set `0` if a tool fails with `GLIBC_* not found` from a host library. |
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`: use the `/cvmfs` the platform mounts. `internal`: mount inside the container (needs root, `/dev/fuse`, mount capability, an AppArmor profile that allows FUSE mounts, repository config and keys under `/etc/cvmfs`; with `docker run`: `--cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor=unconfined`). `disabled`: skip. |
-| `SCIDESKTOP_CVMFS_REPOSITORIES` | empty | Repositories to mount in `internal` mode, comma-separated. |
+| `SCIDESKTOP_CVMFS_REPOSITORIES` | empty; `neurodesk.ardc.edu.au` in neurodesktop | Repositories to mount in `internal` mode, comma-separated. An image with a repository's configuration (the `neurodesk-cvmfs` component) names it as the default. |
 | `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. |
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | The desktop's internal credential; generated per container when unset. |
