@@ -57,7 +57,6 @@ enough for a large virtual screen.
 | scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below |
 | microdesktop | [images/microdesktop](images/microdesktop) | Microscopy (a shell for now), and the [coding agents and T3 Code](docs/coding-agents.md) |
 | aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL. Also the coding agents and T3 Code |
-| aimicrodesktop | [images/aimicrodesktop](images/aimicrodesktop) | The same workshop on microdesktop |
 | neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): the Neurodesk tools as modules from CVMFS, DataLad, VS Code, and the coding agents with Neurodesk's defaults |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
@@ -66,7 +65,7 @@ base alongside them, so nothing needs publishing first. To start a new one, or
 to build one for your own community in a fork, see [docs/images.md](docs/images.md).
 
 CI builds and tests every image on amd64 and arm64. On `main` it publishes
-scidesktop, aidesktop, aimicrodesktop and neurodesktop to
+scidesktop, aidesktop and neurodesktop to
 `ghcr.io/scigetorg/<image>`, each as one multi-arch image, tagged with the
 commit's short SHA, the date and `latest`.
 

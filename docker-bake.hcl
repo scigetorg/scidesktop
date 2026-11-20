@@ -94,7 +94,6 @@ variable "PLATFORM" { default = "" }
 variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
 variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
-variable "AIMICRODESKTOP_IMAGE" { default = "aimicrodesktop:latest" }
 variable "NEURODESKTOP_IMAGE" { default = "neurodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
 # (Renovate tracks its main branch). For local sciget development, build your
@@ -109,7 +108,7 @@ variable "AI_READY_SRC" { default = "https://github.com/IntersectAustralia/ai-re
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop", "aidesktop", "aimicrodesktop", "neurodesktop"]
+  targets = ["scidesktop", "microdesktop", "aidesktop", "neurodesktop"]
 }
 
 group "test" {
@@ -308,7 +307,7 @@ target "micromamba-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: not in the base. The aidesktop and aimicrodesktop images copy it.
+# Optional: not in the base. The aidesktop image copies it.
 target "ai-ready" {
   inherits = ["_component"]
   context  = "components/ai-ready"
@@ -478,17 +477,6 @@ target "aidesktop" {
     t3-code         = "target:t3-code"
   }
   tags   = [AIDESKTOP_IMAGE]
-  output = ["type=docker"]
-}
-
-target "aimicrodesktop" {
-  inherits = ["_common"]
-  context  = "images/aimicrodesktop"
-  contexts = {
-    microdesktop-base = "target:microdesktop"
-    ai-ready          = "target:ai-ready"
-  }
-  tags   = [AIMICRODESKTOP_IMAGE]
   output = ["type=docker"]
 }
 

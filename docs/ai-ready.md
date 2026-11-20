@@ -1,10 +1,10 @@
-# AI Ready: the workshop images
+# AI Ready: the workshop image
 
-`aidesktop` and `aimicrodesktop` add Intersect Australia's
+`aidesktop` adds Intersect Australia's
 [AI Ready workshop](https://github.com/IntersectAustralia/ai-ready-containers)
-to scidesktop and microdesktop. Every session runs its own Airflow, MLflow and
+to scidesktop. Every session runs its own Airflow, MLflow and
 PostgreSQL beside JupyterLab and the desktop. All of it comes from one
-component, `components/ai-ready`, which the two images copy
+component, `components/ai-ready`, which the image copies
 (see [images.md](images.md#optional-components)).
 
 ## Using a session
@@ -116,8 +116,8 @@ pipeline takes about two minutes. Limits are for the whole session, background
 services included: idle, they hold about 1.1 GB. 8 GB and 4 CPUs leave room to train in a pipeline while
 working in JupyterLab.
 
-**Publishing.** CI publishes `ghcr.io/scigetorg/aidesktop` and
-`ghcr.io/scigetorg/aimicrodesktop` for amd64 and arm64, tagged as scidesktop is
+**Publishing.** CI publishes `ghcr.io/scigetorg/aidesktop` for amd64 and arm64, tagged as
+scidesktop is
 (see [images.md](images.md#ci-and-publishing)). A new GHCR package starts
 private: make it public or give the cluster a pull secret.
 

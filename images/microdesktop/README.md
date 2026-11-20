@@ -25,6 +25,5 @@ Open <http://localhost:8888/lab?token=microdesktop>.
 
 Everything specific to microdesktop lives in this folder: the `Dockerfile` and
 any files it copies. The coding agents are the `coding-agents` and `t3-code`
-components (`components/`), which aidesktop copies too; aimicrodesktop gets
-them from this image. See [docs/images.md](../../docs/images.md) for what an image
+components (`components/`), which aidesktop copies too. See [docs/images.md](../../docs/images.md) for what an image
 may change and how base changes are contributed.
