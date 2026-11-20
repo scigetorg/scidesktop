@@ -126,6 +126,8 @@ group "test" {
     "t3-code-test",
     "code-server-test",
     "datalad-test",
+    "neurodesk-cvmfs-test",
+    "neurodesk-agents-test",
   ]
 }
 
@@ -395,6 +397,38 @@ target "datalad" {
 
 target "datalad-test" {
   inherits = ["datalad"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: the Neurodesk CVMFS repository's configuration and public key.
+target "neurodesk-cvmfs" {
+  inherits = ["_component"]
+  context  = "components/neurodesk-cvmfs"
+  target   = "component"
+}
+
+target "neurodesk-cvmfs-test" {
+  inherits = ["neurodesk-cvmfs"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: Neurodesk's defaults for the coding agents, through the
+# coding-agents component's extension points. Its test gives a new home its
+# defaults and runs OpenCode, so it borrows those two components.
+target "neurodesk-agents" {
+  inherits = ["_component"]
+  context  = "components/neurodesk-agents"
+  target   = "component"
+  contexts = {
+    coding-agents = "target:coding-agents"
+    startup       = "target:startup"
+  }
+}
+
+target "neurodesk-agents-test" {
+  inherits = ["neurodesk-agents"]
   target   = "test"
   output   = ["type=cacheonly"]
 }

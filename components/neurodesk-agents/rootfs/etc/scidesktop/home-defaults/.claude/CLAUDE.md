@@ -1,0 +1,1 @@
+/opt/neurodesk-agents/AGENTS.md
