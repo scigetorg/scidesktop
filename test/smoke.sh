@@ -188,42 +188,21 @@ for mode in -ic -lic; do
         fail "bash ${mode}: clean, module and mamba"; printf '%s\n' "${out}" | head -5 | sed 's/^/        /'
     fi
 done
-# sciget arrives configured: the user sees the image's catalog from sciget's
-# system layer, with nothing copied into the home, and the start-up refresh
-# downloads it.
+# sciget arrives configured from its system layer, with nothing copied into
+# the home. Which catalog an image has is its catalog component's to check
+# (test/sciget-catalog-check.sh); the base has none.
 docker exec -u "${NB_USER}" "${NAME}" bash -c '
-    sciget catalog list | grep -q neuroimaging && [ ! -e ~/.config/sciget/catalogs.json ]' 2>/dev/null \
-    && pass "sciget catalog from the system layer" \
-    || fail "sciget catalog from the system layer"
-docker exec -u "${NB_USER}" "${NAME}" bash -c '
-    for _ in $(seq 1 60); do ls ~/.cache/sciget/catalogs/neuroimaging-*/ >/dev/null 2>&1 && exit 0; sleep 1; done
-    exit 1' 2>/dev/null \
-    && pass "sciget catalog downloaded at start" \
-    || fail "sciget catalog downloaded at start (see ~/.cache/sciget/refresh.log)"
-
-# Modules sciget installs are on the path: in new login shells (JupyterLab
-# terminals) and other interactive shells (desktop terminals), and for the
-# Jupyter server's Lmod panel, which lists the folders it started with.
-docker exec -u "${NB_USER}" "${NAME}" bash -c '
-    d="$(sciget config get module_dir)/neuroimaging/smoketool"
-    mkdir -p "${d}" && echo "whatis(\"smoke\")" >"${d}/1.0.lua"' 2>/dev/null
-for mode in -lc -ic; do
-    docker exec -u "${NB_USER}" -w /tmp "${NAME}" bash "${mode}" 'module -t avail smoketool' 2>&1 \
-        | grep -q '^smoketool/1.0' \
-        && pass "sciget modules on the path (bash ${mode})" \
-        || fail "sciget modules on the path (bash ${mode})"
-done
-curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/module/paths" 2>/dev/null \
-    | grep -q 'sciget/modules/neuroimaging' \
-    && pass "sciget modules on the Jupyter server's path" \
-    || fail "sciget modules on the Jupyter server's path"
+    sciget catalog list >/dev/null && [ ! -e ~/.config/sciget/catalogs.json ] \
+        && sciget config get display_start_command | grep -q /opt/scidesktop/start_desktop.sh' 2>/dev/null \
+    && pass "sciget settings from the system layer" \
+    || fail "sciget settings from the system layer"
 
 # Files that component tests cannot check on the OS layer, which has no
 # Python: sciget's system settings are valid JSON (sciget ignores a malformed
 # file) and the startup scripts parse.
 docker exec "${NAME}" python3 -c '
 import ast, json
-json.load(open("/etc/sciget/catalogs.json")); json.load(open("/etc/sciget/config.json"))
+json.load(open("/etc/sciget/config.json"))
 for f in ("/usr/local/bin/start-notebook.py", "/usr/local/bin/start-singleuser.py"):
     ast.parse(open(f).read())
 ' >/dev/null 2>&1 && pass "sciget settings valid JSON, startup scripts parse" \

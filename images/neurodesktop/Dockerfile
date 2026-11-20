@@ -12,6 +12,7 @@
 # components/, where other images can copy them too. Components are ordered
 # from least to most frequently changed.
 #
+#   sciget-neuroimaging  the neuroimaging catalog for sciget, and its modules
 #   neurodesk-cvmfs   the Neurodesk CVMFS repository: its mirrors and key
 #   datalad           DataLad and git-annex
 #   code-server       the VS Code tile
@@ -21,6 +22,7 @@
 
 FROM scidesktop-base
 
+COPY --link --from=sciget-neuroimaging / /
 COPY --link --from=neurodesk-cvmfs / /
 COPY --link --from=datalad / /
 COPY --link --from=code-server / /

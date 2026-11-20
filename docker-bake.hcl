@@ -120,6 +120,8 @@ group "test" {
     "apptainer-test",
     "lmod-test",
     "sciget-test",
+    "sciget-neuroimaging-test",
+    "sciget-microscopy-test",
     "micromamba-test",
     "ai-ready-test",
     "coding-agents-test",
@@ -301,6 +303,34 @@ target "sciget-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: the catalog of tools sciget offers every user of an image. An
+# image copies one of them. Their tests run sciget, so they borrow it.
+target "sciget-neuroimaging" {
+  inherits = ["_component"]
+  context  = "components/sciget-neuroimaging"
+  target   = "component"
+  contexts = { sciget = "target:sciget" }
+}
+
+target "sciget-neuroimaging-test" {
+  inherits = ["sciget-neuroimaging"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+target "sciget-microscopy" {
+  inherits = ["_component"]
+  context  = "components/sciget-microscopy"
+  target   = "component"
+  contexts = { sciget = "target:sciget" }
+}
+
+target "sciget-microscopy-test" {
+  inherits = ["sciget-microscopy"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 target "micromamba-test" {
   inherits = ["micromamba"]
   target   = "test"
@@ -459,9 +489,10 @@ target "microdesktop" {
   inherits = ["_common"]
   context  = "images/microdesktop"
   contexts = {
-    scidesktop-base = "target:scidesktop"
-    coding-agents   = "target:coding-agents"
-    t3-code         = "target:t3-code"
+    scidesktop-base   = "target:scidesktop"
+    sciget-microscopy = "target:sciget-microscopy"
+    coding-agents     = "target:coding-agents"
+    t3-code           = "target:t3-code"
   }
   tags   = [MICRODESKTOP_IMAGE]
   output = ["type=docker"]
@@ -471,10 +502,11 @@ target "aidesktop" {
   inherits = ["_common"]
   context  = "images/aidesktop"
   contexts = {
-    scidesktop-base = "target:scidesktop"
-    ai-ready        = "target:ai-ready"
-    coding-agents   = "target:coding-agents"
-    t3-code         = "target:t3-code"
+    scidesktop-base     = "target:scidesktop"
+    sciget-neuroimaging = "target:sciget-neuroimaging"
+    ai-ready            = "target:ai-ready"
+    coding-agents       = "target:coding-agents"
+    t3-code             = "target:t3-code"
   }
   tags   = [AIDESKTOP_IMAGE]
   output = ["type=docker"]
@@ -486,13 +518,14 @@ target "neurodesktop" {
   inherits = ["_common"]
   context  = "images/neurodesktop"
   contexts = {
-    scidesktop-base  = "target:scidesktop"
-    neurodesk-cvmfs  = "target:neurodesk-cvmfs"
-    datalad          = "target:datalad"
-    code-server      = "target:code-server"
-    coding-agents    = "target:coding-agents"
-    t3-code          = "target:t3-code"
-    neurodesk-agents = "target:neurodesk-agents"
+    scidesktop-base     = "target:scidesktop"
+    sciget-neuroimaging = "target:sciget-neuroimaging"
+    neurodesk-cvmfs     = "target:neurodesk-cvmfs"
+    datalad             = "target:datalad"
+    code-server         = "target:code-server"
+    coding-agents       = "target:coding-agents"
+    t3-code             = "target:t3-code"
+    neurodesk-agents    = "target:neurodesk-agents"
   }
   tags   = [NEURODESKTOP_IMAGE]
   output = ["type=docker"]

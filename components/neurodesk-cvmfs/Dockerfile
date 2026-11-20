@@ -2,8 +2,8 @@
 # The Neurodesk CVMFS repository for the base's CVMFS client: its mirrors,
 # the public key its content is signed with, and the repository as the
 # default one to mount in internal mode. Configuration only; the client is
-# the OS layer's and the module folders are found by sciget's
-# /etc/scidesktop/modulepath.d/60-neurodesk-cvmfs. Not part of the base
+# the OS layer's and the module folders are found by
+# sciget-neuroimaging's /etc/scidesktop/modulepath.d/60-neurodesk-cvmfs. Not part of the base
 # image; domain images copy it (docs/images.md).
 
 ARG UBUNTU_IMAGE

@@ -6,24 +6,19 @@
 # pulled from a registry. A plain `docker build` of this folder fails, because
 # no image of those names exists outside bake.
 #
-# The coding agents and T3 Code are the coding-agents and t3-code components
-# (docs/coding-agents.md), shared with aidesktop. Copying a component is all
-# an image does for it.
+# This file only assembles. Each component brings its own files, hooks,
+# launcher tiles and checks; changes to them belong in components/, where
+# other images can copy them too (docs/images.md).
 #
-# Add what microscopy needs on top of scidesktop here. The base is built as the
-# notebook user; switch to root for system changes and back at the end:
-#
-#   USER root
-#   RUN sciget catalog add --system microscopy https://example.org/apps.json
-#   USER ${NB_UID}
-#
-# Changes every image needs belong in the base (components/), not here; see
-# docs/images.md.
+#   sciget-microscopy  the microscopy catalog for sciget: the only tools offered
+#   coding-agents      Codex, Claude Code and OpenCode (docs/coding-agents.md)
+#   t3-code            the scigent.ai tile
 
 FROM scidesktop-base
 
+COPY --link --from=sciget-microscopy / /
 COPY --link --from=coding-agents / /
 COPY --link --from=t3-code / /
 
 LABEL org.opencontainers.image.title="microdesktop" \
-      org.opencontainers.image.description="scidesktop for microscopy"
+      org.opencontainers.image.description="scidesktop for microscopy: the microscopy tools through sciget"
