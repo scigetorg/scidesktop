@@ -42,8 +42,7 @@ for _ in $(seq 1 120); do
     sleep 1
 done
 
-in_session "curl -s -H 'Authorization: token ${TOKEN}' '${URL}server-proxy/servers-info'" \
-    | grep -q '"name": "vscode"' \
+[ "$(status server-proxy/servers-info)" = 200 ] && in_session "grep -q '\"name\": \"vscode\"' /tmp/code-server-smoke.body" \
     && pass "the VS Code tile is in the launcher" || fail "the VS Code tile is in the launcher"
 [ "$(status server-proxy/icon/vscode)" = 200 ] && in_session "grep -q '<svg' /tmp/code-server-smoke.body" \
     && pass "the tile has its icon" || fail "the tile has its icon"

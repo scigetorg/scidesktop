@@ -24,9 +24,12 @@ for _ in $(seq 1 60); do
     sleep 1
 done
 [ "$(stat -c %a "${socket}")" = 600 ]
-curl -fsS --unix-socket "${socket}" http://localhost/healthz | grep -q '"status"'
-curl -fsSL --unix-socket "${socket}" "http://localhost/?folder=${HOME}" | grep -q 'vscode-workbench-web-configuration' \
-    || { cat "${HOME}/log" >&2; exit 1; }
+# Each answer is saved before it is searched: grep -q stops reading at the
+# first match, and curl then fails on a page it could not finish writing.
+curl -fsS --unix-socket "${socket}" -o "${HOME}/healthz" http://localhost/healthz
+grep -q '"status"' "${HOME}/healthz"
+curl -fsSL --unix-socket "${socket}" -o "${HOME}/page" "http://localhost/?folder=${HOME}"
+grep -q 'vscode-workbench-web-configuration' "${HOME}/page" || { cat "${HOME}/log" >&2; exit 1; }
 
 # The tile's icon and the notices redistribution needs come with the release.
 test -s /opt/code-server/src/browser/media/favicon.svg

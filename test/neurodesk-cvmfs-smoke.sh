@@ -84,7 +84,10 @@ fi
 
 # Internal mode, with what docs/operator-runbook.md says it needs. The two
 # seccomp and AppArmor options are also what Apptainer needs to run the tool.
+# The open-file limit is a low one, as some container runtimes set: the
+# client must still mount.
 docker run -d --name "${NAME}" --user root --cap-add SYS_ADMIN --device /dev/fuse \
+    --ulimit nofile=1024:4096 \
     --security-opt apparmor=unconfined --security-opt seccomp=unconfined \
     -e SCIDESKTOP_CVMFS_MODE=internal -e JUPYTER_TOKEN="${TOKEN}" "${IMAGE}" >/dev/null \
     || { fail "the internal-mode container starts"; finish; }
@@ -111,8 +114,8 @@ done
 modules="$(as_user 'module -t avail' | grep -c '^[a-z0-9_-]*/[0-9]')"
 [ "${modules}" -gt 100 ] && pass "a terminal lists ${modules} Neurodesk modules" \
     || fail "a terminal lists Neurodesk modules (found ${modules})"
-docker exec "${NAME}" curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:8888/module/paths" 2>/dev/null \
-    | grep -q "/cvmfs/${REPOSITORY}/neurodesk-modules/" \
+paths="$(docker exec "${NAME}" curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:8888/module/paths" 2>/dev/null)"
+grep -q "/cvmfs/${REPOSITORY}/neurodesk-modules/" <<<"${paths}" \
     && pass "the Jupyter server's Lmod panel has the Neurodesk module folders" \
     || fail "the Jupyter server's Lmod panel has the Neurodesk module folders"
 
