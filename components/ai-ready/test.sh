@@ -25,7 +25,7 @@ AIRFLOW_HOME="${work}/airflow" "${airflow}/airflow" version
 # asks for it.
 "${env}/python" - "${content}" <<'PYTHON'
 import json, os, pathlib, sys
-spec = json.load(open("/opt/ai-ready/share/jupyter/kernels/ai-ready/kernel.json"))
+spec = json.load(open("/usr/local/share/jupyter/kernels/ai-ready/kernel.json"))
 assert os.access(spec["argv"][0], os.X_OK), spec["argv"]
 assert spec["env"]["PYTHONPATH"] == "${HOME}/ai-ready/src", spec["env"]
 notebooks = sorted(pathlib.Path(sys.argv[1], "notebooks").glob("*.ipynb"))
@@ -45,10 +45,11 @@ test -x /usr/local/bin/before-notebook.d/40-ai-ready.sh
 JUPYTERHUB_SERVICE_PREFIX=/user/x/ "${env}/python" /opt/ai-ready/lib/ai_ready_services.py env \
     | grep -qx "export MLFLOW_TRACKING_URI=http://127.0.0.1:5000/user/x/mlflow"
 "${env}/python" -c 'import ast, sys; [ast.parse(open(f).read(), f) for f in sys.argv[1:]]' \
-    /opt/ai-ready/etc/jupyter/jupyter_server_config.py /opt/ai-ready/lib/ai_ready_dashboard.py
+    /etc/scidesktop/jupyter_server_config.d/ai-ready.py /opt/ai-ready/lib/ai_ready_dashboard.py
 
 # Nothing root-owned is writable by group or others, and the user can read it all.
 if find /opt/ai-ready "${content}" /usr/local/bin/before-notebook.d/40-ai-ready.sh \
+        /etc/scidesktop/jupyter_server_config.d/ai-ready.py /usr/local/share/jupyter/kernels/ai-ready \
         ! -type l \( -perm /022 -o ! -readable \) -print | grep .; then
     echo "bad permissions on the files above" >&2
     exit 1

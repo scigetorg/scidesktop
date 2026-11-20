@@ -40,7 +40,7 @@ COPY rootfs/ /rootfs/
 RUN chmod -R go-w /rootfs
 
 # The desktop: Selkies, its launch scripts, and the /desktop entry for
-# jupyter-server-proxy (rootfs/usr/local/etc/jupyter).
+# jupyter-server-proxy (rootfs/etc/scidesktop/jupyter_server_config.d).
 FROM scratch AS component
 COPY --from=rootfs /rootfs/ /
 COPY --from=build /opt/selkies /opt/selkies

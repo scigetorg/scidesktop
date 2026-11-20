@@ -21,7 +21,7 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 "${_ai_ready[@]}" run </dev/null &
 # The notebook server waits for this process when it exits
-# (/opt/ai-ready/etc/jupyter/jupyter_server_config.py).
+# (/etc/scidesktop/jupyter_server_config.d/ai-ready.py).
 export AI_READY_SUPERVISOR_PID=$!
 echo "[ai-ready] services starting in the background (PID ${AI_READY_SUPERVISOR_PID})"
 unset _ai_ready

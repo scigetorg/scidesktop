@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Enforce the build conventions in docs/components.md.
 
-    python3 test/contract.py static   # before building: Dockerfiles, bake file
-    python3 test/contract.py layers   # after building: what each component writes
+    python3 test/contract.py static          # before building: Dockerfiles, bake file
+    python3 test/contract.py layers          # after building: what each component writes
+    python3 test/contract.py image <image> [ref]
+                                             # a built image: the components it holds
 
 Exit status is non-zero when any rule is broken; each violation is printed
 with the rule it breaks.
@@ -28,6 +30,12 @@ TARGET_ARCH = COMPONENTS / "target-arch"
 CI = ROOT / ".github" / "workflows" / "image.yml"
 # Asking the machine instead of buildx's TARGETARCH.
 ARCH_PROBE = re.compile(r"uname -m|dpkg --print-architecture")
+# Where a component puts its part of the notebook server's configuration, and
+# the one file that loads the parts (docs/components.md).
+JUPYTER_PARTS = "etc/scidesktop/jupyter_server_config.d"
+JUPYTER_LOADER = "jupyter-env/rootfs/usr/local/etc/jupyter/jupyter_server_config.py"
+JUPYTER_ENV = re.compile(r"\bJUPYTER_(?:CONFIG_)?PATH\b")
+MANIFESTS = "/opt/scidesktop/manifest.d"
 
 # Bake variables that carry no "# renovate:" comment, and why.
 NOT_RENOVATED = {
@@ -98,6 +106,21 @@ def component_names():
 
 def image_names():
     return sorted(p.name for p in IMAGES.iterdir() if p.is_dir())
+
+
+def image_components(targets, image):
+    """Components the image holds: its own and those of the images it is FROM."""
+    components = set(component_names()) - {OS_COMPONENT}
+    found = set()
+    while image in targets:
+        parent = None
+        for context, source in targets[image].get("contexts", {}).items():
+            if context in components and source == f"target:{context}":
+                found.add(context)
+            elif context == f"{source.removeprefix('target:')}-base":
+                parent = source.removeprefix("target:")
+        image = parent
+    return found
 
 
 def copied_components(targets):
@@ -239,6 +262,32 @@ def static():
                 fail("S6", f"{rel(df)}: a component is copied whole, as `COPY --link --from={u} / /`: {text}")
             if t.get("contexts", {}).get(u) != f"target:{u}":
                 fail("S6", f"{name}: copying {u} needs `{u} = \"target:{u}\"` in its bake target's contexts")
+            if u in image_components(targets, parent):
+                fail("S6", f"{rel(df)}: copies {u}, which {parent} already holds; remove the COPY and the context")
+            # S8: a component brings its own Jupyter registration.
+        for ins, text in instructions(df):
+            if ins == "ENV" and JUPYTER_ENV.search(text):
+                fail("S8", f"{rel(df)}: sets a Jupyter path; a component registers itself through "
+                           f"/{JUPYTER_PARTS}/<component>.py and /usr/local/share/jupyter: {text[:70]}")
+
+    # S8: one way to add to the notebook server's configuration. A component
+    # ships /etc/scidesktop/jupyter_server_config.d/<component>.py, which adds
+    # to shared settings and never assigns them; only the loader is a Jupyter
+    # config file of its own.
+    for path in sorted(COMPONENTS.glob("*/rootfs/**/*")):
+        if not path.is_file():
+            continue
+        u, inside = path.relative_to(COMPONENTS).parts[0], path.relative_to(COMPONENTS).as_posix()
+        if path.parent.as_posix().endswith(JUPYTER_PARTS):
+            if path.name != f"{u}.py":
+                fail("S8", f"{rel(path)}: a component's part of the Jupyter configuration is named {u}.py")
+            for n, line in enumerate(path.read_text().splitlines(), 1):
+                if re.match(r"\s*c\.ServerProxy\.servers\s*=[^=]", line):
+                    fail("S8", f"{rel(path)}:{n}: assigns c.ServerProxy.servers, dropping other components' "
+                               f"entries; use c.ServerProxy.servers.update(...)")
+        elif path.name == "jupyter_server_config.py" and inside != JUPYTER_LOADER:
+            fail("S8", f"{rel(path)}: a Jupyter config file of its own; move it to "
+                       f"rootfs/{JUPYTER_PARTS}/{u}.py")
 
     # S5: every bake variable is one line, and tracked by Renovate unless
     # listed in NOT_RENOVATED.
@@ -332,12 +381,43 @@ def layers():
                 fail("L5", f"{u}: {path} is root-owned and group/other writable ({oct(mode)})")
 
 
+def image(name, ref):
+    """I1: a built image holds the components its bake target names, and no
+    file of any other component. This is what keeps optional components out
+    of the base."""
+    expected = image_components(bake_print()["target"], name)
+    others = sorted(set(component_names()) - {OS_COMPONENT} - expected)
+    # Signs of a component: its manifest entry, its prefix, and each
+    # integration file it ships in rootfs/.
+    signs = {}
+    for u in others:
+        signs[f"{MANIFESTS}/{u}.json"] = u
+        signs[f"/opt/{u}"] = u
+        for path in (COMPONENTS / u / "rootfs").rglob("*"):
+            if path.is_symlink() or path.is_file():
+                signs["/" + path.relative_to(COMPONENTS / u / "rootfs").as_posix()] = u
+    script = f'ls {MANIFESTS}; echo ---; for p in "$@"; do if [ -e "$p" ] || [ -L "$p" ]; then echo "$p"; fi; done'
+    run = subprocess.run(["docker", "run", "--rm", "--entrypoint", "bash", ref, "-c", script, "_", *signs],
+                         capture_output=True, text=True)
+    if run.returncode:
+        sys.exit(f"docker run {ref} failed:\n{run.stderr}")
+    manifests, _, found = run.stdout.partition("---\n")
+    held = {m.removesuffix(".json") for m in manifests.split()}
+    for u in sorted(expected - held):
+        fail("I1", f"{ref}: no manifest entry for {u}, which the {name} bake target copies")
+    for path in found.split():
+        fail("I1", f"{ref}: has {path} of component {signs[path]}, which the {name} bake target does not copy")
+    print(f"  {ref}: {', '.join(sorted(expected))}; nothing of {', '.join(others) or 'no other component'}")
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     if mode == "static":
         static()
     elif mode == "layers":
         layers()
+    elif mode == "image" and len(sys.argv) in (3, 4) and sys.argv[2] in image_names():
+        image(sys.argv[2], sys.argv[-1])
     else:
         sys.exit(__doc__)
     for p in problems:

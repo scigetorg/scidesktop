@@ -1,3 +1,5 @@
+# The desktop's part of the notebook server's configuration: the Desktop tile
+# and one tile per desktop application.
 import base64
 import os
 import secrets
@@ -8,7 +10,9 @@ _user = os.environ.get("NB_USER", "jovyan")
 _password = os.environ.get("SELKIES_BASIC_AUTH_PASSWORD") or secrets.token_urlsafe(24)
 _auth = base64.b64encode(f"{_user}:{_password}".encode()).decode()
 
-c.ServerProxy.servers = {
+# update() adds to the entries of other components; nothing here assigns the
+# shared setting.
+c.ServerProxy.servers.update({
     'desktop': {
         # {port} is allocated by the proxy; {base_url} carries the JupyterHub
         # per-user prefix, which selkies applies via --subfolder.
@@ -34,7 +38,7 @@ c.ServerProxy.servers = {
             'category': 'Scidesktop',
         },
     }
-}
+})
 
 # App mode: one launcher tile per desktop entry in SCIDESKTOP_APP_DIRS
 # (default: the launchers sciget writes). A tile starts its application on the

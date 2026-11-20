@@ -39,7 +39,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
         --no-cache-dir --no-deps --require-hashes --only-binary :all: --no-compile \
         -r /tmp/airflow-requirements.lock \
     && /opt/ai-ready/env/bin/python -m compileall -q /opt/ai-ready/env/lib /opt/ai-ready/airflow/lib \
-    # The kernelspec, on JUPYTER_PATH in the images. Jupyter fills in ${HOME}
+    # The kernelspec, moved to Jupyter's system folder below. Jupyter fills in ${HOME}
     # and ${PATH} when it starts the kernel: the workshop's own modules import
     # from any notebook, and `!pip` and `!mlflow` are this environment's.
     && /opt/ai-ready/env/bin/python -m ipykernel install --prefix /opt/ai-ready --name ai-ready \
@@ -72,9 +72,18 @@ FROM ${UBUNTU_IMAGE} AS rootfs
 COPY rootfs/ /rootfs/
 RUN chmod -R a+rX,go-w /rootfs
 
+# The kernelspec goes where Jupyter looks without being told
+# (/usr/local/share/jupyter), so an image that copies the component sets
+# nothing for it.
+FROM build AS kernel
+RUN install -d -m 0755 /out/usr/local/share/jupyter \
+    && mv /opt/ai-ready/share/jupyter/kernels /out/usr/local/share/jupyter/kernels \
+    && rmdir /opt/ai-ready/share/jupyter /opt/ai-ready/share
+
 FROM scratch AS component
 COPY --from=rootfs /rootfs/ /
-COPY --from=build /opt/ai-ready /opt/ai-ready
+COPY --from=kernel /opt/ai-ready /opt/ai-ready
+COPY --from=kernel /out/ /
 COPY --from=upstream /out/ /
 
 FROM os AS test

@@ -1,6 +1,5 @@
-# AI Ready's part of the notebook server's configuration. Images that copy the
-# ai-ready component put this folder on JUPYTER_CONFIG_PATH, so it is read
-# after the base's files and adds to them.
+# AI Ready's part of the notebook server's configuration: the Airflow and
+# MLflow tiles, the workshop page, and the wait for the services at shutdown.
 import atexit
 import os
 import sys
@@ -15,7 +14,7 @@ from ai_ready_services import AIRFLOW_PORT, MLFLOW_PORT  # noqa: E402
 
 # Airflow and MLflow listen on loopback only. The proxy checks the notebook
 # server's login before it forwards a request, Airflow's admin UI included.
-# update() adds to the entries of other components (the desktop).
+# update() adds to the entries of other components.
 c.ServerProxy.servers.update({  # noqa: F821
     name: {
         "port": port,
