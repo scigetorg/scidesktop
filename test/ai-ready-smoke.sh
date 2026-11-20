@@ -21,6 +21,14 @@ FAILED=0
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 
+# Whether the container's log has a line matching $1. The log goes to a file
+# first: under pipefail, `docker logs | grep -q` fails when grep finds its
+# line and exits before docker has written the rest.
+logged() {
+    docker logs "${NAME}" >"/tmp/${NAME}.log" 2>&1
+    grep -qE "$1" "/tmp/${NAME}.log"
+}
+
 cleanup() {
     docker logs "${NAME}" >"/tmp/${NAME}.log" 2>&1 || true
     docker rm -f "${NAME}" >/dev/null 2>&1 || true
@@ -82,7 +90,7 @@ docker exec "${NAME}" bash -c '[ "$(stat -c %a ~/.ai-ready/credentials.json)" = 
 # recovery afterwards.
 docker restart --time=40 "${NAME}" >/dev/null
 session_checks again
-if docker logs "${NAME}" 2>&1 | grep -qE "database system was (interrupted|not properly shut down)"; then
+if logged "database system was (interrupted|not properly shut down)"; then
     fail "PostgreSQL shut down cleanly when the container stopped"
 else
     pass "PostgreSQL shut down cleanly when the container stopped"
@@ -99,13 +107,12 @@ python3 "${CHECK}" recovered "http://127.0.0.1:${PORT}${BASE_PATH}" "${TOKEN}" \
 # a restart brings everything back.
 docker exec "${NAME}" pkill -f '/opt/ai-ready/env/bin/mlflow server'
 if [ "$(timeout 90 docker wait "${NAME}" 2>/dev/null)" != "" ] \
-    && docker logs "${NAME}" 2>&1 | grep -q '\[ai-ready\] FAILED: MLflow exited'; then
+    && logged '\[ai-ready\] FAILED: MLflow exited'; then
     pass "the session ends when a service dies"
 else
     fail "the session ends when a service dies"
     docker inspect "${NAME}" --format '        container: {{.State.Status}}, exit code {{.State.ExitCode}}, OOM killed {{.State.OOMKilled}}'
-    docker logs "${NAME}" 2>&1 | grep -F '[ai-ready]' | tail -n 8 | sed 's/^/        /'
-    docker logs "${NAME}" 2>&1 | tail -n 15 | cut -c1-200 | sed 's/^/        | /'
+    grep -F '[ai-ready]' "/tmp/${NAME}.log" | tail -n 8 | sed 's/^/        /'
 fi
 
 finish
