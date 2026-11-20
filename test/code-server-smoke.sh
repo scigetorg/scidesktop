@@ -14,6 +14,8 @@ BASE_PATH="/user/code-server-smoke/"
 TOKEN="code-server-smoke"
 URL="http://127.0.0.1:8888${BASE_PATH}"
 RUNNING='pgrep -u jovyan -f "^/opt/code-server/lib/node /opt/code-server"'
+# Prints the TCP ports with a listener, in hex.
+LISTENING="cat /proc/net/tcp /proc/net/tcp6 | awk 'NR > 1 && \$4 == \"0A\" { print \$2 }' | sed 's/.*://' | sort -u | tr '\n' ' '"
 FAILED=0
 
 pass() { printf '  ok    %s\n' "$1"; }
@@ -49,6 +51,11 @@ done
 in_session "${RUNNING}" >/dev/null \
     && fail "code-server does not run before the tile is opened" \
     || pass "code-server does not run before the tile is opened"
+# What listens before code-server starts: the notebook server, and the
+# session's own services on loopback. The Slurm queue comes up a few seconds
+# after the server; it must be there before the ports are counted.
+docker exec -u jovyan "${NAME}" bash -c '[ ! -x /opt/slurm/bin/slurm-session ] || /opt/slurm/bin/slurm-session wait' >/dev/null 2>&1
+tcp_before="$(in_session "${LISTENING}")"
 
 # The first request starts code-server; it must answer with the editor, not
 # with an error from a server that is still starting.
@@ -67,10 +74,9 @@ case "${code}" in
     302 | 401 | 403) pass "a request without the login is refused (HTTP ${code})" ;;
     *) fail "a request without the login is refused (HTTP ${code})" ;;
 esac
-tcp="$(in_session "cat /proc/net/tcp /proc/net/tcp6 | awk 'NR > 1 && \$4 == \"0A\" { print \$2 }' | sed 's/.*://' | sort -u | tr '\n' ' '")"
-# 22B8 is 8888, the notebook server.
-[ "${tcp}" = "22B8 " ] \
-    && pass "only the notebook server listens on TCP" || fail "only the notebook server listens on TCP (ports, hex: ${tcp})"
+tcp="$(in_session "${LISTENING}")"
+[ -n "${tcp_before}" ] && [ "${tcp}" = "${tcp_before}" ] \
+    && pass "code-server opens no TCP port" || fail "code-server opens no TCP port (ports, hex: before ${tcp_before}, now ${tcp})"
 
 in_session '[ -s "${HOME}/.local/share/code-server/User/settings.json" ]' \
     && pass "a new home gets code-server's settings" || fail "a new home gets code-server's settings"
