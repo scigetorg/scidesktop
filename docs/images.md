@@ -11,7 +11,6 @@ images/
   scidesktop/      the base; its Dockerfile only assembles components
   microdesktop/    FROM scidesktop: microscopy
   aidesktop/       FROM scidesktop, plus the ai-ready component
-  aimicrodesktop/  FROM microdesktop, plus the ai-ready component
 ```
 
 ## How a domain image gets the base
@@ -64,8 +63,8 @@ contexts = {
 }
 ```
 
-Several images can copy the same component, as `aidesktop` and
-`aimicrodesktop` do, and nodes download its layer once. Rule S6 checks the
+Several images can copy the same component, and nodes download its layer
+once. Rule S6 checks the
 `COPY` line and the bake context. The layer rules (L1 to L5) cover every
 component an image copies, so an optional component may not overwrite a file
 of the base's components either.
@@ -124,7 +123,7 @@ to the workflow.
   nothing is tagged. The candidate tags stay in the registry: the multi-arch
   image points at them.
 
-`PUBLISH` lists `scidesktop`, `aidesktop` and `aimicrodesktop`. A published
+`PUBLISH` lists `scidesktop` and `aidesktop`. A published
 domain image gets its own package, `ghcr.io/<owner>/<name>`.
 
 ## Forks

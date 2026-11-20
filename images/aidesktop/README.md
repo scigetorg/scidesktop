@@ -21,6 +21,6 @@ Open <http://localhost:8888/?token=aidesktop>.
 ## What is here
 
 Only the assembly: this image is scidesktop plus the `ai-ready` component
-(`components/ai-ready`), which aimicrodesktop copies too. See
+(`components/ai-ready`). See
 [docs/ai-ready.md](../../docs/ai-ready.md) for what a session runs and how to
 deploy it.

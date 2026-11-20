@@ -7,9 +7,8 @@
 # pulled from a registry. A plain `docker build` of this folder fails, because
 # no image of those names exists outside bake.
 #
-# The workshop itself is the ai-ready component (components/ai-ready), shared
-# with aimicrodesktop. Changes to it belong there, not here; see
-# docs/images.md.
+# The workshop itself is the ai-ready component (components/ai-ready).
+# Changes to it belong there, not here; see docs/images.md.
 
 FROM scidesktop-base
 
