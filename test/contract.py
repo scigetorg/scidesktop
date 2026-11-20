@@ -342,10 +342,14 @@ def component_tar(target):
 
 
 def layers():
-    assembled = copied_components(bake_print()["target"])
+    targets = bake_print()["target"]
+    assembled = copied_components(targets)
+    # Two components meet when some image holds both. Components no image
+    # combines may be alternatives for one file, as the sciget catalogs are.
+    together = [image_components(targets, image) for image in image_names()]
     os_entries, _ = component_tar(OS_COMPONENT)
     print(f"  {OS_COMPONENT}: {len(os_entries)} entries")
-    seen = {}  # path -> component, for non-directories
+    seen = {}  # path -> components, for non-directories
     dirs = {}  # path -> (meta, component)
     for u in assembled:
         entries, manifests = component_tar(u)
@@ -361,10 +365,11 @@ def layers():
                 fail("L4", f"{u}: {want} is not valid JSON: {e}")
         for path, (kind, mode, uid, gid) in entries.items():
             if kind != "dir":
-                # L1: one owner per file. L2: no shadowing the OS layer.
-                if path in seen:
-                    fail("L1", f"{path} is written by both {seen[path]} and {u}")
-                seen[path] = u
+                # L1: one owner per file in an image. L2: no shadowing the OS layer.
+                for other in seen.setdefault(path, []):
+                    if any({other, u} <= held for held in together):
+                        fail("L1", f"{path} is written by both {other} and {u}")
+                seen[path].append(u)
                 if path in os_entries:
                     fail("L2", f"{u}: {path} shadows a file in the OS layer")
             else:
@@ -391,13 +396,20 @@ def image(name, ref):
     others = sorted(set(component_names()) - {OS_COMPONENT} - expected)
     # Signs of a component: its manifest entry, its prefix, and each
     # integration file it ships in rootfs/.
+    def integration_files(u):
+        root = COMPONENTS / u / "rootfs"
+        return {"/" + path.relative_to(root).as_posix() for path in root.rglob("*")
+                if path.is_symlink() or path.is_file()}
+
+    # A file the image's own components ship is theirs, also where another
+    # image's component is an alternative for it (the sciget catalogs).
+    own = set().union(*(integration_files(u) for u in expected))
     signs = {}
     for u in others:
         signs[f"{MANIFESTS}/{u}.json"] = u
         signs[f"/opt/{u}"] = u
-        for path in (COMPONENTS / u / "rootfs").rglob("*"):
-            if path.is_symlink() or path.is_file():
-                signs["/" + path.relative_to(COMPONENTS / u / "rootfs").as_posix()] = u
+        for path in integration_files(u) - own:
+            signs[path] = u
     script = f'ls {MANIFESTS}; echo ---; for p in "$@"; do if [ -e "$p" ] || [ -L "$p" ]; then echo "$p"; fi; done'
     run = subprocess.run(["docker", "run", "--rm", "--entrypoint", "bash", ref, "-c", script, "_", *signs],
                          capture_output=True, text=True)

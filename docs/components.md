@@ -150,7 +150,10 @@ The layer check enforces what it can:
 
 The layer rules cover the base's components and those a domain image copies.
 
-- **L1:** no file is written by two components.
+- **L1:** no file is written by two components of one image. Components
+  that no image combines may be alternatives for the same file: the sciget
+  catalog components each ship `/etc/sciget/catalogs.json`
+  ([images.md](images.md#tool-catalogs)).
 - **L2:** no component file shadows a file in the OS layer.
 - **L3:** a folder a component creates must have the same mode and owner as the
   existing one. A linked layer silently replaces the folder's permissions
