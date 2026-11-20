@@ -87,6 +87,10 @@ jobs:
               image="$(basename "$(dirname "${dockerfile}")")"
               echo "::group::${image}"
               ./test/smoke.sh "${image}:ci" || failed=1
+              # The image's own checks, when its folder has them (docs/images.md).
+              if [ -x "images/${image}/smoke.sh" ]; then
+                  "images/${image}/smoke.sh" "${image}:ci" || failed=1
+              fi
               echo "::endgroup::"
           done
           exit "${failed}"
