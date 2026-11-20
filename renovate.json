@@ -152,6 +152,26 @@
       ]
     },
     {
+      "description": "Component coding-agents: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/coding-agents/**"
+      ],
+      "groupName": "component coding-agents",
+      "addLabels": [
+        "component:coding-agents"
+      ]
+    },
+    {
+      "description": "Component t3-code: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/t3-code/**"
+      ],
+      "groupName": "component t3-code",
+      "addLabels": [
+        "component:t3-code"
+      ]
+    },
+    {
       "description": "AI Ready: Airflow's constraints are per Python minor, and a PostgreSQL major cannot open the data directory an earlier one created in a user's home.",
       "matchFileNames": [
         "components/ai-ready/environment.yml"
@@ -247,6 +267,34 @@
       "groupName": "component ai-ready",
       "addLabels": [
         "component:ai-ready"
+      ]
+    },
+    {
+      "description": "Component coding-agents: its versions in docker-bake.hcl join the component's group. Each bump needs both *_SHA256 variables of that agent updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "openai/codex",
+        "claude-code",
+        "opencode"
+      ],
+      "groupName": "component coding-agents",
+      "addLabels": [
+        "component:coding-agents"
+      ]
+    },
+    {
+      "description": "Component t3-code: a bump needs both T3_CODE_SHA256 variables updated, and its test fails if the web client moved an anchor the base-path adapter rewrites (docs/coding-agents.md).",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "pingdotgg/t3code"
+      ],
+      "groupName": "component t3-code",
+      "addLabels": [
+        "component:t3-code"
       ]
     }
   ],
