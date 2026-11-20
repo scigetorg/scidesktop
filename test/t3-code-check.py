@@ -33,11 +33,11 @@ class NoRedirect(HTTPRedirectHandler):
 opener = build_opener(NoRedirect)
 
 
-def fetch(url, authenticated=True, data=None):
+def fetch(url, authenticated=True, data=None, headers=None, method=None):
     """(status, headers, body); a refusal is an answer, not an error."""
-    headers = {"Authorization": f"token {TOKEN}"} if authenticated else {}
+    headers = {**({"Authorization": f"token {TOKEN}"} if authenticated else {}), **(headers or {})}
     try:
-        with opener.open(Request(url, data=data, headers=headers), timeout=150) as response:
+        with opener.open(Request(url, data=data, headers=headers, method=method), timeout=150) as response:
             return response.status, response.headers, response.read()
     except HTTPError as error:
         return error.code, error.headers, error.read()
@@ -114,6 +114,8 @@ if check(main is not None, "the entry script names the application bundle"):
           "the application's router is based at the session's path", status)
     check(headers.get("Cache-Control") == "no-cache",
           "the browser revalidates an adapted bundle", headers.get("Cache-Control"))
+    status, _, body = fetch(T3 + "assets/" + main[0], method="HEAD")
+    check(status == 200 and body == b"", "a HEAD request for an adapted bundle is answered", status)
 status, headers, body = fetch(T3 + "manifest.webmanifest")
 check(status == 200, "the web manifest is served", status)
 
@@ -130,6 +132,28 @@ check(not any(name.startswith("t3_") for name in cookies) and headers.get("Acces
 status, _, body = fetch(T3 + ".well-known/t3/environment")
 environment = json.loads(body) if status == 200 else {}
 check(bool(environment.get("serverVersion")), f"T3 Code {environment.get('serverVersion')} answers", status)
+
+# A browser logged in to the notebook server sends its cookie with requests
+# other sites make. Those must not reach T3 with the proxy's credential.
+status, headers, _ = fetch(BASE + "lab?token=" + TOKEN, authenticated=False)
+cookie = "; ".join(value.split(";", 1)[0] for value in headers.get_all("Set-Cookie") or [])
+ticket = T3 + "api/auth/websocket-ticket"
+own = BASE[: len(BASE) - len(urlsplit(BASE).path)]
+status, _, _ = fetch(T3 + "api/auth/session", authenticated=False, headers={"Cookie": cookie})
+check(status == 200, "the browser's cookie is the notebook server's login for T3 Code", status)
+status, _, body = fetch(ticket, authenticated=False, data=b"", headers={"Cookie": cookie, "Origin": own})
+check(status == 200 and b"ticket" in body, "a POST from the session's own page reaches T3", f"{status} {body[:200]}")
+for origin in ("https://elsewhere.example.org", None):
+    sent = {"Cookie": cookie, **({"Origin": origin} if origin else {})}
+    status, _, body = fetch(ticket, authenticated=False, data=b"", headers=sent)
+    check(status == 403 and b"ticket" not in body,
+          f"a POST with the browser's cookie from {origin or 'no stated origin'} is refused", f"{status} {body[:200]}")
+try:
+    websocket.create_connection(T3.replace("http", "ws", 1) + "ws", timeout=20, cookie=cookie,
+                                origin="https://elsewhere.example.org").close()
+    check(False, "a WebSocket from another origin is refused", "it connected")
+except websocket.WebSocketBadStatusException as error:
+    check(error.status_code in (403, 404), "a WebSocket from another origin is refused", error.status_code)
 
 status, _, body = fetch(T3 + "api/auth/websocket-ticket", data=b"")
 if check(status == 200, "T3 issues a WebSocket ticket", f"{status} {body[:200]}"):

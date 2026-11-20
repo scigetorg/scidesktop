@@ -14,6 +14,9 @@ IMAGE="${1:-aidesktop}"
 NAME="ai-ready-smoke-$$"
 PORT="${SMOKE_AI_READY_PORT:-18888}"
 BASE_PATH="/user/ai-ready-smoke/"
+# The origin the session is reached at. Not a loopback name, as on a hub:
+# ai-ready-check.py resolves it to this machine.
+PUBLIC="http://ai-ready.test:${PORT}"
 TOKEN="ai-ready-smoke"
 CHECK="$(dirname "$0")/ai-ready-check.py"
 FAILED=0
@@ -51,7 +54,7 @@ finish() {
 }
 
 session_checks() {
-    python3 "${CHECK}" "$1" "http://127.0.0.1:${PORT}${BASE_PATH}" "${TOKEN}" \
+    python3 "${CHECK}" "$1" "${PUBLIC}${BASE_PATH}" "${TOKEN}" \
         || { fail "session checks ($1)"; finish; }
     # Inside the container: Jupyter's Python has the websocket client.
     docker exec -i "${NAME}" /opt/conda/bin/python - kernel \
@@ -64,7 +67,7 @@ docker volume create "${NAME}-home" >/dev/null
 docker run -d --name "${NAME}" --memory=4g --cpus=2 --shm-size=2g \
     -p "127.0.0.1:${PORT}:8888" -v "${NAME}-home:/home/jovyan" \
     -e JUPYTER_TOKEN="${TOKEN}" -e JUPYTERHUB_SERVICE_PREFIX="${BASE_PATH}" \
-    -e AI_READY_PUBLIC_ORIGIN="http://127.0.0.1:${PORT}" \
+    -e AI_READY_PUBLIC_ORIGIN="${PUBLIC}" \
     "${IMAGE}" start-notebook.py --ServerApp.base_url="${BASE_PATH}" >/dev/null \
     || { echo "  FAIL  container did not start"; exit 1; }
 
@@ -96,10 +99,33 @@ else
     pass "PostgreSQL shut down cleanly when the container stopped"
 fi
 
+# The notebook server exits on its own (its shutdown API): nothing signals the
+# services but the server's exit handler, which must still stop them in order.
+since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+python3 "${CHECK}" shutdown "${PUBLIC}${BASE_PATH}" "${TOKEN}"
+ended="$(timeout 60 docker wait "${NAME}" 2>/dev/null)"
+docker logs --since "${since}" "${NAME}" >"/tmp/${NAME}.shutdown.log" 2>&1
+if [ -n "${ended}" ] && grep -q 'database system is shut down' "/tmp/${NAME}.shutdown.log"; then
+    pass "PostgreSQL shut down cleanly when the notebook server exited on its own"
+else
+    fail "PostgreSQL shut down cleanly when the notebook server exited on its own"
+    tail -n 8 "/tmp/${NAME}.shutdown.log" | sed 's/^/        /'
+fi
+rm -f "/tmp/${NAME}.shutdown.log"
+docker start "${NAME}" >/dev/null
+python3 "${CHECK}" recovered "${PUBLIC}${BASE_PATH}" "${TOKEN}" \
+    && pass "services return after the notebook server's own shutdown" \
+    || { fail "services return after the notebook server's own shutdown"; finish; }
+if logged "database system was (interrupted|not properly shut down)"; then
+    fail "PostgreSQL needed no recovery after the notebook server's own shutdown"
+else
+    pass "PostgreSQL needed no recovery after the notebook server's own shutdown"
+fi
+
 # A killed container leaves PostgreSQL's lock file behind; the next start
 # must not mistake it for a running server.
 docker kill "${NAME}" >/dev/null && docker start "${NAME}" >/dev/null
-python3 "${CHECK}" recovered "http://127.0.0.1:${PORT}${BASE_PATH}" "${TOKEN}" \
+python3 "${CHECK}" recovered "${PUBLIC}${BASE_PATH}" "${TOKEN}" \
     && pass "services return after the container was killed" \
     || { fail "services return after the container was killed"; finish; }
 

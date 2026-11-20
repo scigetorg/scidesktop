@@ -74,6 +74,16 @@ T3 has its own sessions as well. The browser never holds one:
   would be removed.
 - T3 prints a pairing token when it starts. It goes nowhere: T3's standard
   output is discarded, so the token is not in the container log.
+- A request that changes something (anything but `GET`, `HEAD` and
+  `OPTIONS`) gets the token only when it names the session's own origin, or
+  one the notebook server is configured to allow, as Jupyter requires of a
+  WebSocket. Jupyter Server Proxy leaves that check to the proxied
+  application, and T3 has none: without it, a page on another site could have
+  the browser send its Hub cookie with a request that T3 then accepts. A
+  client that sends the notebook server's token is not held to it.
+- T3's client puts a short-lived ticket in its WebSocket URL, and the proxy
+  logs the URLs it connects to. The ticket is replaced by `[redacted]` in
+  the notebook server's log.
 
 Do not expose T3's port through a Service or an ingress.
 
