@@ -103,6 +103,9 @@ if [ "$(timeout 90 docker wait "${NAME}" 2>/dev/null)" != "" ] \
     pass "the session ends when a service dies"
 else
     fail "the session ends when a service dies"
+    docker inspect "${NAME}" --format '        container: {{.State.Status}}, exit code {{.State.ExitCode}}, OOM killed {{.State.OOMKilled}}'
+    docker logs "${NAME}" 2>&1 | grep -F '[ai-ready]' | tail -n 8 | sed 's/^/        /'
+    docker logs "${NAME}" 2>&1 | tail -n 15 | cut -c1-200 | sed 's/^/        | /'
 fi
 
 finish
