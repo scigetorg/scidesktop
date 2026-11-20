@@ -97,6 +97,7 @@ when the user first opens **Desktop** from the launcher.
 | `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
 | `CVMFS_NFILES` | `65536`, or the container's hard open-file limit when that is lower | The open-file limit the CVMFS client sets for itself in `internal` mode. The client refuses to mount when it may not raise the limit that far. |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. |
+| `SCIDESKTOP_SLURM` | `yes` | Start the session's Slurm queue, sized from `CPU_LIMIT` and `MEM_LIMIT`. It needs no privilege. `SCIDESKTOP_SLURM_PARTITION` and `SCIDESKTOP_SLURM_MEMORY_RESERVE_MB` are in [slurm.md](slurm.md). |
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | The desktop's internal credential; generated per container when unset. |
 | `CPU_LIMIT`, `MEM_LIMIT` | from the pod's cgroup | Set by KubeSpawner, or derived at start from the cgroup when it does not. `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS` and `NUMEXPR_NUM_THREADS` follow `CPU_LIMIT` unless set, so numerical libraries use the pod's CPUs. |
 

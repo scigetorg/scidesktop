@@ -83,6 +83,7 @@ commit's short SHA, the date and `latest`.
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget, which gets its catalog of tools from the domain image |
 | Modules | Lmod, built from the upstream release |
+| Batch jobs | A [Slurm queue](docs/slurm.md) for the session, run as the notebook user: `sbatch` and `srun` work in every terminal |
 
 The domain images add components the base leaves out
 ([which image has which](docs/images.md)):
@@ -116,6 +117,7 @@ publisher provides one. Renovate proposes updates rather than builds drifting si
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`, `internal` or `disabled`; see the runbook |
 | `SCIDESKTOP_APPTAINER_SETUID` | `auto` | `auto`, `yes` or `no`; applies only when the container starts as root |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download the sciget catalogs in the background at start |
+| `SCIDESKTOP_SLURM` | `yes` | Start the session's Slurm queue; see [docs/slurm.md](docs/slurm.md) |
 | `AI_READY_PUBLIC_ORIGIN` | `http://127.0.0.1:8888` | AI images only: the origin users reach the session at; see [docs/ai-ready.md](docs/ai-ready.md) |
 | `T3_CODE_WORKDIR` | the home folder | Images with T3 Code: the folder it starts in; see [docs/coding-agents.md](docs/coding-agents.md) |
 | `CODE_SERVER_WORKDIR` | the home folder | Images with code-server: the folder VS Code opens |

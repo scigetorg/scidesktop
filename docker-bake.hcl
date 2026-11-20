@@ -136,6 +136,7 @@ group "test" {
     "apptainer-test",
     "lmod-test",
     "sciget-test",
+    "slurm-test",
     "sciget-neuroimaging-test",
     "sciget-microscopy-test",
     "jupyterlab-niivue-test",
@@ -317,6 +318,24 @@ target "sciget" {
 
 target "sciget-test" {
   inherits = ["sciget"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# A Slurm queue for the session, run as the notebook user. Slurm itself is
+# in the OS layer.
+target "slurm" {
+  inherits = ["_component"]
+  context  = "components/slurm"
+  target   = "component"
+  args = {
+    NB_UID = NB_UID
+    NB_GID = NB_GID
+  }
+}
+
+target "slurm-test" {
+  inherits = ["slurm"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -535,6 +554,7 @@ target "scidesktop" {
     apptainer   = "target:apptainer"
     lmod        = "target:lmod"
     sciget      = "target:sciget"
+    slurm       = "target:slurm"
   }
   tags   = [IMAGE]
   output = ["type=docker"]

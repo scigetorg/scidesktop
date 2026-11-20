@@ -150,6 +150,7 @@ earlier review of what belongs in the base is in
 | neurocommand: the application menu, launchers and `fetch_and_run.sh` | sciget with `sciget-neuroimaging`'s `neuroimaging` catalog (built from the same `apps.json`): `sciget ui` on the taskbar, and a launcher tile per installed graphical application |
 | Home defaults restored at start | `startup`'s `/etc/scidesktop/home-defaults` |
 | CPU and memory limits read from cgroups | `startup`'s `05-resource-limits.sh` |
+| Slurm (a local single-node cluster), started as root with munge, MariaDB and `slurmdbd` | `slurm`: the same queue run as the notebook user, with none of those ([slurm.md](slurm.md)); added after the first port |
 | git, ssh client, nano, tmux, `jupyterlab-git` | the OS layer and `jupyter-env` |
 | Codex, Claude Code, OpenCode | `coding-agents` |
 | T3 Code tile | `t3-code` |
@@ -190,7 +191,7 @@ Each of these is a follow-up of its own. None blocks using the image.
 | --- | --- |
 | A neuroimaging Python kernel (`nipype`, `nibabel`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`) | A kernel component with a large lock, like `ai-ready`'s. It needs its own review |
 | Jupyter AI and Notebook Intelligence | Server extensions in `jupyter-env`, with neurodesktop's patches to carry |
-| Slurm (a local single-node cluster) and `jupyterlab-slurm` | System services and munge; a component that starts daemons |
+| `jupyterlab-slurm`, the Slurm panel in JupyterLab | A JupyterLab extension neurodesktop builds from source and patches |
 | SSH into the session (`openssh-server`, `jupyter-sshd-proxy`) | A system service and a server extension |
 | VS Code extensions preinstalled | neurodesktop installs them from the network at every start; a locked set needs a design |
 | The `neurodesk` command (`cite`, `kernel add`, `check`) | Depends on the kernel wrapper and Slurm above |

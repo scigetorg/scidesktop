@@ -213,7 +213,7 @@ docker exec "${NAME}" python3 -c '
 import glob, json, sys
 names = {p.split("/")[-1][:-5] for p in glob.glob("/opt/scidesktop/manifest.d/*.json")}
 [json.load(open(p)) for p in glob.glob("/opt/scidesktop/manifest.d/*.json")]
-need = {"os-ubuntu", "startup", "jupyter-env", "selkies", "apptainer", "lmod", "sciget"}
+need = {"os-ubuntu", "startup", "jupyter-env", "selkies", "apptainer", "lmod", "sciget", "slurm"}
 sys.exit(0 if need <= names else f"missing: {need - names}")' >/dev/null 2>&1 \
     && pass "version manifest complete" || fail "version manifest complete"
 # Shared folders stay traversable for the user (a linked layer once made
