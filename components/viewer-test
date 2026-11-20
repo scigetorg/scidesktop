@@ -22,7 +22,9 @@ grep -A 40 '^/usr/local/share/jupyter/labextensions' "${work}/labextensions" | g
 # A notebook server with this component's configuration, under a nested URL
 # as JupyterHub serves it.
 base=/user/viewer-test/
-port=18888
+# A free port: on some builders the tests of several components run at once
+# and share one network.
+port="$("${python}" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
 "${python}" -m jupyter lab --no-browser --ip=127.0.0.1 --port="${port}" --ServerApp.port_retries=0 \
     --ServerApp.base_url="${base}" --IdentityProvider.token=viewer-test --ServerApp.root_dir="${HOME}" \
     >"${work}/jupyter.log" 2>&1 &
