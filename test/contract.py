@@ -41,6 +41,8 @@ NOT_RENOVATED = {
     "MICRODESKTOP_IMAGE": "output tag",
     "SCIGET_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "SCIGET_SRC": "built from SCIGET_COMMIT",
+    "AI_READY_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
+    "AI_READY_SRC": "built from AI_READY_COMMIT",
 }
 # Instructions the assembly may use: image metadata a component cannot provide.
 ASSEMBLY_ALLOWED = {"FROM", "COPY", "LABEL", "ENV", "EXPOSE", "HEALTHCHECK",

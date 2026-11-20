@@ -70,6 +70,11 @@ variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
 # working copy instead: SCIGET_SRC=../sciget docker buildx bake --allow=fs.read=..
 variable "SCIGET_COMMIT" { default = "56c2f310188ad60f58ded74f811bd3e889c19882" }
 variable "SCIGET_SRC" { default = "https://github.com/scigetorg/sciget.git#${SCIGET_COMMIT}" }
+# Intersect Australia's AI Ready workshop (Apache-2.0): its notebooks, DAGs and
+# requirements are taken from this commit (Renovate tracks its main branch).
+# After changing it, run components/ai-ready/lock.
+variable "AI_READY_COMMIT" { default = "26250b89d323c9981fc1a88c9fe2c0f69993b58d" }
+variable "AI_READY_SRC" { default = "https://github.com/IntersectAustralia/ai-ready-containers.git#${AI_READY_COMMIT}" }
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
@@ -86,6 +91,7 @@ group "test" {
     "lmod-test",
     "sciget-test",
     "micromamba-test",
+    "ai-ready-test",
   ]
 }
 
@@ -261,6 +267,23 @@ target "sciget-test" {
 
 target "micromamba-test" {
   inherits = ["micromamba"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: not in the base. The aidesktop and aimicrodesktop images copy it.
+target "ai-ready" {
+  inherits = ["_component"]
+  context  = "components/ai-ready"
+  target   = "component"
+  contexts = { ai-ready-src = AI_READY_SRC }
+  args = {
+    AI_READY_COMMIT = AI_READY_COMMIT
+  }
+}
+
+target "ai-ready-test" {
+  inherits = ["ai-ready"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
