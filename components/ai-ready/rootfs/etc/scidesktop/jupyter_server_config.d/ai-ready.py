@@ -2,6 +2,7 @@
 # MLflow tiles, the workshop page, and the wait for the services at shutdown.
 import atexit
 import os
+import signal
 import sys
 import time
 
@@ -35,13 +36,19 @@ c.ServerApp.default_url = "/ai-ready/"  # noqa: F821
 c.LabApp.default_url = "/ai-ready/"  # noqa: F821
 
 
-def _wait_for_services(pid, seconds=30):
-    """Stay until the supervisor has stopped PostgreSQL.
+def _stop_services(pid, seconds=30):
+    """Tell the supervisor to stop, and stay until it has stopped PostgreSQL.
 
     The container ends when the notebook server exits, and takes every
     process with it. Without this wait PostgreSQL would be killed partway
-    through its shutdown.
+    through its shutdown. A container stop signals the supervisor too, and a
+    second SIGTERM does nothing then; when the server exits on its own (its
+    shutdown API, a signal to it alone), this one is the only signal.
     """
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        return
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         try:
@@ -58,4 +65,4 @@ def _wait_for_services(pid, seconds=30):
 # terminals do not inherit it.
 _supervisor = os.environ.pop("AI_READY_SUPERVISOR_PID", "")
 if _supervisor.isdigit():
-    atexit.register(_wait_for_services, int(_supervisor))
+    atexit.register(_stop_services, int(_supervisor))

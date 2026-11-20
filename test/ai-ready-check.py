@@ -5,6 +5,7 @@ notebook server, under a nested URL. Called by ai-ready-smoke.sh.
     ai-ready-check.py first     <base url> <token>   a session on a new home
     ai-ready-check.py again     <base url> <token>   restarted on the same home
     ai-ready-check.py recovered <base url> <token>   started again after a kill
+    ai-ready-check.py shutdown  <base url> <token>   stop the notebook server through its API
     ai-ready-check.py kernel    <base url> <token>
 
 All but `kernel` need only the standard library and run outside the
@@ -16,6 +17,7 @@ needs.
 
 import json
 import re
+import socket
 import sys
 import time
 from datetime import datetime, timezone
@@ -25,12 +27,22 @@ from urllib.request import Request, urlopen
 
 MODE, BASE, TOKEN = sys.argv[1:4]
 BASE_PATH = urlsplit(BASE).path
+ORIGIN = "{0.scheme}://{0.netloc}".format(urlsplit(BASE))
+
+# The smoke test reaches the session under a name that is not loopback, as a
+# hub's users do: services treat loopback names more leniently. Names under
+# .test stand for this machine.
+_getaddrinfo = socket.getaddrinfo
+socket.getaddrinfo = lambda host, *args, **kwargs: _getaddrinfo(
+    "127.0.0.1" if isinstance(host, str) and host.endswith(".test") else host, *args, **kwargs)
 EXPERIMENT = "scidesktop-smoke"
 DAG = "pathogenicity_training"
 
 
-def request(path, data=None, authenticated=True, method=None, bearer=None):
+def request(path, data=None, authenticated=True, method=None, bearer=None, origin=None):
     headers = {"Authorization": f"token {TOKEN}"} if authenticated else {}
+    if origin:
+        headers["Origin"] = origin
     if bearer:
         # Airflow wants its own token in the header, so Jupyter's goes in the URL.
         headers["Authorization"] = f"Bearer {bearer}"
@@ -116,6 +128,21 @@ def experiment(kept):
         ok("MLflow experiment is still there")
     found = get_json("mlflow/api/2.0/mlflow/experiments/get-by-name?experiment_name=" + EXPERIMENT)
     assert found["experiment"]["name"] == EXPERIMENT
+    browser_writes(found["experiment"]["experiment_id"])
+
+
+def browser_writes(experiment_id):
+    """A browser's write carries its Origin. MLflow accepts the session's own
+    and refuses any other; the session's is a public name on a hub."""
+    tag = "mlflow/api/2.0/mlflow/experiments/set-experiment-tag"
+    data = {"experiment_id": experiment_id, "key": "smoke", "value": "1"}
+    get_json(tag, data=data, origin=ORIGIN)
+    try:
+        get_json(tag, data=data, origin="https://elsewhere.example.org")
+        raise AssertionError("MLflow accepted a write from another origin")
+    except HTTPError as error:
+        assert error.code == 403, f"a write from another origin: HTTP {error.code}"
+    ok("MLflow accepts a browser's write from the session's origin and refuses another's")
 
 
 def airflow_token():
@@ -206,6 +233,8 @@ elif MODE == "recovered":
     wait_for("api/status")
     experiment(kept=True)
     past_runs()
+elif MODE == "shutdown":
+    request("api/shutdown", data={})
 elif MODE == "kernel":
     kernel()
 else:

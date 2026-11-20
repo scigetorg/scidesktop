@@ -142,6 +142,10 @@ def services(session, credentials, socket_dir):
             "--static-prefix", session.mlflow_path,
             "--allowed-hosts", ",".join((f"127.0.0.1:{MLFLOW_PORT}", f"localhost:{MLFLOW_PORT}",
                                          urlsplit(session.origin).netloc)),
+            # A browser's writes carry its Origin, which MLflow checks against
+            # this list, separately from the hosts above. Loopback origins
+            # are always allowed.
+            "--cors-allowed-origins", session.origin,
             "--backend-store-uri", database_url(credentials, "mlflow"),
             "--artifacts-destination", str(session.state / "mlflow-artifacts"),
         ], signal.SIGTERM),
