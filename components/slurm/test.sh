@@ -8,6 +8,12 @@ log=/tmp/slurm-session.log
 [ "$(stat -c '%U %a' /run/slurm /run/slurmctld)" = "$(printf '%s 755\n%s 755' "$(id -un)" "$(id -un)")" ]
 [ "$(readlink /etc/slurm/slurm.conf)" = /run/slurm/conf/slurm.conf ]
 
+# Ports of this test's own: on some builders the tests of several components
+# run at once and share one network.
+controller_port="$(shuf -i 20000-39999 -n 1)"
+worker_port="$(( controller_port + 20000 ))"
+export SCIDESKTOP_SLURM_PORTS="${controller_port},${worker_port}"
+
 # The queue is sized from the container's limits, less the session's reserve.
 CPU_LIMIT=1.5 MEM_LIMIT=$(( 2048 * 1048576 )) "${session}" run >"${log}" 2>&1 &
 supervisor=$!
@@ -17,9 +23,10 @@ grep -q "queue scidesktop: 2 CPUs, 1536 MB" "${log}"
 [ "$(sinfo -h -o '%P %c %m %T')" = "scidesktop* 2 1536 idle" ]
 [ "$(stat -c %a /run/slurm/conf/slurm.key)" = 600 ]
 
-# Both daemons listen on loopback only.
-listening="$(awk 'NR > 1 && $4 == "0A" { print $2 }' /proc/net/tcp /proc/net/tcp6 | sort -u)"
-[ "$(grep -c -E ':(1AA1|1AA2)$' <<<"${listening}")" = 2 ]
+# Both daemons listen, on loopback only.
+ports="$(printf ':%04X$|:%04X$' "${controller_port}" "${worker_port}")"
+listening="$(awk 'NR > 1 && $4 == "0A" { print $2 }' /proc/net/tcp /proc/net/tcp6 | grep -E "${ports}" | sort -u)"
+[ "$(wc -l <<<"${listening}")" = 2 ]
 if grep -v -E '^(0100007F|00000000000000000000000001000000):' <<<"${listening}"; then
     echo "a Slurm daemon listens beyond loopback" >&2
     exit 1

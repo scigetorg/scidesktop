@@ -15,6 +15,8 @@
 # SCIDESKTOP_SLURM_PARTITION           the queue's name (default: scidesktop)
 # SCIDESKTOP_SLURM_MEMORY_RESERVE_MB   memory kept back from jobs for the
 #                                      notebook server and desktop (default: 512)
+# SCIDESKTOP_SLURM_PORTS               the controller's and the worker's
+#                                      loopback ports (default: 6817,6818)
 # CPU_LIMIT, MEM_LIMIT                 the container's limits, as the startup
 #                                      component exports them from its cgroup
 set -u
@@ -55,6 +57,8 @@ memory_mb() {
 
 write_configuration() {
     local node user cpus memory partition="${SCIDESKTOP_SLURM_PARTITION:-scidesktop}"
+    local ports="${SCIDESKTOP_SLURM_PORTS:-6817,6818}"
+    [[ "${ports}" =~ ^[0-9]+,[0-9]+$ ]] || ports=6817,6818
     node="$(node_name)"
     user="$(id -un)"
     cpus="$(cpus)"
@@ -75,8 +79,8 @@ SlurmUser=${user}
 SlurmdUser=${user}
 AuthType=auth/slurm
 CredType=cred/slurm
-SlurmctldPort=6817
-SlurmdPort=6818
+SlurmctldPort=${ports%,*}
+SlurmdPort=${ports#*,}
 StateSaveLocation=${RUN}/state
 SlurmdSpoolDir=${RUN}/spool
 SlurmctldPidFile=${RUN}/slurmctld.pid
