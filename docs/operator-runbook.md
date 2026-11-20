@@ -80,7 +80,9 @@ when the user first opens **Desktop** from the launcher.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SCIDESKTOP_APPTAINER_SETUID` | `auto` | Applies only when the container starts as root. `auto` enables the setuid starter only if user namespaces fail for the notebook user; `yes`/`no` force it. The setuid starter only works in privileged containers. |
-| `SCIDESKTOP_CVMFS_MODE` | `external` | `external`: use the `/cvmfs` the platform mounts. `internal`: mount inside the container (needs root, `/dev/fuse`, mount capability, repository config and keys under `/etc/cvmfs`). `disabled`: skip. |
+| `APPTAINER_HOME` | the notebook user's home | Set at start so Apptainer does not look the home up for the host uid, which fails under rootless Podman ("failed to add  as session directory"). An explicit value is kept. |
+| `APPTAINER_NV` | `1` when the NVIDIA driver is loaded | Binds the host's NVIDIA devices and libraries into tool containers. Set `0` if a tool fails with `GLIBC_* not found` from a host library. |
+| `SCIDESKTOP_CVMFS_MODE` | `external` | `external`: use the `/cvmfs` the platform mounts. `internal`: mount inside the container (needs root, `/dev/fuse`, mount capability, an AppArmor profile that allows FUSE mounts, repository config and keys under `/etc/cvmfs`; with `docker run`: `--cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor=unconfined`). `disabled`: skip. |
 | `SCIDESKTOP_CVMFS_REPOSITORIES` | empty | Repositories to mount in `internal` mode, comma-separated. |
 | `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. |
@@ -113,6 +115,6 @@ file that hides a system one. A derived image adds its own with
 | Browser stuck at "waiting for stream" | Request `/desktop/` again and read the Selkies log; check `/opt/selkies/bin/python -c 'import pixelflux, pcmflux'` succeeds. |
 | sciget lists nothing | `sciget catalog list`; `~/.cache/sciget/refresh.log` for the download at start; `sciget doctor`; whether the catalog's `dir` exists under `/cvmfs`. |
 | `[cvmfs] /cvmfs is empty` | The pod's CVMFS volume and mount path; whether the node or CSI mount is populated before the pod starts. |
-| Internal CVMFS does not mount | The pod starts as root, has `/dev/fuse` and mount capability, names repositories in `SCIDESKTOP_CVMFS_REPOSITORIES`, and has their config and keys under `/etc/cvmfs`. |
+| Internal CVMFS does not mount | The pod starts as root, has `/dev/fuse` and mount capability, an AppArmor profile that allows the mount (Docker's default profile denies it: run with `--security-opt apparmor=unconfined`), names repositories in `SCIDESKTOP_CVMFS_REPOSITORIES`, and has their config and keys under `/etc/cvmfs`. |
 | `/desktop/` returns an error | jupyter-server-proxy and Selkies logs; that no deployment override replaced `start.sh`. |
 | Slow starts at one CPU | Give each pod at least two CPUs; a CPU limit is a quota for the whole pod, so process priority does not help. |

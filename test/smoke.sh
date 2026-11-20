@@ -249,6 +249,12 @@ actual_setuid=$(docker exec "${NAME}" awk -F ' = ' '/^allow setuid = / { print $
     /opt/apptainer/etc/apptainer/apptainer.conf 2>/dev/null)
 [ "${actual_setuid}" = no ] && pass "apptainer setuid off by default" \
     || fail "apptainer setuid off by default (got ${actual_setuid:-missing})"
+# The server, and everything it starts, names the home for Apptainer.
+docker exec -u "${NB_USER}" "${NAME}" sh -c \
+    'tr "\0" "\n" </proc/$(pgrep -o -f "jupyter-lab|jupyter lab")/environ' 2>/dev/null \
+    | grep -qx "APPTAINER_HOME=/home/${NB_USER}" \
+    && pass "APPTAINER_HOME set for the Jupyter server" \
+    || fail "APPTAINER_HOME set for the Jupyter server"
 # Users are told when containers cannot run. Where the notebook user cannot
 # even create a user namespace, the warning must be there; the check against
 # Apptainer itself is with the user-namespace check below.
