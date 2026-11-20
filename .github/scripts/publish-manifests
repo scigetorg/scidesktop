@@ -6,16 +6,27 @@
 #
 # The candidates are <image>:<candidate>-<arch>, one per architecture in
 # components/target-arch. Tags written: the commit's short SHA (the one to
-# deploy), then the UTC date and latest. The candidate tags stay: the
-# multi-arch image points at them.
+# deploy), then the commit's UTC date and latest. The candidate tags stay:
+# the multi-arch image points at them.
+#
+# Two passes, so a failure on one image moves no image's rolling tags: every
+# image gets its short-SHA tag and is checked first, then the date and latest
+# tags move for all. They move only when GITHUB_SHA is still the head of the
+# branch (PUBLISH_BRANCH, default main): a re-run of an older run publishes
+# its short SHA and leaves the rolling tags where they are.
 set -euo pipefail
 registry="${1:?usage: publish-manifests <registry>/<owner> <candidate> <image>...}"
 candidate="${2:?}"
 shift 2
 cd "$(dirname "$0")/../.."
 arches="$(components/target-arch list)"
-short_sha="$(printf '%.7s' "${GITHUB_SHA:?}")"
-date="$(date -u +%Y-%m-%d)"
+sha="${GITHUB_SHA:?}"
+short_sha="$(printf '%.7s' "${sha}")"
+branch="${PUBLISH_BRANCH:-main}"
+date="$(TZ=UTC git show --no-patch --date=format-local:%Y-%m-%d --format=%cd "${sha}")"
+head="$(git ls-remote origin "refs/heads/${branch}" | cut -f 1)"
+[ -n "${head}" ] || { echo "publish-manifests: origin has no branch ${branch}" >&2; exit 1; }
+
 for image in "$@"; do
     repo="${registry,,}/${image}"
     sources=()
@@ -30,6 +41,15 @@ for image in "$@"; do
         echo "publish-manifests: ${repo}:${short_sha} holds '${published}', not '${arches}'" >&2
         exit 1
     fi
+    echo "published ${repo}:${short_sha} for ${arches}"
+done
+
+if [ "${head}" != "${sha}" ]; then
+    echo "publish-manifests: ${short_sha} is not the head of ${branch} ($(printf '%.7s' "${head}")); :latest and :${date} are left where they are"
+    exit 0
+fi
+for image in "$@"; do
+    repo="${registry,,}/${image}"
     docker buildx imagetools create --tag "${repo}:${date}" --tag "${repo}:latest" "${repo}:${short_sha}"
-    echo "published ${repo}:${short_sha}, :${date} and :latest for ${arches}"
+    echo "tagged ${repo}:${date} and :latest"
 done

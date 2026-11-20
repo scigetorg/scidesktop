@@ -119,8 +119,11 @@ to the workflow.
   `PUBLISH` to `ghcr.io/<owner>/<image>` under a candidate tag,
   `run-<run id>-<arch>`. When both architectures have passed, the `publish`
   job joins the candidates into one multi-arch image and tags it
-  `<short sha>`, `<YYYY-MM-DD>` and `latest`. If either architecture fails,
-  nothing is tagged. The candidate tags stay in the registry: the multi-arch
+  `<short sha>`, `<YYYY-MM-DD>` (the commit's date) and `latest`. If either
+  architecture fails, nothing is tagged. Every image gets its `<short sha>`
+  tag before any image's date and `latest` tags move, so a failure part way
+  leaves those where they were. A re-run of an older run, whose commit is no
+  longer the head of `main`, publishes its `<short sha>` and leaves them too. The candidate tags stay in the registry: the multi-arch
   image points at them.
 
 `PUBLISH` lists `scidesktop` and `aidesktop`. A published
