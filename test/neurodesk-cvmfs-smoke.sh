@@ -38,6 +38,22 @@ finish() {
     exit "${FAILED}"
 }
 
+# Why a mount failed: the start hook does not show the client's own message.
+# Tries the mount again by hand and asks each mirror for the repository's
+# manifest, from inside the container.
+diagnose() {
+    docker exec -u root "${NAME}" bash -c "
+        echo \"mount by hand: \$(mount -t cvmfs ${REPOSITORY} /cvmfs/${REPOSITORY} 2>&1 | tr '\n' ' ')\"
+        echo \"/dev/fuse: \$(ls -l /dev/fuse 2>&1)\"
+        echo \"capabilities: \$(grep CapEff /proc/self/status | tr '\t' ' ')\"
+        echo \"cache: \$(df -T /var/lib/cvmfs 2>&1 | tail -n 1)\"
+        . /etc/cvmfs/config.d/${REPOSITORY}.conf
+        for url in \${CVMFS_SERVER_URL//;/ }; do
+            url=\"\${url//@fqrn@/${REPOSITORY}}/.cvmfspublished\"
+            echo \"\$(curl -s -o /dev/null -m 15 -w '%{http_code} in %{time_total}s' \"\${url}\") \${url}\"
+        done" 2>&1 | sed 's/^/        /'
+}
+
 as_user() { docker exec -u jovyan -w /tmp "${NAME}" bash -lc "$1" 2>&1; }
 
 echo "neurodesk-cvmfs smoke: ${IMAGE}"
@@ -82,6 +98,7 @@ if grep -q "^\[cvmfs\] mounted ${REPOSITORY}$" "${LOG}"; then
 else
     fail "${REPOSITORY} mounts in internal mode"
     grep '^\[cvmfs\]' "${LOG}" | sed 's/^/        /'
+    diagnose
     finish
 fi
 for _ in $(seq 1 120); do
