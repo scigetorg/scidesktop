@@ -102,6 +102,13 @@ if grep -qE 'Pairing URL|pair#token' "/tmp/${NAME}.log"; then
 else
     pass "T3's pairing token stays out of the container log"
 fi
+# T3's client puts a WebSocket ticket in the URL, and the proxy logs the URLs
+# it connects to: the log names the connection, not the ticket.
+if grep -q 'wsTicket=\[redacted\]' "/tmp/${NAME}.log" && ! grep -q 'wsTicket=[^[]' "/tmp/${NAME}.log"; then
+    pass "T3's WebSocket tickets stay out of the container log"
+else
+    fail "T3's WebSocket tickets stay out of the container log"
+fi
 docker start "${NAME}" >/dev/null
 for _ in $(seq 1 120); do
     in_session "curl -fsS -o /dev/null http://127.0.0.1:8888${BASE_PATH}api" && break

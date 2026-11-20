@@ -5,6 +5,8 @@ the notebook server's login on every request and forwards it to T3 on
 loopback. This module is the proxy entry and its two hooks:
 
 - `request_headers` adds T3's own credential, so the browser never holds one.
+  A request that changes something gets it only when it comes from the
+  session's own pages or from a client that sent the notebook server's token.
 - `rewrite_response` adapts T3's web client, which has no base-path option
   and addresses everything from the root of the origin, to the session's URL.
 
@@ -14,6 +16,7 @@ a T3 release that moves an anchor fails the build, not a session.
 """
 
 import json
+import logging
 import os
 import re
 import sys
@@ -117,7 +120,8 @@ def rewrite_response(response, path):
         response.headers["Retry-After"] = "1"
         response.headers["Cache-Control"] = "no-store"
         return
-    if response.code != 200:
+    # A HEAD request's answer has the headers of a file and none of its text.
+    if response.code != 200 or not response.body:
         return
     body = rewrite_client(response.body, response.headers.get("Content-Type", ""), path, _prefix())
     if body is not response.body:
@@ -148,12 +152,53 @@ def _session_token():
     return _token[1]
 
 
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
+def _proxy_handler():
+    """The request handler that is asking for these headers.
+
+    Jupyter Server Proxy calls the hook from the handler but passes it only
+    the port and base URL, so the handler is found on the call stack.
+    """
+    from tornado.web import RequestHandler
+
+    frame = sys._getframe(1)
+    while frame is not None:
+        handler = frame.f_locals.get("self")
+        if isinstance(handler, RequestHandler):
+            return handler
+        frame = frame.f_back
+    raise RuntimeError("t3-code: no request handler is asking for the proxy's headers")
+
+
+def require_own_origin(handler):
+    """Refuse a request that changes something unless the session sent it.
+
+    Jupyter Server Proxy leaves the cross-site check to the proxied
+    application, and T3 would accept the credential added below from any
+    page. A browser logged in to the notebook server sends its cookie with
+    requests another site makes, so such a request must name the session's
+    own origin (or one the server is configured to allow), as Jupyter requires
+    of a WebSocket. A client that sent the server's token is not a browser
+    acting for another site.
+    """
+    from tornado.web import HTTPError
+
+    request = handler.request
+    if request.method in SAFE_METHODS or handler.token_authenticated:
+        return
+    if request.headers.get("Origin") is None or not handler.check_origin():
+        raise HTTPError(403, "T3 Code accepts changes from this session's own pages only")
+
+
 def request_headers():
     """Jupyter Server Proxy's request_headers_override hook.
 
     The notebook server has checked its own login by now. Its cookies and
     token end here: T3 gets the session issued for this proxy instead.
     """
+    require_own_origin(_proxy_handler())
     token = _session_token()
     return {
         "Authorization": f"Bearer {token}" if token else "",
@@ -161,6 +206,34 @@ def request_headers():
         # The rewrite needs the bodies as written.
         "Accept-Encoding": "identity",
     }
+
+
+TICKET = re.compile(r"(wsTicket=)[^&\s\"']+")
+
+
+def redact_tickets():
+    """Keep T3's WebSocket tickets out of the notebook server's log.
+
+    T3's client puts a short-lived ticket in the WebSocket's URL, and the
+    proxy logs the URLs it connects to. Every log record passes through the
+    record factory, whichever logger and handler it is for.
+    """
+    make = logging.getLogRecordFactory()
+    if getattr(make, "redacts_t3_tickets", False):
+        return
+
+    def record_factory(*args, **kwargs):
+        record = make(*args, **kwargs)
+        try:
+            message = record.getMessage()
+        except Exception:
+            return record
+        if "wsTicket=" in message:
+            record.msg, record.args = TICKET.sub(r"\1[redacted]", message), None
+        return record
+
+    record_factory.redacts_t3_tickets = True
+    logging.setLogRecordFactory(record_factory)
 
 
 def server_entry():

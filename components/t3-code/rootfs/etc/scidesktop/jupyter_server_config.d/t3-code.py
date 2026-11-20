@@ -10,3 +10,4 @@ if _lib not in sys.path:
 import t3_code_proxy  # noqa: E402
 
 c.ServerProxy.servers.update({t3_code_proxy.ROUTE: t3_code_proxy.server_entry()})  # noqa: F821
+t3_code_proxy.redact_tickets()

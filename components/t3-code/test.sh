@@ -93,6 +93,12 @@ if grep -qE 'Pairing URL|pair#token' "${work}/jupyter.log"; then
     exit 1
 fi
 
+# Nor are the tickets T3's client puts in its WebSocket URLs.
+if grep -q 'wsTicket=[^[]' "${work}/jupyter.log"; then
+    echo "a T3 WebSocket ticket reached the notebook server's log" >&2
+    exit 1
+fi
+
 # When the notebook server stops, T3 stops with it and closes its database.
 kill -TERM "${server}"
 wait "${server}" || true
