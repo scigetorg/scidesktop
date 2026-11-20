@@ -140,6 +140,7 @@ Check an image with:
 
 ```sh
 docker buildx bake aidesktop ai-ready-test
+./test/image-smoke.sh aidesktop       # every check, or only the workshop's:
 ./test/ai-ready-smoke.sh aidesktop
 ```
 
