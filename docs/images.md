@@ -15,7 +15,8 @@ images/
                    coding-agents and t3-code
   neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
                    datalad, the viewers, code-server, coding-agents, t3-code
-                   and neurodesk-agents: neuroimaging
+                   neurodesk-agents, neurodesk-vscode and neurodesk-cli:
+                   neuroimaging
 ```
 
 | Component | scidesktop | microdesktop | aidesktop | neurodesktop |
@@ -27,7 +28,7 @@ images/
 | `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)) | no | yes | yes | yes |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no |
 | `code-server`, `datalad` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
-| `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
+| `neurodesk-cvmfs`, `neurodesk-agents`, `neurodesk-vscode`, `neurodesk-cli` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
 
 ## How a domain image gets the base
 

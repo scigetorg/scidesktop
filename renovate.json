@@ -21,6 +21,14 @@
       "/^components/datalad/requirements\\.in$/"
     ]
   },
+  "customDatasources": {
+    "open-vsx": {
+      "defaultRegistryUrlTemplate": "https://open-vsx.org/api/{{packageName}}",
+      "transformTemplates": [
+        "{\"releases\": $map($keys(allVersions)[$ != \"latest\"], function($v) { {\"version\": $v} })}"
+      ]
+    }
+  },
   "packageRules": [
     {
       "description": "Base and build-stage image digests, grouped into one review.",

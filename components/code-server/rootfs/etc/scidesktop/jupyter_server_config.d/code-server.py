@@ -11,6 +11,9 @@ c.ServerProxy.servers.update({  # noqa: F821
             "--auth", "none",
             "--disable-telemetry",
             "--disable-update-check",
+            # The release's own extensions and those other components add
+            # (components/code-server/install-extension).
+            "--builtin-extensions-dir", "/usr/local/share/code-server/extensions",
             "--socket", "{unix_socket}",
             "--socket-mode", "0600",
             os.environ.get("CODE_SERVER_WORKDIR") or os.path.expanduser("~"),

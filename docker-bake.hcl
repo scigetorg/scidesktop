@@ -90,6 +90,37 @@ variable "JUPYTERLAB_NIIVUE_SHA256" { default = "192d71973065358fd6151ad2c6fef2e
 # renovate: datasource=docker depName=freebrowse-node packageName=node
 variable "FREEBROWSE_NODE_VERSION" { default = "24.22.3-bookworm-slim" }
 
+# The VS Code extensions neurodesktop gives its users
+# (components/neurodesk-vscode), from Open VSX. Three are published per
+# platform and have a checksum per architecture; the others are one file.
+# renovate: datasource=custom.open-vsx depName=anthropic.claude-code packageName=Anthropic/claude-code
+variable "VSCODE_CLAUDE_CODE_VERSION" { default = "2.1.330" }
+variable "VSCODE_CLAUDE_CODE_SHA256_AMD64" { default = "e021a291fa6863326ed955485e734c8b71ccd784afb2702a3537287007881957" }
+variable "VSCODE_CLAUDE_CODE_SHA256_ARM64" { default = "2e29d36e93db8da8ce0d57ca4e633cac80e8d3c673279406cd6b92be098d8800" }
+# renovate: datasource=custom.open-vsx depName=openai.chatgpt packageName=openai/chatgpt
+variable "VSCODE_CHATGPT_VERSION" { default = "26.51117.41037" }
+variable "VSCODE_CHATGPT_SHA256_AMD64" { default = "24bb529a21656afae3cecc69c7efc42a58e0fee55944c8a3d175a45274954497" }
+variable "VSCODE_CHATGPT_SHA256_ARM64" { default = "0812b26dc04cfb6cf624f03222a9397a43e3bc9ef34d69996dc147df43d819ee" }
+# renovate: datasource=custom.open-vsx depName=ms-python.python packageName=ms-python/python
+variable "VSCODE_PYTHON_VERSION" { default = "2026.10.0" }
+variable "VSCODE_PYTHON_SHA256_AMD64" { default = "4a05e50fee8d6c613a4a17f3ee1c9c0e318f0d9bcfa636dbe079d9c8e1506e05" }
+variable "VSCODE_PYTHON_SHA256_ARM64" { default = "f16870f6eb1b4303d04189029cf402c81ea5a5595323127eb4e69fa4141e9a95" }
+# renovate: datasource=custom.open-vsx depName=ms-toolsai.jupyter packageName=ms-toolsai/jupyter
+variable "VSCODE_JUPYTER_VERSION" { default = "2025.9.1" }
+variable "VSCODE_JUPYTER_SHA256" { default = "110660656944c4ab0ff687db488c2e8c59c67ec121dcf09bcaa54b6edd9ce71f" }
+# renovate: datasource=custom.open-vsx depName=github.vscode-pull-request-github packageName=GitHub/vscode-pull-request-github
+variable "VSCODE_GITHUB_PR_VERSION" { default = "0.174.0" }
+variable "VSCODE_GITHUB_PR_SHA256" { default = "d777b9c7d59bc1e34a93366633ac254a4299110df3fa77eb4e5fa3ba2d49ed5f" }
+# renovate: datasource=custom.open-vsx depName=repreng.csv packageName=ReprEng/csv
+variable "VSCODE_CSV_VERSION" { default = "1.5.2" }
+variable "VSCODE_CSV_SHA256" { default = "8e3dc016152ce46ec57bc5c0a93144e442b396a4bcff40681ef87f3b06dc8a10" }
+# renovate: datasource=custom.open-vsx depName=korbinianeckstein.niivue packageName=KorbinianEckstein/niivue
+variable "VSCODE_NIIVUE_VERSION" { default = "2.11.168" }
+variable "VSCODE_NIIVUE_SHA256" { default = "df0a0ed8a644ff07c59cb601dbd726be536facc7425886a397500c739ef8a228" }
+# renovate: datasource=custom.open-vsx depName=xy-sss.slurm--extension packageName=xy-sss/slurm--extension
+variable "VSCODE_SLURM_VERSION" { default = "0.17.0" }
+variable "VSCODE_SLURM_SHA256" { default = "7b32d4bb9c4849eaf9a2b8c1807dd7aef32ca7bb5ddee7ae15278d5e788aad4b" }
+
 # The notebook user, set in the OS layer and used by components that own files.
 variable "NB_USER" { default = "jovyan" }
 variable "NB_UID" { default = "1000" }
@@ -149,6 +180,8 @@ group "test" {
     "datalad-test",
     "neurodesk-cvmfs-test",
     "neurodesk-agents-test",
+    "neurodesk-cli-test",
+    "neurodesk-vscode-test",
   ]
 }
 
@@ -540,6 +573,66 @@ target "neurodesk-agents-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: the VS Code extensions neurodesktop gives its users, in
+# code-server's system extensions folder. Its test borrows code-server and
+# the Jupyter environment's Python.
+target "neurodesk-vscode" {
+  inherits = ["_component"]
+  context  = "components/neurodesk-vscode"
+  target   = "component"
+  contexts = {
+    code-server = "target:code-server"
+    jupyter-env = "target:jupyter-env"
+  }
+  args = {
+    VSCODE_CLAUDE_CODE_VERSION      = VSCODE_CLAUDE_CODE_VERSION
+    VSCODE_CLAUDE_CODE_SHA256_AMD64 = VSCODE_CLAUDE_CODE_SHA256_AMD64
+    VSCODE_CLAUDE_CODE_SHA256_ARM64 = VSCODE_CLAUDE_CODE_SHA256_ARM64
+    VSCODE_CHATGPT_VERSION          = VSCODE_CHATGPT_VERSION
+    VSCODE_CHATGPT_SHA256_AMD64     = VSCODE_CHATGPT_SHA256_AMD64
+    VSCODE_CHATGPT_SHA256_ARM64     = VSCODE_CHATGPT_SHA256_ARM64
+    VSCODE_PYTHON_VERSION           = VSCODE_PYTHON_VERSION
+    VSCODE_PYTHON_SHA256_AMD64      = VSCODE_PYTHON_SHA256_AMD64
+    VSCODE_PYTHON_SHA256_ARM64      = VSCODE_PYTHON_SHA256_ARM64
+    VSCODE_JUPYTER_VERSION          = VSCODE_JUPYTER_VERSION
+    VSCODE_JUPYTER_SHA256           = VSCODE_JUPYTER_SHA256
+    VSCODE_GITHUB_PR_VERSION        = VSCODE_GITHUB_PR_VERSION
+    VSCODE_GITHUB_PR_SHA256         = VSCODE_GITHUB_PR_SHA256
+    VSCODE_CSV_VERSION              = VSCODE_CSV_VERSION
+    VSCODE_CSV_SHA256               = VSCODE_CSV_SHA256
+    VSCODE_NIIVUE_VERSION           = VSCODE_NIIVUE_VERSION
+    VSCODE_NIIVUE_SHA256            = VSCODE_NIIVUE_SHA256
+    VSCODE_SLURM_VERSION            = VSCODE_SLURM_VERSION
+    VSCODE_SLURM_SHA256             = VSCODE_SLURM_SHA256
+  }
+}
+
+target "neurodesk-vscode-test" {
+  inherits = ["neurodesk-vscode"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: the `neurodesk` command (cite, kernel, check, info). Its test
+# runs it with Lmod, the session's Slurm queue and the Jupyter environment's
+# Python, so it borrows those three components.
+target "neurodesk-cli" {
+  inherits = ["_component"]
+  context  = "components/neurodesk-cli"
+  target   = "component"
+  contexts = {
+    lmod        = "target:lmod"
+    slurm       = "target:slurm"
+    jupyter-env = "target:jupyter-env"
+  }
+}
+
+target "neurodesk-cli-test" {
+  inherits = ["neurodesk-cli"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # --- Images -----------------------------------------------------------------
 
 # The base: the components assembled on the OS layer.
@@ -608,6 +701,8 @@ target "neurodesktop" {
     coding-agents         = "target:coding-agents"
     t3-code               = "target:t3-code"
     neurodesk-agents      = "target:neurodesk-agents"
+    neurodesk-vscode      = "target:neurodesk-vscode"
+    neurodesk-cli         = "target:neurodesk-cli"
   }
   tags   = [NEURODESKTOP_IMAGE]
   output = ["type=docker"]

@@ -60,7 +60,7 @@ enough for a large virtual screen.
 | scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below |
 | microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: sciget offers the microscopy tools and no others. The [NiiVue and FreeBrowse viewers](docs/viewers.md), and the [coding agents and T3 Code](docs/coding-agents.md) |
 | aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL. Also the coding agents and T3 Code |
-| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): the Neurodesk tools as modules from CVMFS, DataLad, VS Code, the NiiVue and FreeBrowse viewers, and the coding agents with Neurodesk's defaults |
+| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): the Neurodesk tools as modules from CVMFS, DataLad, VS Code, the NiiVue and FreeBrowse viewers, the coding agents with Neurodesk's defaults, preinstalled VS Code extensions and the `neurodesk` command |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
 [docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
@@ -96,7 +96,7 @@ The domain images add components the base leaves out
 | T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
 | VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile; at `/opt/code-server` |
 | DataLad | DataLad and git-annex for terminals, in their own locked environment at `/opt/datalad` |
-| Neurodesk | The Neurodesk CVMFS repository's mirrors and key, and Neurodesk's instructions and model provider for the coding agents |
+| Neurodesk | The Neurodesk CVMFS repository's mirrors and key, Neurodesk's instructions and model provider for the coding agents, its VS Code extensions for every user, and the `neurodesk` command |
 | AI Ready | A Python 3.12 kernel with the workshop's libraries and MLflow, Airflow in its own environment, PostgreSQL from conda-forge; all locked, at `/opt/ai-ready` |
 
 `/opt/scidesktop/manifest.d/` holds one JSON file per component with its versions. Design and rationale:

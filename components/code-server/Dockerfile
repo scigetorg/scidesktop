@@ -34,6 +34,15 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && /opt/code-server/bin/code-server --version | grep -F "${CODE_SERVER_VERSION}" \
     && test -s /opt/code-server/LICENSE \
     && test -s /opt/code-server/ThirdPartyNotices.txt \
+    # The folder code-server reads as its system extensions: a link to each
+    # extension of the release, and whatever extensions other components put
+    # beside them (install-extension). Every user gets them; none is copied
+    # into a home.
+    && install -d -m 0755 /out/usr/local/share/code-server/extensions \
+    && for bundled in /opt/code-server/lib/vscode/extensions/*; do \
+        ln -s "${bundled}" "/out/usr/local/share/code-server/extensions/$(basename "${bundled}")"; \
+    done \
+    && test -L /out/usr/local/share/code-server/extensions/git \
     && install -d -m 0755 /out/manifest \
     && printf '{"code-server": "%s", "vscode": "%s"}\n' "${CODE_SERVER_VERSION}" \
         "$(sed -n 's/^ *"version": "\(.*\)",$/\1/p' /opt/code-server/lib/vscode/package.json | head -n 1)" \
@@ -51,6 +60,7 @@ FROM scratch AS component
 COPY --from=rootfs /rootfs/ /
 COPY --from=build /opt/code-server /opt/code-server
 COPY --from=build /out/manifest/ /opt/scidesktop/manifest.d/
+COPY --from=build /out/usr/ /usr/
 
 FROM os AS test
 COPY --from=component / /

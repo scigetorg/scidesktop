@@ -40,7 +40,7 @@ Then, in a terminal: `module avail`, `module load niimath/<version>`, `niimath`.
 
 ## What is here
 
-Only the assembly: this image is scidesktop plus nine components from
+Only the assembly: this image is scidesktop plus eleven components from
 `components/`. Any other image can copy the same ones.
 
 | Component | What it adds |
@@ -52,3 +52,5 @@ Only the assembly: this image is scidesktop plus nine components from
 | `code-server` | the **VS Code** launcher tile |
 | `coding-agents`, `t3-code` | Codex, Claude Code, OpenCode and the **scigent.ai** tile |
 | `neurodesk-agents` | the agents' instructions for Neurodesk tools, and the Neurodesk model provider for OpenCode |
+| `neurodesk-vscode` | eight VS Code extensions for every user, with no download at start |
+| `neurodesk-cli` | the `neurodesk` command: `cite`, `kernel`, `check`, `info` |

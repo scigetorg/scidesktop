@@ -1,0 +1,37 @@
+#!/bin/bash
+# Installs one VS Code extension from Open VSX into the folder code-server
+# reads as its system extensions (/usr/local/share/code-server/extensions,
+# docs/neurodesktop.md#vs-code), at build time. For components that give
+# every user of an image an extension; nothing is copied into a home.
+#
+#   install-extension <namespace> <name> <version> <sha256> <out> [platform]
+#
+# <out> is the build stage's output root. [platform] is the extension's
+# target (linux-x64, linux-arm64) when it is published per platform; leave it
+# out for an extension published once for all. The download must match
+# <sha256>, and the unpacked extension must be the one asked for.
+set -euo pipefail
+namespace="${1:?}" name="${2:?}" version="${3:?}" sha256="${4:?}" out="${5:?}" platform="${6:-}"
+
+if [ -n "${platform}" ]; then
+    url="https://open-vsx.org/api/${namespace}/${name}/${platform}/${version}/file/${namespace}.${name}-${version}@${platform}.vsix"
+else
+    url="https://open-vsx.org/api/${namespace}/${name}/${version}/file/${namespace}.${name}-${version}.vsix"
+fi
+work="$(mktemp -d)"
+trap 'rm -rf "${work}"' EXIT
+curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "${work}/extension.vsix" "${url}"
+echo "${sha256}  ${work}/extension.vsix" | sha256sum -c - >/dev/null \
+    || { echo "install-extension: ${namespace}.${name} ${version} ${platform}: checksum mismatch, got $(sha256sum "${work}/extension.vsix" | cut -d ' ' -f 1)" >&2; exit 1; }
+unzip -q "${work}/extension.vsix" 'extension/*' -d "${work}"
+
+manifest="${work}/extension/package.json"
+field() { sed -n "s/^[[:space:]]*\"$1\":[[:space:]]*\"\([^\"]*\)\".*/\1/p" "${manifest}" | head -n 1; }
+[ "$(field version)" = "${version}" ] && [ "$(field name | tr '[:upper:]' '[:lower:]')" = "${name,,}" ] \
+    || { echo "install-extension: ${url} holds $(field publisher).$(field name) $(field version)" >&2; exit 1; }
+
+folder="${out}/usr/local/share/code-server/extensions/${namespace,,}.${name,,}-${version}"
+install -d -m 0755 "$(dirname "${folder}")"
+mv "${work}/extension" "${folder}"
+chmod -R a+rX,go-w "${folder}"
+echo "installed ${namespace}.${name} ${version}${platform:+ (${platform})}: $(du -sh "${folder}" | cut -f 1)"

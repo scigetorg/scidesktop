@@ -20,6 +20,8 @@
 #   coding-agents     Codex, Claude Code and OpenCode (docs/coding-agents.md)
 #   t3-code           the scigent.ai tile
 #   neurodesk-agents  Neurodesk's instructions and model provider for the agents
+#   neurodesk-vscode  the VS Code extensions neurodesktop preinstalls
+#   neurodesk-cli     the `neurodesk` command
 
 FROM scidesktop-base
 
@@ -32,6 +34,8 @@ COPY --link --from=code-server / /
 COPY --link --from=coding-agents / /
 COPY --link --from=t3-code / /
 COPY --link --from=neurodesk-agents / /
+COPY --link --from=neurodesk-vscode / /
+COPY --link --from=neurodesk-cli / /
 
 LABEL org.opencontainers.image.title="neurodesktop" \
       org.opencontainers.image.description="scidesktop for neuroimaging: the Neurodesk tools as modules"
