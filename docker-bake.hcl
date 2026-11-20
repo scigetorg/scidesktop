@@ -73,6 +73,12 @@ variable "T3_CODE_VERSION" { default = "0.1.5" }
 variable "T3_CODE_SHA256_AMD64" { default = "21d50dcc9c634221b11b58d6a94350d2c6ee36905737b054b11fa4eba295a98b" }
 variable "T3_CODE_SHA256_ARM64" { default = "389362e2a349ea62b38d9bc708f4fca2381936cccb2d326b5fc5d074b072aef1" }
 
+# code-server (components/code-server): the upstream release, unmodified.
+# renovate: datasource=github-releases depName=coder/code-server extractVersion=^v(?<version>.*)$
+variable "CODE_SERVER_VERSION" { default = "4.145.2" }
+variable "CODE_SERVER_SHA256_AMD64" { default = "2f6db6c3e8b733dd6b3aeee83532e148b2bae2e392353ba85452d03572348962" }
+variable "CODE_SERVER_SHA256_ARM64" { default = "e867a34416e2da4a83496b09580001893e7a4e5bb58a0624c4fcd22819e7d53d" }
+
 # The notebook user, set in the OS layer and used by components that own files.
 variable "NB_USER" { default = "jovyan" }
 variable "NB_UID" { default = "1000" }
@@ -118,6 +124,8 @@ group "test" {
     "ai-ready-test",
     "coding-agents-test",
     "t3-code-test",
+    "code-server-test",
+    "datalad-test",
   ]
 }
 
@@ -356,6 +364,37 @@ target "t3-code" {
 
 target "t3-code-test" {
   inherits = ["t3-code"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: code-server (VS Code in the browser) as the VS Code tile.
+target "code-server" {
+  inherits = ["_component"]
+  context  = "components/code-server"
+  target   = "component"
+  args = {
+    CODE_SERVER_VERSION      = CODE_SERVER_VERSION
+    CODE_SERVER_SHA256_AMD64 = CODE_SERVER_SHA256_AMD64
+    CODE_SERVER_SHA256_ARM64 = CODE_SERVER_SHA256_ARM64
+  }
+}
+
+target "code-server-test" {
+  inherits = ["code-server"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: DataLad and git-annex for terminals, in their own interpreter.
+target "datalad" {
+  inherits = ["_component"]
+  context  = "components/datalad"
+  target   = "component"
+}
+
+target "datalad-test" {
+  inherits = ["datalad"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
