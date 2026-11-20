@@ -129,10 +129,13 @@ Components meet in a few shared folders. Each file in them has one owner.
 | `/etc/bash.bashrc.d/` | interactive shell setup (all bash terminals) | `<component>.sh` |
 | `/etc/jupyter/` | Jupyter server settings, the lowest-priority config folder | `jupyter_server_config.py` is startup's (docker-stacks); `jupyter_server_config.json` is jupyter-env's |
 | `/usr/local/etc/jupyter/` | Jupyter config from components outside the Jupyter environment | `jupyter_server_config.py` is Selkies'; `jupyter_server_config.d/<component>.json` only enables server extensions (Jupyter ignores other settings there) |
+| `JUPYTER_CONFIG_PATH`, `JUPYTER_PATH` (image `ENV`) | Jupyter config and kernels from a component outside the base: folders under its own prefix, which the image that copies it puts on these paths | `<prefix>/etc/jupyter/jupyter_server_config.py`, `<prefix>/share/jupyter/kernels/<component>`; the config file adds to shared settings (`c.ServerProxy.servers.update(...)`), never assigns them |
 | `/opt/scidesktop/` | scidesktop's own scripts; `manifest.d/<component>.json` | `<component>.json` |
 | `/etc/scidesktop/home-defaults/` | files copied into each user's home at start, never overwriting the user's own (derived images' default settings) | the path the file should have in the home |
 
 The layer check enforces what it can:
+
+The layer rules cover the base's components and those a domain image copies.
 
 - **L1:** no file is written by two components.
 - **L2:** no component file shadows a file in the OS layer.
@@ -162,6 +165,10 @@ in that order.
    the component by its folder: nothing to add to the workflows.
 3. If it goes into the image: add it to the `scidesktop` target's contexts and
    one `COPY --link --from=<component> / /` line to `images/scidesktop/Dockerfile`.
+   If only some images want it (an optional component, see
+   [images.md](images.md#optional-components)): add the context and the `COPY`
+   line to those images instead, and their `ENV` for any Jupyter folders it
+   brings.
 4. A Renovate group for `components/<component>/**` and its dependency names.
 5. `python3 test/contract.py static`, build, `python3 test/contract.py layers`,
    `./test/smoke.sh`.
