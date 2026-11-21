@@ -33,6 +33,7 @@ COPY --link --from=jupyterlab-freebrowse / /
 COPY --link --from=code-server / /
 COPY --link --from=coding-agents / /
 COPY --link --from=t3-code / /
+COPY --link --from=t3-connect / /
 COPY --link --from=neurodesk-agents / /
 COPY --link --from=neurodesk-vscode / /
 COPY --link --from=neurodesk-cli / /

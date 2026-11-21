@@ -95,6 +95,7 @@ The domain images add components the base leaves out
 | Viewers | [NiiVue and FreeBrowse](docs/viewers.md) for NIfTI files in JupyterLab, at `/opt/jupyterlab-niivue` and `/opt/jupyterlab-freebrowse` |
 | Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
 | T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
+| T3 Connect | [Remote access](docs/t3-connect.md) to that T3 Code from the T3 apps, through T3's relay. Off until the user sets it up; at `/opt/t3-connect` |
 | VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile; at `/opt/code-server` |
 | DataLad | DataLad and git-annex for terminals, in their own locked environment at `/opt/datalad` |
 | Neurodesk | The Neurodesk CVMFS repository's mirrors and key, Neurodesk's instructions and model provider for the coding agents, its VS Code extensions for every user, and the `neurodesk` command |

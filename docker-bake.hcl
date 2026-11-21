@@ -73,6 +73,13 @@ variable "T3_CODE_VERSION" { default = "0.1.5" }
 variable "T3_CODE_SHA256_AMD64" { default = "21d50dcc9c634221b11b58d6a94350d2c6ee36905737b054b11fa4eba295a98b" }
 variable "T3_CODE_SHA256_ARM64" { default = "389362e2a349ea62b38d9bc708f4fca2381936cccb2d326b5fc5d074b072aef1" }
 
+# The relay client T3 Connect uses (components/t3-connect): cloudflared's
+# release executable. T3 Code checks the version it is given.
+# renovate: datasource=github-releases depName=cloudflare/cloudflared
+variable "T3_CLOUDFLARED_VERSION" { default = "2026.10.7" }
+variable "T3_CLOUDFLARED_SHA256_AMD64" { default = "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872" }
+variable "T3_CLOUDFLARED_SHA256_ARM64" { default = "3df43aedc9ff291d1735b5cb576cb97e0b157488796db2e32b28aecabb445775" }
+
 # code-server (components/code-server): the upstream release, unmodified.
 # renovate: datasource=github-releases depName=coder/code-server extractVersion=^v(?<version>.*)$
 variable "CODE_SERVER_VERSION" { default = "4.145.2" }
@@ -176,6 +183,7 @@ group "test" {
     "ai-ready-test",
     "coding-agents-test",
     "t3-code-test",
+    "t3-connect-test",
     "code-server-test",
     "datalad-test",
     "neurodesk-cvmfs-test",
@@ -510,6 +518,29 @@ target "t3-code-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: T3 Connect for images with T3 Code. Its test runs both through a
+# notebook server, so it borrows T3 Code and the Jupyter environment.
+target "t3-connect" {
+  inherits = ["_component"]
+  context  = "components/t3-connect"
+  target   = "component"
+  contexts = {
+    t3-code     = "target:t3-code"
+    jupyter-env = "target:jupyter-env"
+  }
+  args = {
+    T3_CLOUDFLARED_VERSION      = T3_CLOUDFLARED_VERSION
+    T3_CLOUDFLARED_SHA256_AMD64 = T3_CLOUDFLARED_SHA256_AMD64
+    T3_CLOUDFLARED_SHA256_ARM64 = T3_CLOUDFLARED_SHA256_ARM64
+  }
+}
+
+target "t3-connect-test" {
+  inherits = ["t3-connect"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # Optional: code-server (VS Code in the browser) as the VS Code tile.
 target "code-server" {
   inherits = ["_component"]
@@ -666,6 +697,7 @@ target "microdesktop" {
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
     coding-agents         = "target:coding-agents"
     t3-code               = "target:t3-code"
+    t3-connect            = "target:t3-connect"
   }
   tags   = [MICRODESKTOP_IMAGE]
   output = ["type=docker"]
@@ -680,6 +712,7 @@ target "aidesktop" {
     ai-ready            = "target:ai-ready"
     coding-agents       = "target:coding-agents"
     t3-code             = "target:t3-code"
+    t3-connect          = "target:t3-connect"
   }
   tags   = [AIDESKTOP_IMAGE]
   output = ["type=docker"]
@@ -700,6 +733,7 @@ target "neurodesktop" {
     code-server           = "target:code-server"
     coding-agents         = "target:coding-agents"
     t3-code               = "target:t3-code"
+    t3-connect            = "target:t3-connect"
     neurodesk-agents      = "target:neurodesk-agents"
     neurodesk-vscode      = "target:neurodesk-vscode"
     neurodesk-cli         = "target:neurodesk-cli"

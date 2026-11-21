@@ -39,16 +39,26 @@
       super(target(url).url, protocols);
     }
   };
-  // T3 Connect signs in through t3.codes, which accepts its own origins only.
-  // The image does not ship it (docs/coding-agents.md); a button that can
-  // only spin is hidden.
-  const hideConnect = () => {
+  // T3's own Connect button signs in through t3.codes, which accepts its own
+  // origins only, so here it could only spin. It is hidden. Where the image
+  // sets up T3 Connect itself (docs/t3-connect.md), a button beside it opens
+  // that page instead.
+  const connect = __T3_CODE_CONNECT__;
+  const replaceConnect = () => {
     for (const button of document.querySelectorAll('button:not([hidden])')) {
-      if (button.textContent.includes('T3 Connect')) button.hidden = true;
+      if (button.dataset.sessionConnect || !button.textContent.includes('T3 Connect')) continue;
+      button.hidden = true;
+      if (!connect) continue;
+      const replacement = button.cloneNode(false);
+      replacement.hidden = false;
+      replacement.dataset.sessionConnect = 'true';
+      replacement.textContent = 'Set up T3 Connect';
+      replacement.onclick = () => window.open(connect, '_blank', 'noopener');
+      button.after(replacement);
     }
   };
   document.addEventListener('DOMContentLoaded', () => {
-    new MutationObserver(hideConnect).observe(document.body, { childList: true, subtree: true });
-    hideConnect();
+    new MutationObserver(replaceConnect).observe(document.body, { childList: true, subtree: true });
+    replaceConnect();
   });
 })();

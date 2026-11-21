@@ -2,7 +2,7 @@
 
 `neurodesktop` gives users what
 [neurodesk/neurodesktop](https://github.com/neurodesk/neurodesktop) gives
-them, built from scidesktop components. It is scidesktop plus eleven optional
+them, built from scidesktop components. It is scidesktop plus twelve optional
 components (see [images.md](images.md#optional-components)). Each one is
 reusable: another image copies it with one line.
 
@@ -14,6 +14,7 @@ reusable: another image copies it with one line.
 | `jupyterlab-niivue`, `jupyterlab-freebrowse` | the NiiVue and FreeBrowse viewers for NIfTI files in JupyterLab ([viewers.md](viewers.md)) | `/opt/jupyterlab-niivue`, `/opt/jupyterlab-freebrowse` |
 | `code-server` | [code-server](https://github.com/coder/code-server) (VS Code in the browser), opened from the **VS Code** launcher tile | `/opt/code-server`, command `code-server` |
 | `coding-agents`, `t3-code` | Codex, Claude Code, OpenCode and the **scigent.ai** tile ([coding-agents.md](coding-agents.md)) | `/opt/coding-agents`, `/opt/t3-code` |
+| `t3-connect` | T3 Connect: this session's T3 Code from the T3 apps, off until set up ([t3-connect.md](t3-connect.md)) | `/opt/t3-connect` |
 | `neurodesk-agents` | Neurodesk's defaults for those agents: instructions for working with Neurodesk tools, and the Neurodesk model provider for OpenCode | `/opt/neurodesk-agents` |
 | `neurodesk-vscode` | the eight VS Code extensions neurodesktop gives its users, for every user ([VS Code](#vs-code)) | `/usr/local/share/code-server/extensions` |
 | `neurodesk-cli` | the [`neurodesk` command](#the-neurodesk-command): `cite`, `kernel`, `check`, `info` | `/opt/neurodesk-cli`, command `neurodesk` |
@@ -246,7 +247,7 @@ earlier review of what belongs in the base is in
 | --- | --- |
 | Guacamole, Tomcat, VNC, xrdp, LXDE, voxl, Kasm, Glass | Selkies replaces the streaming stack |
 | The webapp container launcher | Out of scope here; a containerised web application is a sciget concern |
-| Tailscale, cloudflared, T3 Connect | Remote pairing needs a relay client and a sign-in the image cannot hold |
+| Tailscale (`neurodesk t3`) | It needs a tailnet and a userspace network daemon. T3 Connect, the other way to reach T3 Code remotely, is the `t3-connect` component ([t3-connect.md](t3-connect.md)) |
 | The agent wrapper scripts (`/usr/local/sbin/{claude,codex,opencode}`) and their interactive key prompts | The agents are upstream binaries here. The wrappers save keys into `~/.bashrc` and copy instructions into every working directory |
 | Agent defaults that switch off approvals (Codex `approval_policy = "never"` with `danger-full-access`, Claude `allow: Bash, Edit, Write`) | A default for one community's risk appetite; a deployment that wants them puts them in `/etc/scidesktop/home-defaults` |
 | Brain Researcher MCP server | It needs a personal token (`BR_MCP_TOKEN`). See [below](#brain-researcher) for how a user adds it |

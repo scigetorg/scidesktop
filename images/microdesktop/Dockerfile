@@ -22,6 +22,7 @@ COPY --link --from=jupyterlab-niivue / /
 COPY --link --from=jupyterlab-freebrowse / /
 COPY --link --from=coding-agents / /
 COPY --link --from=t3-code / /
+COPY --link --from=t3-connect / /
 
 LABEL org.opencontainers.image.title="microdesktop" \
       org.opencontainers.image.description="scidesktop for microscopy: the microscopy tools through sciget"

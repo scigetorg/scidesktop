@@ -18,6 +18,7 @@ COPY --link --from=sciget-neuroimaging / /
 COPY --link --from=ai-ready / /
 COPY --link --from=coding-agents / /
 COPY --link --from=t3-code / /
+COPY --link --from=t3-connect / /
 
 LABEL org.opencontainers.image.title="aidesktop" \
       org.opencontainers.image.description="scidesktop with the AI Ready workshop"

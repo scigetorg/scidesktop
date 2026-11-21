@@ -41,9 +41,10 @@ T3 Code drives the agents installed in the image. Sign in to an agent in a
 terminal first, or in T3 Code's provider settings, where each agent can also
 be turned on or off.
 
-**T3 Connect** (pairing this session with the T3 desktop or mobile app
-through T3's relay) is not part of the image, and its button is hidden; see
-[What is left out](#what-is-left-out).
+**T3 Connect** (using this session's T3 Code from the T3 desktop or mobile
+app, through T3's relay) is the `t3-connect` component, which the images
+that have T3 Code copy too. It is off until the user sets it up; see
+[t3-connect.md](t3-connect.md).
 
 ## What runs
 
@@ -141,6 +142,7 @@ supplies them through the same places, without changing a component:
 | --- | --- |
 | an agent's default settings (a provider, an MCP server, instructions) | the file at its home path under `/etc/scidesktop/home-defaults/`, for example `.codex/AGENTS.md`, `.claude/CLAUDE.md`, `.config/opencode/AGENTS.md`. An image's own Dockerfile may also replace one of the three settings files this component ships: the image's layer wins. Another component may not (rule L1) |
 | an OpenCode provider or MCP server, from a component | a JSON file of its own, and a start hook in `/usr/local/bin/before-notebook.d/` that sets `OPENCODE_CONFIG` to it. OpenCode merges that file with the user's `~/.config/opencode/opencode.json` |
+| Defaults for the T3 Code server's environment | a JSON file of variable names and values in `/etc/scidesktop/t3-code/environment.d/`. A variable the deployment set is kept. `t3-connect` names T3's relay client there |
 | T3 Code's default settings (provider instances, binary paths) | a JSON file in `/etc/scidesktop/t3-code/settings.d/`. The files are merged in name order into the user's `~/.t3/userdata/settings.json` when T3 starts. They only fill gaps: a value already in the user's file is never changed, at any depth |
 | environment for T3 Code and the agents it starts | `ENV` in the image's Dockerfile, or a start hook in `/usr/local/bin/before-notebook.d/` |
 
@@ -153,9 +155,9 @@ The components were ported from
 [neurodesktop](https://github.com/neurodesk/neurodesktop). These parts of its
 integration were not:
 
-- **T3 Connect, cloudflared and Tailscale.** Remote pairing through T3's
-  relay needs a relay client and a sign-in flow that T3 accepts only from its
-  own origins. T3 Code works without them.
+- **Tailscale.** T3 Connect and its relay client are the `t3-connect`
+  component ([t3-connect.md](t3-connect.md)). neurodesktop's other way to
+  reach T3 Code, through a tailnet, is not here.
 - **Neurodesk's defaults** are not in these components. The `neurodesktop`
   image gets its instructions and model provider from the `neurodesk-agents`
   component, through the extension points above

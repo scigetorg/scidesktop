@@ -28,6 +28,11 @@ SERVE = LIB / "t3_code_serve.py"
 ADAPTER = LIB / "t3_code_adapter.js"
 ICON = LIB / "scigent.svg"
 SESSION_FILE = "jupyter-proxy-session.json"
+# A component that sets up T3 Connect for this session names its page here,
+# relative to the session's URL (the t3-connect component does). Without it
+# T3's own Connect button is hidden: it signs in through t3.codes, which
+# accepts T3's own origins only.
+CONNECT_PATH = Path("/etc/scidesktop/t3-code/connect-path")
 
 # T3 accepts connections a moment before it can serve, and answers 503 until
 # then. The proxy takes any answer for readiness, so the first page can be one.
@@ -92,11 +97,23 @@ def rewrite_client(body, content_type, path, prefix):
             lambda m: re.sub(r'\s+crossorigin(?:="[^"]*")?', "", m[0])
             .replace("<link", '<link crossorigin="use-credentials"', 1),
             text)
-        adapter = ADAPTER.read_text().replace("__T3_CODE_PREFIX__", json.dumps(prefix))
+        adapter = (ADAPTER.read_text().replace("__T3_CODE_PREFIX__", json.dumps(prefix))
+                   .replace("__T3_CODE_CONNECT__", json.dumps(connect_url(prefix))))
         return _replace_once(text, "<head>", "<head><script>" + adapter + "</script>", "page shell").encode()
     if path.startswith("/assets/") and path.endswith(".css"):
         return re.sub(rb"url\(/(?!/)", b"url(" + prefix.encode(), body)
     return body
+
+
+def connect_url(prefix, connect_path=CONNECT_PATH):
+    """The address of the session's T3 Connect page, or None when the image has none."""
+    try:
+        path = connect_path.read_text().strip()
+    except OSError:
+        return None
+    if not re.fullmatch(r"[a-z0-9-]+/", path):
+        return None
+    return prefix[: -len(ROUTE) - 1] + path
 
 
 def _prefix():

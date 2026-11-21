@@ -19,6 +19,10 @@ from t3_code_proxy import SESSION_FILE, base_dir
 T3 = "/opt/t3-code/app/t3"
 # Image defaults for T3's settings.json: every *.json here, in name order.
 SETTINGS_DEFAULTS = Path("/etc/scidesktop/t3-code/settings.d")
+# Image defaults for the server's environment: every *.json here, in name
+# order, each an object of variable names and values. A variable the
+# deployment set is kept.
+ENVIRONMENT_DEFAULTS = Path("/etc/scidesktop/t3-code/environment.d")
 # The proxy's session outlives any notebook server; each start replaces it.
 SESSION_TTL = "3650d"
 
@@ -102,8 +106,24 @@ def issue_proxy_session(base, env):
             log("could not revoke the previous proxy session; `t3 auth session list` shows it")
 
 
-def server_environment(base, environ=os.environ):
+def environment_defaults(defaults_dir=ENVIRONMENT_DEFAULTS):
+    defaults = {}
+    for file in sorted(defaults_dir.glob("*.json")):
+        try:
+            values = json.loads(file.read_text())
+        except (OSError, ValueError, UnicodeError) as error:
+            log(f"ignoring {file}: {error}")
+            continue
+        if isinstance(values, dict):
+            defaults.update({name: value for name, value in values.items()
+                             if isinstance(name, str) and isinstance(value, str)})
+    return defaults
+
+
+def server_environment(base, environ=os.environ, defaults_dir=ENVIRONMENT_DEFAULTS):
     env = dict(environ)
+    for name, value in environment_defaults(defaults_dir).items():
+        env.setdefault(name, value)
     env.update({
         "T3CODE_HOME": str(base),
         "T3CODE_NO_BROWSER": "true",
