@@ -60,6 +60,10 @@ jobs:
       - name: Contract (static)
         run: python3 test/contract.py static
 
+      # Which tags the publish job moves, against a registry of the test's own.
+      - name: Publish script
+        run: ./test/publish-manifests-test.sh
+
       # One bake builds every component, runs every component's test stage and loads
       # every image in images/ as <image>:ci.
       - name: Build components, component tests and images
