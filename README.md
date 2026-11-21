@@ -13,7 +13,8 @@ but Jupyter itself.
 ## Running it
 
 The image is assembled from components under `components/` with `docker buildx bake`
-(see [docs/components.md](docs/components.md)).
+(see [docs/components.md](docs/components.md)), for amd64 and arm64. A local build is for
+the machine it runs on.
 
 ```sh
 docker buildx bake                           # builds every image (scidesktop:latest, ...)
@@ -60,6 +61,10 @@ Domain images build `FROM scidesktop` and add only their own files, like the
 [docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
 base alongside them, so nothing needs publishing first. To start a new one, or
 to build one for your own community in a fork, see [docs/images.md](docs/images.md).
+
+CI builds and tests every image on amd64 and arm64. On `main` it publishes
+scidesktop to `ghcr.io/scigetorg/scidesktop` as one multi-arch image, tagged with the
+commit's short SHA, the date and `latest`.
 
 ## What is in it
 

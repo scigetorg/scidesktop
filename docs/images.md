@@ -65,10 +65,35 @@ built from that folder, and that the stage a domain image builds starts from
 2. In `docker-bake.hcl`: a variable `<NAME>_IMAGE` for its tag (list it in
    `NOT_RENOVATED` in `test/contract.py`), a target like `microdesktop`'s, and
    the target in group `default`.
-3. In `.github/workflows/image.yml`: add it to the cache loop, set its tag to
-   `<name>:ci` and add a smoke test step.
-4. `python3 test/contract.py static`, `docker buildx bake <name>`,
+3. `python3 test/contract.py static`, `docker buildx bake <name>`,
    `./test/smoke.sh <name>`.
+4. To publish it, add its name to `PUBLISH` in `.github/workflows/image.yml`.
+
+## CI and publishing
+
+`.github/workflows/image.yml` finds the images by their folders, so a new
+image is built, cached and smoke-tested on amd64 and arm64 without a change
+to the workflow.
+
+- **Pull requests:** one job per architecture, each on a runner of that
+  architecture (no emulation). It runs the contract checks, builds every
+  component, test and image, and smoke-tests every image. Nothing is pushed.
+- **Pushes to `main`:** the same jobs, then each pushes the images named in
+  `PUBLISH` to `ghcr.io/<owner>/<image>` under a candidate tag,
+  `run-<run id>-<arch>`. When both architectures have passed, the `publish`
+  job joins the candidates into one multi-arch image and tags it
+  `<short sha>`, `<YYYY-MM-DD>` (the commit's date) and `latest`. If either
+  architecture fails, nothing is tagged. Every image gets its `<short sha>`
+  tag before any image's date and `latest` tags move, so a failure part way
+  leaves those where they were. A run whose commit is no longer the head of
+  `main` (a re-run of an older run, or `main` advancing while the run
+  publishes) publishes its `<short sha>` and leaves them too: the head is read
+  again before each image's tags move
+  (`test/publish-manifests-test.sh`). The candidate tags stay in the registry: the multi-arch
+  image points at them.
+
+`PUBLISH` lists `scidesktop` only. A published domain image gets its own
+package, `ghcr.io/<owner>/<name>`.
 
 ## Forks
 

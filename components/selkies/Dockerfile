@@ -6,17 +6,20 @@
 # on the lockfiles, so OS updates do not rebuild it or change its layer.
 ARG UBUNTU_IMAGE
 FROM ${UBUNTU_IMAGE} AS build
+ARG TARGETARCH
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update && apt-get install --no-install-recommends -y ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 # A pin changed without ./lock fails here rather than installing the old lock.
 RUN --mount=type=bind,from=components,source=check-lock,target=/usr/local/bin/check-lock \
     --mount=type=bind,source=.,target=/src \
-    check-lock /src/requirements.in /src/requirements.lock
+    check-lock /src/environment.yml /src/linux-*.lock \
+    && check-lock /src/requirements.in /src/requirements.lock
 COPY --from=micromamba /usr/local/bin/micromamba /usr/local/bin/micromamba
-COPY linux-64.lock requirements.lock /tmp/
-RUN micromamba create --yes --root-prefix /tmp/mamba-root --prefix /opt/selkies \
-        --file /tmp/linux-64.lock \
+COPY linux-*.lock requirements.lock /tmp/
+RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    micromamba create --yes --root-prefix /tmp/mamba-root --prefix /opt/selkies \
+        --file "/tmp/$(target-arch conda).lock" \
     && /opt/selkies/bin/python -m pip install --no-cache-dir --no-deps --require-hashes \
         --no-compile -r /tmp/requirements.lock \
     && /opt/selkies/bin/python -m compileall -q /opt/selkies/lib \
