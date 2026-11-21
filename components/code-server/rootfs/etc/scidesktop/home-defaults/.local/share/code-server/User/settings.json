@@ -1,0 +1,7 @@
+{
+    "update.mode": "none",
+    "extensions.autoUpdate": false,
+    "remote.autoForwardPorts": false,
+    "remote.restoreForwardedPorts": false,
+    "terminal.integrated.inheritEnv": true
+}

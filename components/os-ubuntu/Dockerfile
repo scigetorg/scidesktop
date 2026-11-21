@@ -31,6 +31,7 @@ RUN --mount=type=bind,from=bootstrap-certs,source=/etc/ssl/certs/ca-certificates
     # Dockerfile, rootfs/) do not rebuild the OS layer.
     --mount=type=bind,source=install,target=/tmp/os-ubuntu/install \
     --mount=type=bind,source=packages,target=/tmp/os-ubuntu/packages \
+    --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
     --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-${TARGETARCH},target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     APT_SNAPSHOT="${APT_SNAPSHOT:?}" CVMFS_VERSION="${CVMFS_VERSION:?}" \

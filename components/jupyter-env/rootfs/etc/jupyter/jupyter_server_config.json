@@ -9,5 +9,8 @@
   },
   "LabApp": {
     "check_for_updates_class": "jupyterlab.handlers.announcements.NeverCheckForUpdate"
+  },
+  "MCPExtensionApp": {
+    "mcp_port": 0
   }
 }
