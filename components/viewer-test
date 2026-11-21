@@ -10,7 +10,9 @@ component="${1:?usage: viewer-test <component>}"
 python=/opt/conda/bin/python
 work="$(mktemp -d)"
 server=""
-trap '[ -z "${server}" ] || kill "${server}" 2>/dev/null; rm -rf "${work}"' EXIT
+# The server is waited for before its folder is removed: it writes there
+# until it has exited, and under `set -e` a failed removal would fail the test.
+trap '[ -z "${server}" ] || { kill "${server}" 2>/dev/null; wait "${server}" 2>/dev/null; } || true; rm -rf "${work}" || true' EXIT
 
 # JupyterLab finds the extension where the component put it, with no setting.
 export HOME="${work}/home"

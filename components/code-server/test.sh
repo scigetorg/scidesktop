@@ -4,7 +4,9 @@
 set -euo pipefail
 export HOME="$(mktemp -d)"
 socket="${HOME}/code-server.sock"
-trap 'kill "${pid:-}" 2>/dev/null || true; rm -rf "${HOME}"' EXIT
+# code-server is waited for before its home is removed: it writes there until
+# it has exited, and under `set -e` a failed removal would fail the test.
+trap 'kill "${pid:-}" 2>/dev/null || true; wait "${pid:-}" 2>/dev/null || true; rm -rf "${HOME}" || true' EXIT
 cd "${HOME}"
 
 # The command a terminal finds is the component's, and the manifest names the
