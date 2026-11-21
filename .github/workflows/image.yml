@@ -65,8 +65,22 @@ jobs:
       - name: Build components, component tests and images
         env:
           PLATFORM: linux/${{ matrix.arch }}
+        # The Actions cache holds 10 GB for the whole repository and evicts
+        # the rest. A layer evicted between a build reading the cache's index
+        # and fetching the layer fails the build (BlobNotFound). That build
+        # is run once more without the cache; any other failure stands.
         run: |
+          # The build's own exit status, not tee's.
+          set -o pipefail
           mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci write-cache)
+          if docker buildx bake "${args[@]}" default test 2>&1 | tee /tmp/bake.log; then
+              exit 0
+          fi
+          if ! grep -qE 'BlobNotFound|failed to copy: GET https://[^ ]*actions-cache' /tmp/bake.log; then
+              exit 1
+          fi
+          echo "::warning::The Actions cache lost a layer during the build; building once more without it."
+          mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci no-cache)
           docker buildx bake "${args[@]}" default test
 
       # docs/components.md: what each component writes (no overlaps, no shadowing,
