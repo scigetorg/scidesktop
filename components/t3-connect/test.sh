@@ -102,6 +102,10 @@ case "$2 ${scenario}" in
         touch "${here}/unlinked"
         echo "T3 Connect is disabled, but the running server could not stop its tunnel." >&2
         echo "Revoked the relay-side environment record." ;;
+    "unlink both-left")
+        touch "${here}/unlinked"
+        echo "T3 Connect is disabled, but the running server could not stop its tunnel." >&2
+        echo "Could not revoke the relay-side environment record yet." >&2 ;;
     "unlink record-left")
         touch "${here}/unlinked"
         echo "T3 Connect is disabled locally."
@@ -218,6 +222,22 @@ async def main():
     scenario("disconnected")
     state = await settled(manager, "disconnect")
     assert state["state"] == "idle" and not state["linked"] and state["message"].startswith("Disconnected."), state
+    # The tunnel did not stop and the record was not revoked: the tunnel is
+    # reported first, and the record is not forgotten on the next attempt,
+    # nor by a notebook server that starts afterwards.
+    scenario("both-left")
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "error" and "tunnel has not been confirmed stopped" in state["message"], state
+    scenario("never-linked")
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "error" and "relay still lists" in state["message"], state
+    restarted = t3_connect.ConnectManager(t3=manager.t3, environ=environ)
+    await restarted.refresh()
+    state = restarted.snapshot()
+    assert state["state"] == "error" and state["connections_url"], state
+    scenario("disconnected")
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "idle" and state["message"].startswith("Disconnected."), state
     # Nothing was ever linked: T3 has no record to revoke, and says it revoked none.
     scenario("never-linked")
     state = await settled(manager, "disconnect")
