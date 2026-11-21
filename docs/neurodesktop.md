@@ -2,7 +2,7 @@
 
 `neurodesktop` gives users what
 [neurodesk/neurodesktop](https://github.com/neurodesk/neurodesktop) gives
-them, built from scidesktop components. It is scidesktop plus thirteen optional
+them, built from scidesktop components. It is scidesktop plus fifteen optional
 components (see [images.md](images.md#optional-components)). Each one is
 reusable: another image copies it with one line.
 
@@ -13,7 +13,7 @@ reusable: another image copies it with one line.
 | `datalad` | [DataLad](https://www.datalad.org), datalad-container and git-annex | `/opt/datalad`, commands `datalad`, `git-annex` |
 | `jupyterlab-niivue`, `jupyterlab-freebrowse` | the NiiVue and FreeBrowse viewers for NIfTI files in JupyterLab ([viewers.md](viewers.md)) | `/opt/jupyterlab-niivue`, `/opt/jupyterlab-freebrowse` |
 | `code-server` | [code-server](https://github.com/coder/code-server) (VS Code in the browser), opened from the **VS Code** launcher tile | `/opt/code-server`, command `code-server` |
-| `coding-agents`, `t3-code` | Codex, Claude Code, OpenCode and the **scigent.ai** tile ([coding-agents.md](coding-agents.md)) | `/opt/coding-agents`, `/opt/t3-code` |
+| `coding-agents`, `acp-adapters`, `t3-code` | Codex, Claude Code, OpenCode, Jupyter AI ACP adapters and the **scigent.ai** tile ([coding-agents.md](coding-agents.md), [jupyter-ai.md](jupyter-ai.md)) | `/opt/coding-agents`, `/opt/acp-adapters`, `/opt/t3-code` |
 | `t3-connect` | T3 Connect: this session's T3 Code from the T3 apps, off until set up ([t3-connect.md](t3-connect.md)) | `/opt/t3-connect` |
 | `neurodesk-agents` | Neurodesk's defaults for those agents: instructions for working with Neurodesk tools, and the Neurodesk model provider for OpenCode | `/opt/neurodesk-agents` |
 | `vscode-core`, `vscode-niivue`, `vscode-coding-agents` | the eight VS Code extensions neurodesktop gives its users, split for reuse ([VS Code](#vs-code)) | `/usr/local/share/code-server/extensions` |

@@ -452,6 +452,29 @@
       "addLabels": [
         "component:t3-connect"
       ]
+    },
+    {
+      "description": "Component acp-adapters: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/acp-adapters/**"
+      ],
+      "groupName": "component acp-adapters",
+      "addLabels": [
+        "component:acp-adapters"
+      ]
+    },
+    {
+      "description": "Component acp-adapters: a bump needs both ACP_NODE_SHA256 variables updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "node"
+      ],
+      "groupName": "component acp-adapters",
+      "addLabels": [
+        "component:acp-adapters"
+      ]
     }
   ],
   "customManagers": [
