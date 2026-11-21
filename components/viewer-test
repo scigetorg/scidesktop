@@ -27,7 +27,11 @@ base=/user/viewer-test/
 # A free port: on some builders the tests of several components run at once
 # and share one network.
 port="$("${python}" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+# Jupyter's MCP server takes a free port too, not its fixed 3001: two servers
+# that start together both find 3001 free, and the one that then fails to
+# bind it exits.
 "${python}" -m jupyter lab --no-browser --ip=127.0.0.1 --port="${port}" --ServerApp.port_retries=0 \
+    --MCPExtensionApp.mcp_port=0 \
     --ServerApp.base_url="${base}" --IdentityProvider.token=viewer-test --ServerApp.root_dir="${HOME}" \
     >"${work}/jupyter.log" 2>&1 &
 server=$!
