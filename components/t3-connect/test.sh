@@ -194,6 +194,27 @@ async def main():
     state = await settled(manager, "disconnect")
     assert state["state"] == "error" and "relay still lists" in state["message"], state
     assert state["connections_url"] == "https://app.t3.codes/settings/general", state
+    # A second attempt that fails the same way: T3 now reports no link at all,
+    # and the record is still there.
+    (work / "unlinked").touch()
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "error" and "relay still lists" in state["message"], state
+    # A disconnect that is still checking the tunnel cannot be cancelled.
+    tunnel = start_tunnel()
+    scenario("disconnected")
+    state = await manager.action("disconnect")
+    assert state["state"] == "disconnecting", state
+    try:
+        await manager.action("cancel")
+    except t3_connect.web.HTTPError as error:
+        assert error.status_code == 409, error
+    else:
+        raise AssertionError("Cancel interrupted a disconnect")
+    assert "value.state === 'disconnecting'" in page, "the page offers Cancel during a disconnect"
+    tunnel.kill()
+    tunnel.wait()
+    await manager.task
+    assert manager.snapshot()["state"] == "idle", manager.snapshot()
     scenario("disconnected")
     state = await settled(manager, "disconnect")
     assert state["state"] == "idle" and not state["linked"] and state["message"].startswith("Disconnected."), state
