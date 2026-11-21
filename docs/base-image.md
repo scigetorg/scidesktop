@@ -2,8 +2,9 @@
 
 Status: agreed 2026-11-15; first implementation built 2026-11-16 (see
 `docs/overnight-2026-11-16.md`). Target: the Kubernetes MVP. Replaces `quay.io/jupyter/base-notebook` with a
-base we build ourselves. Ubuntu 26.04 LTS ships first; the layout is built so
-that another distribution or CPU architecture is an addition, not a rewrite.
+base we build ourselves. Ubuntu 26.04 LTS ships first, on amd64 and arm64;
+the layout is built so that another distribution or CPU architecture is an
+addition, not a rewrite.
 
 ## Goals
 
@@ -19,9 +20,8 @@ that another distribution or CPU architecture is an addition, not a rewrite.
 
 - Hardened or distroless bases. A full desktop on top erases their benefit;
   security comes from CI scanning, SBOMs, provenance and signing instead.
-- Shipping anything other than Ubuntu 26.04 on amd64 for the MVP. arm64, a
-  RHEL-family variant and Selkies 2.3.0 are deferred, but the layout must not
-  block them.
+- Shipping anything other than Ubuntu 26.04 for the MVP. A RHEL-family
+  variant and Selkies 2.3.0 are deferred, but the layout must not block them.
 
 ## Layers
 
@@ -59,11 +59,18 @@ FROM os AS common
 
 ### Selecting the architecture
 
-Builds use buildx's `TARGETOS`/`TARGETARCH`. Nothing calls
+Builds use buildx's `TARGETARCH`. Nothing calls
 `dpkg --print-architecture` or `uname -m` directly. One helper,
-`build/arch`, maps `TARGETARCH` to each upstream's naming
-(`amd64`/`x86_64`, `arm64`/`aarch64`, `ppc64le`) and fails clearly when a
-component has no build for that arch.
+`components/target-arch`, lists the supported architectures (amd64, arm64),
+maps `TARGETARCH` to each upstream's naming (`linux-64`/`linux-aarch64`,
+`x86_64`/`aarch64`) and fails clearly on any other. Files that differ per
+architecture have a checksum or a lock for each. The rules are in
+[components.md](components.md#architectures).
+
+One bake run builds one platform (`PLATFORM`, the machine's own by default).
+CI builds each architecture on a runner of that architecture, without
+emulation, and joins the results into one multi-arch image only after both
+pass ([images.md](images.md#ci-and-publishing)).
 
 ## Repository layout
 
@@ -71,16 +78,14 @@ component has no build for that arch.
 components/
   os-ubuntu/          Dockerfile, packages/<capability>.txt, snapshot, test
   apptainer/          Dockerfile, test
-  jupyter-env/        Dockerfile, environment.yml, lockfile, test
+  jupyter-env/        Dockerfile, environment.yml, a lock per arch, test
   selkies/            Dockerfile, test
   lmod/               Dockerfile, test
   startup/            vendored docker-stacks scripts + LICENSE, test
-build/
-  arch                TARGETARCH → upstream names
+  target-arch         supported arches; TARGETARCH → upstream names
 config/               runtime config and hooks (exists today)
 docker-bake.hcl       component targets + images
 images/scidesktop/    the assembly (Dockerfile); domain images beside it
-support.yml           OS × arch × component matrix
 test/
   os-contract.sh      asserts the OS layer's contract
   smoke.sh            exists; runs against the assembled image
@@ -123,7 +128,7 @@ no per-OS work:
 | --- | --- | --- |
 | micromamba | static binary | amd64, arm64, ppc64le, riscv64 |
 | Jupyter environment | conda-forge via `components/jupyter-env/environment.yml` and its lockfile | follows conda-forge |
-| Selkies 2.2.1 | manylinux wheel into its own prefix | amd64, arm64 |
+| Selkies 2.2.1 | manylinux wheel into its own prefix (pixelflux, pcmflux: `manylinux_2_28` wheels) | amd64, arm64 |
 | Selkies 2.3.0 (later) | static binary / `.whl` | amd64, arm64 |
 | sciget | `COPY --from` the sciget image | its image's platforms |
 | startup scripts | `vendor/docker-stacks`, pinned commit | any |
@@ -235,19 +240,27 @@ Everything in layers 2 and 3, and every runtime script:
 
 ## Support matrix
 
-`support.yml` declares which OS × arch combinations are built, and records
-per-component availability. CI generates its build matrix from it, so adding a
-row adds a job.
+`components/target-arch` lists the architectures that are built. The build
+matrix in `.github/workflows/image.yml` has one runner per architecture, and
+the contract test (S7) keeps the two lists equal.
 
 | | amd64 | arm64 | ppc64le |
 | --- | --- | --- | --- |
-| ubuntu26.04 | MVP | deferred | blocked: Selkies has no wheel |
+| ubuntu26.04 | built, published | built, published | blocked: Selkies has no wheel |
 | rocky10 | future | future | blocked: Selkies |
+
+Per component on arm64: the OS packages come from the same snapshot (the
+snapshot service has every architecture under `/ubuntu`), CVMFS from CERN's
+arm64 packages, Apptainer, Lmod and sciget are compiled on the arm64 runner,
+and the conda environments and Selkies install from their arm64 locks and
+wheels.
 
 ## Tags and labels
 
-- `ghcr.io/scigetorg/scidesktop:<version>-<os>`, multi-arch manifest per OS.
-- `:<version>` and `:latest` point at the default OS (Ubuntu).
+- Today: `ghcr.io/scigetorg/scidesktop:<short sha>`, `:<YYYY-MM-DD>` and
+  `:latest`, each one multi-arch image for amd64 and arm64.
+- With a second OS: `:<version>-<os>`, a multi-arch manifest per OS;
+  `:<version>` and `:latest` point at the default OS (Ubuntu).
 - Labels: `org.scidesktop.os=<id>`, alongside the existing
   `org.scidesktop.desktop_adapter`.
 
@@ -260,7 +273,8 @@ manager, they follow the same capability-file pattern.
 
 - `test/os-contract.sh` runs at the end of layer 1 during the build and again
   in the smoke test.
-- `test/smoke.sh` runs unchanged against every matrix cell.
+- `test/smoke.sh` runs unchanged on amd64 and arm64, and against every future
+  matrix cell.
 - New: a JupyterHub spawn check (`start-singleuser.py` with Hub env vars),
   replacing the compatibility testing docker-stacks did for us.
 - Startup timing breakdown recorded per build, so trimming `start.sh` is

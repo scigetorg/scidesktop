@@ -13,14 +13,15 @@ but Jupyter itself.
 ## Running it
 
 The image is assembled from components under `components/` with `docker buildx bake`
-(see [docs/components.md](docs/components.md)).
+(see [docs/components.md](docs/components.md)), for amd64 and arm64. A local build is for
+the machine it runs on.
 
 ```sh
 docker buildx bake                           # builds every image (scidesktop:latest, ...)
 docker buildx bake test                      # every component's own test
 docker run --rm -p 8888:8888 --shm-size=2g -e JUPYTER_TOKEN=scidesktop \
     --security-opt seccomp=unconfined --security-opt apparmor=unconfined scidesktop
-./test/smoke.sh scidesktop                   # end-to-end checks
+./test/image-smoke.sh scidesktop             # end-to-end checks
 ```
 
 The two `--security-opt` flags let Apptainer run containers inside it; see
@@ -54,12 +55,17 @@ enough for a large virtual screen.
 | Image | Folder | What it adds |
 |---|---|---|
 | scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below |
-| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy (a shell for now) |
+| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy (a shell for now), and the [coding agents and T3 Code](docs/coding-agents.md) |
+| aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL. Also the coding agents and T3 Code |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
 [docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
 base alongside them, so nothing needs publishing first. To start a new one, or
 to build one for your own community in a fork, see [docs/images.md](docs/images.md).
+
+CI builds and tests every image on amd64 and arm64. On `main` it publishes
+scidesktop to `ghcr.io/scigetorg/scidesktop` as one multi-arch image, tagged with the
+commit's short SHA, the date and `latest`.
 
 ## What is in it
 
@@ -72,6 +78,15 @@ to build one for your own community in a fork, see [docs/images.md](docs/images.
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget with a default catalog |
 | Modules | Lmod, built from the upstream release |
+
+The domain images add components the base leaves out
+([which image has which](docs/images.md)):
+
+| | |
+|---|---|
+| Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
+| T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
+| AI Ready | A Python 3.12 kernel with the workshop's libraries and MLflow, Airflow in its own environment, PostgreSQL from conda-forge; all locked, at `/opt/ai-ready` |
 
 `/opt/scidesktop/manifest.d/` holds one JSON file per component with its versions. Design and rationale:
 [docs/base-image.md](docs/base-image.md). **Contributing:** read [docs/components.md](docs/components.md)
@@ -91,6 +106,8 @@ publisher provides one. Renovate proposes updates rather than builds drifting si
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`, `internal` or `disabled`; see the runbook |
 | `SCIDESKTOP_APPTAINER_SETUID` | `auto` | `auto`, `yes` or `no`; applies only when the container starts as root |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download the sciget catalogs in the background at start |
+| `AI_READY_PUBLIC_ORIGIN` | `http://127.0.0.1:8888` | AI images only: the origin users reach the session at; see [docs/ai-ready.md](docs/ai-ready.md) |
+| `T3_CODE_WORKDIR` | the home folder | Images with T3 Code: the folder it starts in; see [docs/coding-agents.md](docs/coding-agents.md) |
 
 ## Operations
 

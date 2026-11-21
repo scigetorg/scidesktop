@@ -3,7 +3,7 @@
     desktop_app.py <port> <desktop_url> <desktop_file>
 
 Spawned by jupyter-server-proxy on the first click of the application's
-launcher tile (see jupyter_server_config.py). The tile opens <name>/launch;
+launcher tile (see jupyter_server_config.d/selkies.py). The tile opens <name>/launch;
 any other path answers 200 and does nothing, which is what the proxy's
 readiness check (GET /) sees. Each launch request:
 

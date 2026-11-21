@@ -1,0 +1,5 @@
+# Codex settings, copied into a new home by scidesktop. This file is yours:
+# edit it freely. https://developers.openai.com/codex/config-reference
+#
+# The image provides Codex; a newer image brings a newer Codex.
+check_for_update_on_startup = false
