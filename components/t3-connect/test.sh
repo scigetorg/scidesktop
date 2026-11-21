@@ -129,6 +129,23 @@ async def main():
     print("ready follows T3's own reachability check, not the cached token's expiry")
 
 
+    # Cancel while the approved link is still connecting: it is kept, and
+    # the setup can be resumed.
+    scenario("unreachable")
+    await manager.action("retry")
+    for _ in range(100):
+        if manager.snapshot()["state"] == "connecting":
+            break
+        await asyncio.sleep(0.1)
+    state = await manager.action("cancel")
+    assert state["state"] == "cancelled" and state["linked"], state
+    page = t3_connect.PAGE.read_text()
+    assert "['error', 'expired', 'cancelled'].includes(value.state)" in page, "the page offers no Retry after a cancel"
+    scenario("reachable")
+    state = await settled(manager, "retry")
+    assert state["state"] == "ready", state
+    print("a setup cancelled after approval can be resumed")
+
 asyncio.run(main())
 PYTHON
 

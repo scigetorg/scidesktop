@@ -262,7 +262,11 @@ class ConnectManager:
                 await self.close()
                 with suppress(Exception):
                     await self.saved_status()
-                self.set_state("idle", "Setup cancelled. An already approved link is kept; Disconnect revokes it.")
+                if self.linked:
+                    self.set_state("cancelled", "Setup cancelled. The approved link is kept: Retry resumes "
+                                                "the setup, Disconnect revokes the link.")
+                else:
+                    self.set_state("idle", "Setup cancelled.")
             elif action in ("link", "retry", "disconnect"):
                 if self.task and not self.task.done():
                     raise web.HTTPError(409, reason="T3 Connect is already processing a request.")

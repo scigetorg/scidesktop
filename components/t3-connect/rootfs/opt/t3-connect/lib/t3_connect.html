@@ -53,9 +53,9 @@ scigent.ai tile starts it.</p>
     element('connections').hidden = value.connections_url !== 'https://app.t3.codes/settings/general';
     const busy = ['starting', 'authorizing', 'waiting_idle', 'restarting', 'connecting', 'disconnecting'].includes(value.state);
     buttons.link.hidden = value.state !== 'idle' || value.linked;
-    buttons.retry.hidden = !['error', 'expired'].includes(value.state);
+    buttons.retry.hidden = !['error', 'expired', 'cancelled'].includes(value.state);
     buttons.cancel.hidden = !busy;
-    // Also after an error or an expired code: the approval may have arrived late.
+    // Also after an error, an expired code or a cancelled setup: the approval may have arrived late.
     buttons.disconnect.hidden = busy || (!value.linked && value.state === 'idle');
     // T3 Code opens the tunnel, and Jupyter starts T3 Code when it is asked for a page.
     if (value.needs_server) fetch(base + 't3-code/api/auth/session', { credentials: 'same-origin' }).catch(() => {});
