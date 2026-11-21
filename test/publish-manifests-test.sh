@@ -47,12 +47,14 @@ SHIM
 chmod +x "${work}/bin/docker"
 
 # holds <image>:<tag>: the images the registry's index under that tag points
-# at, or none. Two indexes of the same images can list them in another order.
+# at, or none. Two indexes of the same images can list them in another order,
+# and the registry answers a plain request for a Docker manifest list with
+# one architecture's image, so the index is read as buildx reads it.
 holds() {
     local found
-    found="$(curl --silent --fail --header 'Accept: application/vnd.oci.image.index.v1+json' \
-        "http://${registry}/v2/${name}/${1%%:*}/manifests/${1##*:}" \
-        | python3 -c 'import json, sys; print(" ".join(sorted(m["digest"] for m in json.load(sys.stdin)["manifests"])))')" || true
+    found="$(docker buildx imagetools inspect --raw "${registry}/${name}/$1" 2>/dev/null \
+        | python3 -c 'import json, sys; print(" ".join(sorted(m["digest"] for m in json.load(sys.stdin)["manifests"])))' \
+        2>/dev/null)" || true
     echo "${found:-none}"
 }
 
