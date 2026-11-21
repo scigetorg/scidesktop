@@ -27,7 +27,8 @@ images/
 | `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)) | no | yes | no | yes |
 | `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)) | no | yes | yes | yes |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no |
-| `code-server`, `datalad` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
+| `code-server` ([neurodesktop.md](neurodesktop.md#vs-code)) | no | yes | no | yes |
+| `datalad` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
 | `neurodesk-cvmfs`, `neurodesk-agents`, `neurodesk-vscode`, `neurodesk-cli` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
 
 ## How a domain image gets the base

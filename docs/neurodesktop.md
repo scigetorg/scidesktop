@@ -237,7 +237,7 @@ earlier review of what belongs in the base is in
 | The VS Code extensions installed into each home at start | `neurodesk-vscode`: the same eight, installed at build time for every user; added after the first port |
 | The `neurodesk` command, the kernel wrapper and the Lmod site package behind `neurodesk cite` | `neurodesk-cli`: `cite`, `kernel`, `check` and `info`, with this image's paths; added after the first port |
 | The NiiVue viewer (`jupyterlab-niivue`) and FreeBrowse, with NiiVue the default for NIfTI files | `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)); generic, added after the first port |
-| `AGENTS.md` for the agents; the Neurodesk LLM provider for OpenCode | `neurodesk-agents`. The instructions are written for this image, not copied: neurodesktop's describe Slurm, ASTRA and wrapper scripts this image does not have |
+| `AGENTS.md` for the agents; the Neurodesk LLM provider for OpenCode | `neurodesk-agents`. The instructions are written for this image, not copied: neurodesktop's describe ASTRA, neurocommand and wrapper scripts this image does not have |
 
 **(d) Deliberately not ported**
 
