@@ -92,7 +92,7 @@ def rewrite_client(body, content_type, path, prefix):
             lambda m: re.sub(r'\s+crossorigin(?:="[^"]*")?', "", m[0])
             .replace("<link", '<link crossorigin="use-credentials"', 1),
             text)
-        adapter = ADAPTER.read_text().replace("__T3_CODE_PREFIX__", json.dumps(prefix))
+        adapter = ADAPTER.read_text().replace("__T3_CODE_PREFIX__", json.dumps(prefix).replace("<", "\\u003c"))
         return _replace_once(text, "<head>", "<head><script>" + adapter + "</script>", "page shell").encode()
     if path.startswith("/assets/") and path.endswith(".css"):
         return re.sub(rb"url\(/(?!/)", b"url(" + prefix.encode(), body)
@@ -144,7 +144,8 @@ def _session_token():
     global _token
     file = base_dir() / SESSION_FILE
     try:
-        stamp = file.stat().st_mtime_ns
+        stat = file.stat()
+        stamp = (str(file), stat.st_ino, stat.st_mtime_ns)
         if _token[0] != stamp:
             _token = (stamp, json.loads(file.read_text())["token"])
     except (OSError, ValueError, KeyError):
