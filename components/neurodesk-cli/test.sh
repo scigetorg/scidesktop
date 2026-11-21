@@ -17,8 +17,8 @@ if grep -E '^  (uv|jobs|update|test|t3|agent|astra|lightcone)' <<<"${help}"; the
     exit 1
 fi
 [ "$(neurodesk help check)" = "$(neurodesk check --help)" ]
-if neurodesk chek 2>"${HOME}/error"; then exit 1; fi
-grep -q "Did you mean 'check'?" "${HOME}/error"
+if neurodesk inf 2>"${HOME}/error"; then exit 1; fi
+grep -q "Did you mean 'info'?" "${HOME}/error"
 neurodesk --version | grep -q '^neurodesk {cli_sha256: [0-9a-f]\{64\}}$'
 [ "$(readlink -f "$(command -v neurodesk-kernel)")" = /opt/neurodesk-cli/lib/neurodesk_kernel.py ]
 
