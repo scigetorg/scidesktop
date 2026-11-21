@@ -110,7 +110,11 @@ export HOME="${work}/home"
 mkdir -p "${HOME}"
 base=/user/t3-test/
 port=18888
+# Jupyter's MCP server takes a free port too, not its fixed 3001: two servers
+# that start together both find 3001 free, and the one that then fails to
+# bind it exits.
 "${python}" -m jupyter server --no-browser --ip=127.0.0.1 --port="${port}" --ServerApp.port_retries=0 \
+    --MCPExtensionApp.mcp_port=0 \
     --ServerApp.base_url="${base}" --IdentityProvider.token=t3-test --ServerApp.root_dir="${HOME}" \
     >"${work}/jupyter.log" 2>&1 &
 server=$!
