@@ -20,7 +20,13 @@ nothing of it and contacts nobody.
    reaches the session, and says **Ready**. In the T3 app, open Settings,
    Connections and add the environment.
 
-**Disconnect** on the same page switches it off again. The same can be done
+**Cancel setup** stops a setup in progress. A link that was already approved
+is kept: **Retry** resumes the setup, and Disconnect revokes the link.
+
+**Disconnect** on the same page switches it off again. It says
+**Disconnected** once T3 confirms that it stopped the tunnel and no relay
+client is left running; until then it says what is still pending, and
+Disconnect stays available. The same can be done
 in a terminal with `t3 connect link --headless`, `t3 connect status` and
 `t3 connect unlink`.
 
@@ -55,9 +61,9 @@ outbound traffic to `*.t3.codes` and Cloudflare blocks T3 Connect.
   signed-in user only. Nothing else of that output is kept, returned or
   logged. The code is not in the container log.
 - **The account's credentials** are T3's, in `~/.t3/userdata/secrets`,
-  readable by the user only. The component reads the access token to ask
-  T3's relay for this environment's address, sends it nowhere else, and never
-  returns it to the browser.
+  readable by the user only. The component does not read them: whether the
+  relay reaches the session is the answer of `t3 connect status`, in which
+  the running T3 Code checks its own tunnel.
 - **T3's pairing token**, which T3 Code prints when it starts, still goes
   nowhere: T3 Code's standard output is discarded
   ([coding-agents.md](coding-agents.md#isolation)).
@@ -104,7 +110,10 @@ docker buildx bake t3-connect-test
 
 The component's test drives the device authorization with a stand-in for the
 `t3` command: the code reaches the state, the rest of the output does not,
-and Cancel ends the command. The smoke test checks that Connect is off,
+and Cancel ends the command. A second stand-in answers as T3 does after an
+approval: Ready follows T3's own reachability check, a setup cancelled after
+approval can be resumed, and Disconnect succeeds only when the tunnel has
+stopped. The smoke test checks that Connect is off,
 behind the login, refused from another origin, and silent in the container
 log. Neither signs in to T3: linking needs an account and a person, and the
 smoke test says so (`NOT TESTED`).

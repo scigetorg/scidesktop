@@ -16,8 +16,8 @@ beyond loopback.
 
 The command's output is untrusted and never returned or logged wholesale: one
 bounded device code is read from it and shown to the signed-in user. The
-account's credentials stay in T3's private store (~/.t3/userdata/secrets);
-they are sent only to T3's relay, to find this environment's address.
+account's credentials stay in T3's private store (~/.t3/userdata/secrets),
+which only the `t3` command reads.
 """
 
 import asyncio
@@ -29,24 +29,26 @@ import re
 import signal
 import sqlite3
 import time
-from urllib.parse import urlsplit
 
 from jupyter_server.base.handlers import APIHandler, JupyterHandler
 from jupyter_server.utils import url_path_join
-from tornado import httpclient, web
+from tornado import web
 
 from t3_code_proxy import base_dir
 from t3_code_serve import T3, server_environment
 
 ROUTE = "t3-connect"
 PAGE = Path(__file__).with_name("t3_connect.html")
-RELAY = "https://relay.t3.codes"
 DEVICE_PAGE = "https://accounts.t3.codes/device"
 CONNECTIONS_PAGE = "https://app.t3.codes/settings/general"
 DEFAULT_TUNNEL_LIMIT = 3
 AUTH_TIMEOUT = 660
 ROUTE_TIMEOUT = 240
-USER_AGENT = "scidesktop-t3-connect"
+# `t3 connect status` asks the running server to check its tunnel, and waits
+# 30 seconds for the answer.
+STATUS_TIMEOUT = 45
+# How long the relay client may take to exit once T3 Code has stopped it.
+TUNNEL_STOP_TIMEOUT = 10
 
 
 class ConnectError(Exception):
@@ -55,10 +57,6 @@ class ConnectError(Exception):
     def __init__(self, message, *, connections_url=None):
         super().__init__(message)
         self.connections_url = connections_url
-
-
-class RoutePending(ConnectError):
-    """The approved tunnel has not finished routing yet."""
 
 
 class ConnectManager:
@@ -71,7 +69,6 @@ class ConnectManager:
         self.message = "T3 Connect is off. T3 Code works here without it."
         self.code = None
         self.expires_at = None
-        self.label = None
         self.linked = False
         self.connections_url = None
         self.last_checked = 0
@@ -85,7 +82,7 @@ class ConnectManager:
     def snapshot(self):
         return dict(state=self.state, message=self.message, code=self.code,
                     verification_url=DEVICE_PAGE if self.code else None,
-                    expires_at=self.expires_at, label=self.label, linked=self.linked,
+                    expires_at=self.expires_at, linked=self.linked,
                     connections_url=self.connections_url, last_checked=self.last_checked,
                     # The page asks T3 Code for a page while this is set, which
                     # is what makes Jupyter Server Proxy start it.
@@ -97,13 +94,15 @@ class ConnectManager:
         if state != "authorizing":
             self.code = self.expires_at = None
 
-    async def _process(self, *args, timeout=30, on_line=None):
+    async def _process(self, *args, timeout=30, on_line=None, warnings=False):
+        """The command's standard output, and with `warnings` its standard error too."""
         self.base.mkdir(mode=0o700, parents=True, exist_ok=True)
         process = await asyncio.create_subprocess_exec(
             self.t3, "connect", *args, "--base-dir", str(self.base),
             env={**server_environment(self.base, self.environ), "NO_COLOR": "1"}, cwd=str(Path.home()),
             stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL, start_new_session=True, limit=65536,
+            stderr=asyncio.subprocess.STDOUT if warnings else asyncio.subprocess.DEVNULL,
+            start_new_session=True, limit=65536,
         )
         output = bytearray()
         try:
@@ -130,7 +129,7 @@ class ConnectManager:
 
     async def saved_status(self):
         try:
-            value = json.loads(await self._process("status", "--json"))
+            value = json.loads(await self._process("status", "--json", timeout=STATUS_TIMEOUT))
         except ValueError:
             value = None
         if not isinstance(value, dict):
@@ -188,50 +187,29 @@ class ConnectManager:
             await asyncio.sleep(0.1)
         raise ConnectError("T3 Code did not stop. Close its tab, wait a moment and choose Retry.")
 
-    async def _json(self, url, *, token=None):
-        headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
-        if token:
-            # Credentials are only ever sent to the fixed official relay.
-            if url != RELAY + "/v1/environments":
-                raise ConnectError("Unexpected relay address.")
-            headers["Authorization"] = "Bearer " + token
-        response = await httpclient.AsyncHTTPClient().fetch(
-            url, headers=headers, follow_redirects=False, request_timeout=10, raise_error=False)
-        if token and response.code in (401, 403):
-            raise ConnectError("Your T3 authorization needs refreshing. Choose Retry to sign in again.")
-        if response.code not in (200, 401) or len(response.body) > 1024 * 1024:
-            raise RoutePending("The connection is not ready yet.")
-        return json.loads(response.body)
+    def tunnel_running(self):
+        """Whether a relay client of this user's is running."""
+        client = server_environment(self.base, self.environ).get("T3CODE_CLOUDFLARED_PATH")
+        if not client:
+            return False
+        client = os.path.realpath(client)
+        for entry in os.scandir("/proc"):
+            if entry.name.isdigit():
+                # Another user's process cannot be read, and is not ours.
+                with suppress(OSError):
+                    if os.readlink(f"/proc/{entry.name}/exe") == client:
+                        return True
+        return False
 
     async def reachable(self):
-        """Find this environment at the relay, then probe it without credentials.
+        """Whether T3's relay reaches this session, by T3 Code's own check.
 
-        A successful link or a running relay client is not readiness. The
-        pinned `t3` command owns token refresh; this method never refreshes or
-        writes its credentials and never returns them to the browser.
+        A saved link or a running relay client is not readiness. `t3 connect
+        status` has the running T3 Code probe its tunnel; the credentials
+        stay the command's to read and refresh.
         """
-        state = self.base / "userdata"
-        token = json.loads((state / "secrets/cloud-cli-oauth-token.bin").read_text())
-        environment_id = (state / "environment-id").read_text().strip()
-        if token["expiresAtEpochMs"] <= time.time() * 1000:
-            raise ConnectError("Your T3 authorization needs refreshing. Choose Retry to sign in again.")
-        records = await self._json(RELAY + "/v1/environments", token=token["accessToken"])
-        for record in records["environments"]:
-            if record["environmentId"] != environment_id:
-                continue
-            endpoint = record["endpoint"]["httpBaseUrl"]
-            url = urlsplit(endpoint)
-            if (url.scheme != "https" or not url.hostname or url.username or url.password
-                    or url.port not in (None, 443) or url.query or url.fragment
-                    or not re.fullmatch(r"[a-z0-9-]+\.t3coderelay\.com", url.hostname)):
-                raise ConnectError("The relay returned an unsupported endpoint.")
-            result = await self._json(endpoint.rstrip("/") + "/api/auth/session")
-            # An unauthenticated session response proves routing reaches T3
-            # without sending a Jupyter cookie or minting another credential.
-            if isinstance(result.get("authenticated"), bool):
-                self.label = str(record["label"])[:200]
-                return True
-        return False
+        reachability = (await self.saved_status()).get("reachability")
+        return isinstance(reachability, dict) and reachability.get("status") == "reachable"
 
     async def _wait_reachable(self):
         deadline = asyncio.get_running_loop().time() + ROUTE_TIMEOUT
@@ -242,7 +220,7 @@ class ConnectManager:
                     self.last_checked = time.time()
                     self.set_state("ready", "Ready. In the T3 app, open Settings, Connections and add this environment.")
                     return
-            except (OSError, ValueError, KeyError, TypeError, RoutePending, httpclient.HTTPClientError):
+            except (ConnectError, TimeoutError):
                 pass
             await asyncio.sleep(3)
         raise ConnectError(
@@ -276,11 +254,30 @@ class ConnectManager:
 
     async def _unlink(self):
         self.set_state("disconnecting", "Disconnecting this environment.")
-        await self._process("unlink")
+        saved = await self.saved_status()
+        had_link = any(saved.get(key) for key in ("desired", "authenticated", "linked"))
+        # T3 clears the saved link and exits 0 even when it could not stop
+        # the running tunnel or revoke the relay's record; it says which on
+        # its output, of which only these fixed sentences are looked for.
+        said = (await self._process("unlink", warnings=True)).decode("utf-8", errors="replace")
         saved = await self.saved_status()
         if saved.get("desired") or saved.get("linked"):
             raise ConnectError("Disconnect has not completed. Retry Disconnect when the relay is reachable.")
-        self.label = None
+        deadline = time.monotonic() + TUNNEL_STOP_TIMEOUT
+        while self.tunnel_running() and time.monotonic() < deadline:
+            await asyncio.sleep(0.5)
+        if "T3 Connect is disabled locally." not in said or self.tunnel_running():
+            raise ConnectError(
+                "T3 Connect is switched off here, but this session's tunnel has not been confirmed "
+                "stopped and may still give remote access. Choose Disconnect to try again; the "
+                "tunnel also ends when the session stops.")
+        # T3 also says it revoked nothing when there was never a link to revoke.
+        if had_link and "relay-side environment record" in said and "Revoked the relay-side environment record." not in said:
+            raise ConnectError(
+                "This session's tunnel has stopped, but T3's relay still lists the environment. "
+                "Choose Disconnect to try again when the relay is reachable, or remove the "
+                "environment from your T3 connections.",
+                connections_url=CONNECTIONS_PAGE)
         self.set_state("idle", "Disconnected. T3 Code still works here.")
 
     async def _run(self, operation):
@@ -303,7 +300,11 @@ class ConnectManager:
                 await self.close()
                 with suppress(Exception):
                     await self.saved_status()
-                self.set_state("idle", "Setup cancelled. An already approved link is kept; Disconnect revokes it.")
+                if self.linked:
+                    self.set_state("cancelled", "Setup cancelled. The approved link is kept: Retry resumes "
+                                                "the setup, Disconnect revokes the link.")
+                else:
+                    self.set_state("idle", "Setup cancelled.")
             elif action in ("link", "retry", "disconnect"):
                 if self.task and not self.task.done():
                     raise web.HTTPError(409, reason="T3 Connect is already processing a request.")
