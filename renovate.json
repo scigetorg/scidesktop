@@ -15,7 +15,10 @@
   ],
   "pip_requirements": {
     "managerFilePatterns": [
-      "/^components/selkies/requirements\\.in$/"
+      "/^components/selkies/requirements\\.in$/",
+      "/^components/ai-ready/requirements\\.in$/",
+      "/^components/ai-ready/airflow-requirements\\.in$/",
+      "/^components/datalad/requirements\\.in$/"
     ]
   },
   "packageRules": [
@@ -140,6 +143,71 @@
       ]
     },
     {
+      "description": "Component ai-ready: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/ai-ready/**"
+      ],
+      "groupName": "component ai-ready",
+      "addLabels": [
+        "component:ai-ready"
+      ]
+    },
+    {
+      "description": "Component coding-agents: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/coding-agents/**"
+      ],
+      "groupName": "component coding-agents",
+      "addLabels": [
+        "component:coding-agents"
+      ]
+    },
+    {
+      "description": "Component t3-code: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/t3-code/**"
+      ],
+      "groupName": "component t3-code",
+      "addLabels": [
+        "component:t3-code"
+      ]
+    },
+    {
+      "description": "Component code-server: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/code-server/**"
+      ],
+      "groupName": "component code-server",
+      "addLabels": [
+        "component:code-server"
+      ]
+    },
+    {
+      "description": "Component datalad: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/datalad/**"
+      ],
+      "groupName": "component datalad",
+      "addLabels": [
+        "component:datalad"
+      ]
+    },
+    {
+      "description": "AI Ready: Airflow's constraints are per Python minor, and a PostgreSQL major cannot open the data directory an earlier one created in a user's home.",
+      "matchFileNames": [
+        "components/ai-ready/environment.yml"
+      ],
+      "matchDepNames": [
+        "python",
+        "postgresql"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "Component os-ubuntu: its versions in docker-bake.hcl join the component's group.",
       "matchFileNames": [
         "docker-bake.hcl"
@@ -208,6 +276,60 @@
       "addLabels": [
         "component:sciget"
       ]
+    },
+    {
+      "description": "Component ai-ready: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "ai-ready-containers"
+      ],
+      "groupName": "component ai-ready",
+      "addLabels": [
+        "component:ai-ready"
+      ]
+    },
+    {
+      "description": "Component coding-agents: its versions in docker-bake.hcl join the component's group. Each bump needs both *_SHA256 variables of that agent updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "openai/codex",
+        "claude-code",
+        "opencode"
+      ],
+      "groupName": "component coding-agents",
+      "addLabels": [
+        "component:coding-agents"
+      ]
+    },
+    {
+      "description": "Component t3-code: a bump needs both T3_CODE_SHA256 variables updated, and its test fails if the web client moved an anchor the base-path adapter rewrites (docs/coding-agents.md).",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "pingdotgg/t3code"
+      ],
+      "groupName": "component t3-code",
+      "addLabels": [
+        "component:t3-code"
+      ]
+    },
+    {
+      "description": "Component code-server: a bump needs both CODE_SERVER_SHA256 variables updated, from the release's sha256 digests of code-server-<version>-linux-{amd64,arm64}.tar.gz.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "coder/code-server"
+      ],
+      "groupName": "component code-server",
+      "addLabels": [
+        "component:code-server"
+      ]
     }
   ],
   "customManagers": [
@@ -232,6 +354,20 @@
       ],
       "depNameTemplate": "sciget",
       "packageNameTemplate": "https://github.com/scigetorg/sciget",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    },
+    {
+      "description": "AI Ready workshop commit; a bump needs components/ai-ready/lock run before it builds.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"AI_READY_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "ai-ready-containers",
+      "packageNameTemplate": "https://github.com/IntersectAustralia/ai-ready-containers",
       "datasourceTemplate": "git-refs",
       "currentValueTemplate": "main"
     },

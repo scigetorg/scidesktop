@@ -29,21 +29,40 @@ internal)
     [ -c /dev/fuse ] || { echo "[cvmfs] no /dev/fuse; skipping"; exit 0; }
     [ -n "${REPOS}" ] || { echo "[cvmfs] internal mode needs SCIDESKTOP_CVMFS_REPOSITORIES; skipping"; exit 0; }
 
+    # The client raises its open-file limit to CVMFS_NFILES (65536 unless
+    # set) and refuses to mount when the container's hard limit is lower,
+    # which root here may not raise. Ask for no more than the container has.
+    nfiles="${CVMFS_NFILES:-65536}"
+    [[ "${nfiles}" =~ ^[0-9]+$ ]] || nfiles=65536
+    hard="$(ulimit -Hn)"
+    if [ "${hard}" != unlimited ] && [ "${hard}" -lt "${nfiles}" ]; then
+        nfiles="${hard}"
+    fi
+
+    quote_sh() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
     mkdir -p /var/lib/cvmfs
-    cat > /etc/cvmfs/default.local <<CONF
-CVMFS_HTTP_PROXY=${CVMFS_HTTP_PROXY:-DIRECT}
-CVMFS_QUOTA_LIMIT=${CVMFS_QUOTA_LIMIT:-5000}
-CVMFS_CACHE_BASE=${CVMFS_CACHE_BASE:-/var/lib/cvmfs}
-CVMFS_REPOSITORIES=${REPOS}
-CONF
-    for repo in ${REPOS//,/ }; do
+    {
+        printf 'CVMFS_HTTP_PROXY=%s\n' "$(quote_sh "${CVMFS_HTTP_PROXY:-DIRECT}")"
+        printf 'CVMFS_QUOTA_LIMIT=%s\n' "$(quote_sh "${CVMFS_QUOTA_LIMIT:-5000}")"
+        printf 'CVMFS_CACHE_BASE=%s\n' "$(quote_sh "${CVMFS_CACHE_BASE:-/var/lib/cvmfs}")"
+        printf 'CVMFS_REPOSITORIES=%s\n' "$(quote_sh "${REPOS}")"
+        printf 'CVMFS_NFILES=%s\n' "$(quote_sh "${nfiles}")"
+    } > /etc/cvmfs/default.local
+    IFS=, read -ra _repos <<< "${REPOS}"
+    for repo in "${_repos[@]}"; do
+        [ -n "${repo}" ] || continue
+        if [[ ! "${repo}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "[cvmfs] ignoring invalid repository name: ${repo}"
+            continue
+        fi
         mkdir -p "/cvmfs/${repo}"
         if mountpoint -q "/cvmfs/${repo}"; then
             echo "[cvmfs] ${repo} already mounted"
-        elif mount -t cvmfs "${repo}" "/cvmfs/${repo}" 2>/dev/null; then
+        elif error="$(mount -t cvmfs "${repo}" "/cvmfs/${repo}" 2>&1 >/dev/null)"; then
             echo "[cvmfs] mounted ${repo}"
         else
             echo "[cvmfs] failed to mount ${repo}; check its config and key under /etc/cvmfs"
+            [ -z "${error}" ] || echo "[cvmfs] the client said: ${error//$'\n'/ }"
         fi
     done
     ;;

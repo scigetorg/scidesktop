@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Enforce the build conventions in docs/components.md.
 
-    python3 test/contract.py static   # before building: Dockerfiles, bake file
-    python3 test/contract.py layers   # after building: what each component writes
+    python3 test/contract.py static          # before building: Dockerfiles, bake file
+    python3 test/contract.py layers          # after building: what each component writes
+    python3 test/contract.py image <image> [ref]
+                                             # a built image: the components it holds
 
 Exit status is non-zero when any rule is broken; each violation is printed
 with the rule it breaks.
@@ -23,6 +25,17 @@ BASE_IMAGE = "scidesktop"
 ASSEMBLY = IMAGES / BASE_IMAGE / "Dockerfile"
 COMPONENTS = ROOT / "components"
 OS_COMPONENT = "os-ubuntu"
+# The one place that names architectures; everything else asks it.
+TARGET_ARCH = COMPONENTS / "target-arch"
+CI = ROOT / ".github" / "workflows" / "image.yml"
+# Asking the machine instead of buildx's TARGETARCH.
+ARCH_PROBE = re.compile(r"uname -m|dpkg --print-architecture")
+# Where a component puts its part of the notebook server's configuration, and
+# the one file that loads the parts (docs/components.md).
+JUPYTER_PARTS = "etc/scidesktop/jupyter_server_config.d"
+JUPYTER_LOADER = "jupyter-env/rootfs/usr/local/etc/jupyter/jupyter_server_config.py"
+JUPYTER_ENV = re.compile(r"\bJUPYTER_(?:CONFIG_)?PATH\b")
+MANIFESTS = "/opt/scidesktop/manifest.d"
 
 # Bake variables that carry no "# renovate:" comment, and why.
 NOT_RENOVATED = {
@@ -31,10 +44,15 @@ NOT_RENOVATED = {
     "NB_USER": "setting, not a version",
     "NB_UID": "setting, not a version",
     "NB_GID": "setting, not a version",
+    "PLATFORM": "build setting",
     "IMAGE": "output tag",
     "MICRODESKTOP_IMAGE": "output tag",
+    "AIDESKTOP_IMAGE": "output tag",
+    "NEURODESKTOP_IMAGE": "output tag",
     "SCIGET_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "SCIGET_SRC": "built from SCIGET_COMMIT",
+    "AI_READY_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
+    "AI_READY_SRC": "built from AI_READY_COMMIT",
 }
 # Instructions the assembly may use: image metadata a component cannot provide.
 ASSEMBLY_ALLOWED = {"FROM", "COPY", "LABEL", "ENV", "EXPOSE", "HEALTHCHECK",
@@ -48,9 +66,12 @@ def fail(rule, msg):
 
 
 def bake_print():
-    out = subprocess.run(["docker", "buildx", "bake", "--print", "default", "test"],
-                         cwd=ROOT, capture_output=True, text=True, check=True).stdout
-    return json.loads(out)
+    # Components are named too: one that no image copies is otherwise absent.
+    run = subprocess.run(["docker", "buildx", "bake", "--print", "default", "test", *component_names()],
+                         cwd=ROOT, capture_output=True, text=True)
+    if run.returncode:
+        sys.exit(f"docker buildx bake --print failed:\n{run.stderr}")
+    return json.loads(run.stdout)
 
 
 def instructions(dockerfile):
@@ -73,8 +94,43 @@ def rel(path):
     return path.relative_to(ROOT)
 
 
+def target_arch(naming, arch=None):
+    out = subprocess.run([TARGET_ARCH, naming], env={"TARGETARCH": arch} if arch else {},
+                         capture_output=True, text=True, check=True).stdout
+    return out.split()
+
+
 def component_names():
     return sorted(p.parent.name for p in COMPONENTS.glob("*/Dockerfile"))
+
+
+def image_names():
+    return sorted(p.name for p in IMAGES.iterdir() if p.is_dir())
+
+
+def image_components(targets, image):
+    """Components the image holds: its own and those of the images it is FROM."""
+    components = set(component_names()) - {OS_COMPONENT}
+    found = set()
+    while image in targets:
+        parent = None
+        for context, source in targets[image].get("contexts", {}).items():
+            if context in components and source == f"target:{context}":
+                found.add(context)
+            elif context == f"{source.removeprefix('target:')}-base":
+                parent = source.removeprefix("target:")
+        image = parent
+    return found
+
+
+def copied_components(targets):
+    """Components that an image in images/ copies: the base's, and those a
+    domain image adds. Each is a bake context of the image, named after its
+    component target."""
+    components = set(component_names()) - {OS_COMPONENT}
+    return sorted({context for image in image_names()
+                   for context, source in targets.get(image, {}).get("contexts", {}).items()
+                   if context in components and source == f"target:{context}"})
 
 
 def static():
@@ -124,12 +180,38 @@ def static():
             if ins == "ARG" and "=" in line:
                 fail("S4", f"{u}: ARG with a value; put it in docker-bake.hcl: {line}")
 
+    # S7: the architecture comes from buildx. Nothing asks the machine, and a
+    # conda environment has a lock for every architecture.
+    arches = target_arch("list")
+    for path in sorted(COMPONENTS.rglob("*")):
+        if not path.is_file() or path == TARGET_ARCH or path.suffix == ".lock":
+            continue
+        try:
+            text = path.read_text()
+        except UnicodeDecodeError:
+            continue
+        for n, line in enumerate(text.splitlines(), 1):
+            code = line.split("#", 1)[0]
+            if ARCH_PROBE.search(code):
+                fail("S7", f"{rel(path)}:{n}: asks the machine for its architecture; "
+                           f"use TARGETARCH and components/target-arch: {line.strip()[:70]}")
+    for env in sorted(COMPONENTS.glob("*/environment.yml")):
+        for arch in arches:
+            lock = env.with_name(f"{target_arch('conda', arch)[0]}.lock")
+            if not lock.is_file():
+                fail("S7", f"{rel(env.parent)}: no {lock.name} for {arch}; run ./lock")
+
+    ci = sorted(re.findall(r"^ +- arch: (\S+)$", CI.read_text(), re.M))
+    if ci != sorted(arches):
+        fail("S7", f"{rel(CI)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
+                   f"components/target-arch lists {', '.join(arches)}")
+
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is
     # FROM <base>-base, a bake context naming another image in images/: a
     # registry image would bypass the base built alongside it, and the base's
     # own name would resolve to whatever image of that tag is stored locally.
-    images = sorted(p.name for p in IMAGES.iterdir() if p.is_dir())
+    images = image_names()
     for name in images:
         t = targets.get(name)
         if t is None:
@@ -169,6 +251,43 @@ def static():
             fail("S6", f"{rel(df)}: the image must be FROM <image>-base for another image in images/, not {base}")
         elif t.get("contexts", {}).get(base) != f"target:{parent}":
             fail("S6", f"{name}: FROM {base} needs `contexts = {{ {base} = \"target:{parent}\" }}` in its bake target")
+        # A domain image adds a component the way the assembly does: whole,
+        # as a linked layer, built in the same bake run.
+        for ins, text in instructions(df):
+            m = re.match(r"COPY\b.*--from=(\S+)", text) if ins == "COPY" else None
+            if not m or m.group(1) not in component_names():
+                continue
+            u = m.group(1)
+            if text != f"COPY --link --from={u} / /":
+                fail("S6", f"{rel(df)}: a component is copied whole, as `COPY --link --from={u} / /`: {text}")
+            if t.get("contexts", {}).get(u) != f"target:{u}":
+                fail("S6", f"{name}: copying {u} needs `{u} = \"target:{u}\"` in its bake target's contexts")
+            if u in image_components(targets, parent):
+                fail("S6", f"{rel(df)}: copies {u}, which {parent} already holds; remove the COPY and the context")
+            # S8: a component brings its own Jupyter registration.
+        for ins, text in instructions(df):
+            if ins == "ENV" and JUPYTER_ENV.search(text):
+                fail("S8", f"{rel(df)}: sets a Jupyter path; a component registers itself through "
+                           f"/{JUPYTER_PARTS}/<component>.py and /usr/local/share/jupyter: {text[:70]}")
+
+    # S8: one way to add to the notebook server's configuration. A component
+    # ships /etc/scidesktop/jupyter_server_config.d/<component>.py, which adds
+    # to shared settings and never assigns them; only the loader is a Jupyter
+    # config file of its own.
+    for path in sorted(COMPONENTS.glob("*/rootfs/**/*")):
+        if not path.is_file():
+            continue
+        u, inside = path.relative_to(COMPONENTS).parts[0], path.relative_to(COMPONENTS).as_posix()
+        if path.parent.as_posix().endswith(JUPYTER_PARTS):
+            if path.name != f"{u}.py":
+                fail("S8", f"{rel(path)}: a component's part of the Jupyter configuration is named {u}.py")
+            for n, line in enumerate(path.read_text().splitlines(), 1):
+                if re.match(r"\s*c\.ServerProxy\.servers\s*=[^=]", line):
+                    fail("S8", f"{rel(path)}:{n}: assigns c.ServerProxy.servers, dropping other components' "
+                               f"entries; use c.ServerProxy.servers.update(...)")
+        elif path.name == "jupyter_server_config.py" and inside != JUPYTER_LOADER:
+            fail("S8", f"{rel(path)}: a Jupyter config file of its own; move it to "
+                       f"rootfs/{JUPYTER_PARTS}/{u}.py")
 
     # S5: every bake variable is one line, and tracked by Renovate unless
     # listed in NOT_RENOVATED.
@@ -181,8 +300,16 @@ def static():
         if not re.fullmatch(r'variable "\w+" \{ default = "[^"]*" \}', line):
             fail("S5", f"docker-bake.hcl:{i+1}: {name} must be one line: variable \"{name}\" {{ default = \"...\" }}")
         renovated = i > 0 and lines[i - 1].startswith("# renovate: ")
-        if not renovated and name not in NOT_RENOVATED and not name.endswith("_SHA256"):
+        checksum = re.fullmatch(r"(\w+_SHA256)(?:_([A-Z0-9]+))?", name)
+        if not renovated and name not in NOT_RENOVATED and not checksum:
             fail("S5", f"docker-bake.hcl:{i+1}: {name} has no `# renovate:` comment above it")
+        # A checksum that differs per architecture has a variable for each one.
+        if checksum and checksum.group(2):
+            for arch in arches:
+                if f'variable "{checksum.group(1)}_{arch.upper()}" ' not in BAKE.read_text():
+                    fail("S5", f"docker-bake.hcl:{i+1}: {name} has no {checksum.group(1)}_{arch.upper()} beside it")
+            if checksum.group(2).lower() not in arches:
+                fail("S5", f"docker-bake.hcl:{i+1}: {name} is for an architecture components/target-arch does not list")
 
 
 def component_tar(target):
@@ -213,8 +340,7 @@ def component_tar(target):
 
 
 def layers():
-    bake = bake_print()
-    assembled = sorted(set(bake["target"]["scidesktop"]["contexts"]) - {"os"})
+    assembled = copied_components(bake_print()["target"])
     os_entries, _ = component_tar(OS_COMPONENT)
     print(f"  {OS_COMPONENT}: {len(os_entries)} entries")
     seen = {}  # path -> component, for non-directories
@@ -255,12 +381,43 @@ def layers():
                 fail("L5", f"{u}: {path} is root-owned and group/other writable ({oct(mode)})")
 
 
+def image(name, ref):
+    """I1: a built image holds the components its bake target names, and no
+    file of any other component. This is what keeps optional components out
+    of the base."""
+    expected = image_components(bake_print()["target"], name)
+    others = sorted(set(component_names()) - {OS_COMPONENT} - expected)
+    # Signs of a component: its manifest entry, its prefix, and each
+    # integration file it ships in rootfs/.
+    signs = {}
+    for u in others:
+        signs[f"{MANIFESTS}/{u}.json"] = u
+        signs[f"/opt/{u}"] = u
+        for path in (COMPONENTS / u / "rootfs").rglob("*"):
+            if path.is_symlink() or path.is_file():
+                signs["/" + path.relative_to(COMPONENTS / u / "rootfs").as_posix()] = u
+    script = f'ls {MANIFESTS}; echo ---; for p in "$@"; do if [ -e "$p" ] || [ -L "$p" ]; then echo "$p"; fi; done'
+    run = subprocess.run(["docker", "run", "--rm", "--entrypoint", "bash", ref, "-c", script, "_", *signs],
+                         capture_output=True, text=True)
+    if run.returncode:
+        sys.exit(f"docker run {ref} failed:\n{run.stderr}")
+    manifests, _, found = run.stdout.partition("---\n")
+    held = {m.removesuffix(".json") for m in manifests.split()}
+    for u in sorted(expected - held):
+        fail("I1", f"{ref}: no manifest entry for {u}, which the {name} bake target copies")
+    for path in found.split():
+        fail("I1", f"{ref}: has {path} of component {signs[path]}, which the {name} bake target does not copy")
+    print(f"  {ref}: {', '.join(sorted(expected))}; nothing of {', '.join(others) or 'no other component'}")
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     if mode == "static":
         static()
     elif mode == "layers":
         layers()
+    elif mode == "image" and len(sys.argv) in (3, 4) and sys.argv[2] in image_names():
+        image(sys.argv[2], sys.argv[-1])
     else:
         sys.exit(__doc__)
     for p in problems:

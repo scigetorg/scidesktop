@@ -1,0 +1,31 @@
+#!/bin/bash
+# The CPU architectures scidesktop builds for, and the name each upstream gives
+# them. buildx sets TARGETARCH; nothing else in a build asks what the machine
+# is (docs/components.md).
+#
+#   target-arch list       every supported TARGETARCH
+#   target-arch <naming>   this build's architecture in that naming:
+#                            conda   conda-forge subdir and micromamba release
+#                            uname   kernel machine name, as most release files use
+#                            deb     Debian and Ubuntu packages
+#                            go      GOARCH
+#                            node    Node.js process.arch, as npm packages use
+set -euo pipefail
+supported="amd64 arm64"
+naming="${1:?usage: target-arch list | conda | uname | deb | go | node}"
+if [ "${naming}" = list ]; then
+    echo "${supported}"
+    exit 0
+fi
+case "${TARGETARCH:?target-arch: TARGETARCH is not set; build with docker buildx bake}" in
+    amd64) conda=linux-64 uname=x86_64 node=x64 ;;
+    arm64) conda=linux-aarch64 uname=aarch64 node=arm64 ;;
+    *) echo "target-arch: scidesktop has no build for ${TARGETARCH} (supported: ${supported})" >&2; exit 1 ;;
+esac
+case "${naming}" in
+    conda) echo "${conda}" ;;
+    uname) echo "${uname}" ;;
+    node) echo "${node}" ;;
+    deb | go) echo "${TARGETARCH}" ;;
+    *) echo "target-arch: unknown naming ${naming}" >&2; exit 1 ;;
+esac

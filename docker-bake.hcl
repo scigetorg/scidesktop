@@ -19,7 +19,8 @@
 # Renovate updates every variable carrying a "# renovate:" comment. Keep each
 # variable on one line: the comment, then `variable "NAME" { default = "..." }`.
 # Checksums are not updated by Renovate; a version bump fails the build until
-# its checksum is updated too.
+# its checksum is updated too. A file that differs per architecture has one
+# checksum variable per architecture: NAME_SHA256_AMD64, NAME_SHA256_ARM64.
 
 # renovate: datasource=docker depName=ubuntu
 variable "UBUNTU" { default = "26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96" }
@@ -31,7 +32,8 @@ variable "CVMFS_CONFIG_VERSION" { default = "1.1-0" }
 
 # renovate: datasource=github-releases depName=mamba-org/micromamba-releases
 variable "MICROMAMBA_VERSION" { default = "2.10.0-0" }
-variable "MICROMAMBA_SHA256" { default = "701f39c06f8e6a670a0e186c8479b9e5c0502a2f0cda6cef65d83bdd2875e8bd" }
+variable "MICROMAMBA_SHA256_AMD64" { default = "701f39c06f8e6a670a0e186c8479b9e5c0502a2f0cda6cef65d83bdd2875e8bd" }
+variable "MICROMAMBA_SHA256_ARM64" { default = "3bb56786e21b9b24024f599fe9185b4a59dc3f9f59937a42311ee583adbbb23c" }
 
 # renovate: datasource=github-releases depName=apptainer/apptainer extractVersion=^v(?<version>.*)$
 variable "APPTAINER_VERSION" { default = "1.5.5" }
@@ -49,6 +51,34 @@ variable "LMOD_SHA256" { default = "05292b7a1d9285a869129726f1429f86393fe274bf12
 # renovate: datasource=docker depName=sciget-go packageName=golang
 variable "SCIGET_GO_VERSION" { default = "1.27.0-bookworm" }
 
+# The command-line coding agents (components/coding-agents). Each is its
+# upstream's release binary; docs/coding-agents.md has their licences.
+# renovate: datasource=github-releases depName=openai/codex extractVersion=^rust-v(?<version>.*)$
+variable "CODEX_VERSION" { default = "0.167.0" }
+variable "CODEX_SHA256_AMD64" { default = "9d64836106d5b374e90ee4454c7ebcde7ca7106558bd7e41a34b9f26ebda251a" }
+variable "CODEX_SHA256_ARM64" { default = "843489acb4d4b1079745c36b03c5963b887b83155af208fd53584e33ee8eb281" }
+# renovate: datasource=npm depName=claude-code packageName=@anthropic-ai/claude-code
+variable "CLAUDE_CODE_VERSION" { default = "2.1.316" }
+variable "CLAUDE_CODE_SHA256_AMD64" { default = "fd13c70000fec3f2116dfbcbb6121210b4a29328bf0e46210a59dd594a67d824" }
+variable "CLAUDE_CODE_SHA256_ARM64" { default = "55cdb8e162d190432696ea54010e0fca2e18d06fa7a7127fd563b9ffd4f22624" }
+# renovate: datasource=npm depName=opencode packageName=@opencode/cli
+variable "OPENCODE_VERSION" { default = "2.2.5" }
+variable "OPENCODE_SHA256_AMD64" { default = "92690eee07a680d3cb760ca02ba43878de9eab1b4e5d5dfae8795518c53628f4" }
+variable "OPENCODE_SHA256_ARM64" { default = "f8c5a82075fede9b5b044ed6c8a6d13ad807a7e62caea1cd0a878adef49eb053" }
+
+# T3 Code (components/t3-code). Its base-path adapter is written against the
+# web client of this release; the component's test says when a bump moves it.
+# renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.*)$
+variable "T3_CODE_VERSION" { default = "0.1.5" }
+variable "T3_CODE_SHA256_AMD64" { default = "21d50dcc9c634221b11b58d6a94350d2c6ee36905737b054b11fa4eba295a98b" }
+variable "T3_CODE_SHA256_ARM64" { default = "389362e2a349ea62b38d9bc708f4fca2381936cccb2d326b5fc5d074b072aef1" }
+
+# code-server (components/code-server): the upstream release, unmodified.
+# renovate: datasource=github-releases depName=coder/code-server extractVersion=^v(?<version>.*)$
+variable "CODE_SERVER_VERSION" { default = "4.145.2" }
+variable "CODE_SERVER_SHA256_AMD64" { default = "2f6db6c3e8b733dd6b3aeee83532e148b2bae2e392353ba85452d03572348962" }
+variable "CODE_SERVER_SHA256_ARM64" { default = "e867a34416e2da4a83496b09580001893e7a4e5bb58a0624c4fcd22819e7d53d" }
+
 # The notebook user, set in the OS layer and used by components that own files.
 variable "NB_USER" { default = "jovyan" }
 variable "NB_UID" { default = "1000" }
@@ -56,17 +86,29 @@ variable "NB_GID" { default = "100" }
 
 # --- Build settings ---------------------------------------------------------
 
+# The platform to build, for example linux/arm64. Empty builds for the machine
+# the builder runs on, which is what loads into the local image store. One
+# platform per run: CI builds each on its own runner and joins them when it
+# publishes.
+variable "PLATFORM" { default = "" }
 variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
+variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
+variable "NEURODESKTOP_IMAGE" { default = "neurodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
 # (Renovate tracks its main branch). For local sciget development, build your
 # working copy instead: SCIGET_SRC=../sciget docker buildx bake --allow=fs.read=..
 variable "SCIGET_COMMIT" { default = "56c2f310188ad60f58ded74f811bd3e889c19882" }
 variable "SCIGET_SRC" { default = "https://github.com/scigetorg/sciget.git#${SCIGET_COMMIT}" }
+# Intersect Australia's AI Ready workshop (Apache-2.0): its notebooks, DAGs and
+# requirements are taken from this commit (Renovate tracks its main branch).
+# After changing it, run components/ai-ready/lock.
+variable "AI_READY_COMMIT" { default = "26250b89d323c9981fc1a88c9fe2c0f69993b58d" }
+variable "AI_READY_SRC" { default = "https://github.com/IntersectAustralia/ai-ready-containers.git#${AI_READY_COMMIT}" }
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop"]
+  targets = ["scidesktop", "microdesktop", "aidesktop", "neurodesktop"]
 }
 
 group "test" {
@@ -79,11 +121,18 @@ group "test" {
     "lmod-test",
     "sciget-test",
     "micromamba-test",
+    "ai-ready-test",
+    "coding-agents-test",
+    "t3-code-test",
+    "code-server-test",
+    "datalad-test",
+    "neurodesk-cvmfs-test",
+    "neurodesk-agents-test",
   ]
 }
 
 target "_common" {
-  platforms = ["linux/amd64"]
+  platforms = PLATFORM == "" ? [] : [PLATFORM]
 }
 
 # --- OS layer ---------------------------------------------------------------
@@ -93,7 +142,10 @@ target "os-ubuntu" {
   inherits = ["_common"]
   context  = "components/os-ubuntu"
   target   = "os"
-  contexts = { tests = "test" }
+  contexts = {
+    tests      = "test"
+    components = "components"
+  }
   args = {
     UBUNTU_IMAGE         = "docker.io/library/ubuntu:${UBUNTU}"
     APT_CACHE_ID         = "ubuntu-${regex("^[^@]+", UBUNTU)}"
@@ -142,12 +194,18 @@ target "_component" {
 # A build tool for the conda-based components; not copied into the image.
 target "micromamba" {
   inherits = ["_common"]
-  contexts = { os = "target:os-ubuntu" }
-  context  = "components/micromamba"
-  target   = "component"
+  contexts = {
+    os         = "target:os-ubuntu"
+    components = "components"
+  }
+  context = "components/micromamba"
+  target  = "component"
   args = {
-    MICROMAMBA_VERSION = MICROMAMBA_VERSION
-    MICROMAMBA_SHA256  = MICROMAMBA_SHA256
+    UBUNTU_IMAGE            = "docker.io/library/ubuntu:${UBUNTU}"
+    APT_CACHE_ID            = "ubuntu-${regex("^[^@]+", UBUNTU)}"
+    MICROMAMBA_VERSION      = MICROMAMBA_VERSION
+    MICROMAMBA_SHA256_AMD64 = MICROMAMBA_SHA256_AMD64
+    MICROMAMBA_SHA256_ARM64 = MICROMAMBA_SHA256_ARM64
   }
 }
 
@@ -249,6 +307,132 @@ target "micromamba-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: not in the base. The aidesktop image copies it.
+target "ai-ready" {
+  inherits = ["_component"]
+  context  = "components/ai-ready"
+  target   = "component"
+  contexts = { ai-ready-src = AI_READY_SRC }
+  args = {
+    AI_READY_COMMIT = AI_READY_COMMIT
+  }
+}
+
+target "ai-ready-test" {
+  inherits = ["ai-ready"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: Codex, Claude Code and OpenCode for terminals. Every domain image
+# copies it; the base does not.
+target "coding-agents" {
+  inherits = ["_component"]
+  context  = "components/coding-agents"
+  target   = "component"
+  args = {
+    CODEX_VERSION            = CODEX_VERSION
+    CODEX_SHA256_AMD64       = CODEX_SHA256_AMD64
+    CODEX_SHA256_ARM64       = CODEX_SHA256_ARM64
+    CLAUDE_CODE_VERSION      = CLAUDE_CODE_VERSION
+    CLAUDE_CODE_SHA256_AMD64 = CLAUDE_CODE_SHA256_AMD64
+    CLAUDE_CODE_SHA256_ARM64 = CLAUDE_CODE_SHA256_ARM64
+    OPENCODE_VERSION         = OPENCODE_VERSION
+    OPENCODE_SHA256_AMD64    = OPENCODE_SHA256_AMD64
+    OPENCODE_SHA256_ARM64    = OPENCODE_SHA256_ARM64
+  }
+}
+
+target "coding-agents-test" {
+  inherits = ["coding-agents"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: T3 Code behind the notebook server, as the scigent.ai tile. Its
+# test runs it through a notebook server, so it borrows the Jupyter
+# environment.
+target "t3-code" {
+  inherits = ["_component"]
+  context  = "components/t3-code"
+  target   = "component"
+  contexts = { jupyter-env = "target:jupyter-env" }
+  args = {
+    T3_CODE_VERSION      = T3_CODE_VERSION
+    T3_CODE_SHA256_AMD64 = T3_CODE_SHA256_AMD64
+    T3_CODE_SHA256_ARM64 = T3_CODE_SHA256_ARM64
+  }
+}
+
+target "t3-code-test" {
+  inherits = ["t3-code"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: code-server (VS Code in the browser) as the VS Code tile.
+target "code-server" {
+  inherits = ["_component"]
+  context  = "components/code-server"
+  target   = "component"
+  args = {
+    CODE_SERVER_VERSION      = CODE_SERVER_VERSION
+    CODE_SERVER_SHA256_AMD64 = CODE_SERVER_SHA256_AMD64
+    CODE_SERVER_SHA256_ARM64 = CODE_SERVER_SHA256_ARM64
+  }
+}
+
+target "code-server-test" {
+  inherits = ["code-server"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: DataLad and git-annex for terminals, in their own interpreter.
+target "datalad" {
+  inherits = ["_component"]
+  context  = "components/datalad"
+  target   = "component"
+}
+
+target "datalad-test" {
+  inherits = ["datalad"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: the Neurodesk CVMFS repository's configuration and public key.
+target "neurodesk-cvmfs" {
+  inherits = ["_component"]
+  context  = "components/neurodesk-cvmfs"
+  target   = "component"
+}
+
+target "neurodesk-cvmfs-test" {
+  inherits = ["neurodesk-cvmfs"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: Neurodesk's defaults for the coding agents, through the
+# coding-agents component's extension points. Its test gives a new home its
+# defaults and runs OpenCode, so it borrows those two components.
+target "neurodesk-agents" {
+  inherits = ["_component"]
+  context  = "components/neurodesk-agents"
+  target   = "component"
+  contexts = {
+    coding-agents = "target:coding-agents"
+    startup       = "target:startup"
+  }
+}
+
+target "neurodesk-agents-test" {
+  inherits = ["neurodesk-agents"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # --- Images -----------------------------------------------------------------
 
 # The base: the components assembled on the OS layer.
@@ -270,10 +454,46 @@ target "scidesktop" {
 
 # Domain images build FROM the base by name. The named context hands them the
 # scidesktop target built here, so no registry is involved (docs/images.md).
+# They may also copy components the base leaves out (docs/images.md).
 target "microdesktop" {
   inherits = ["_common"]
   context  = "images/microdesktop"
-  contexts = { scidesktop-base = "target:scidesktop" }
-  tags     = [MICRODESKTOP_IMAGE]
-  output   = ["type=docker"]
+  contexts = {
+    scidesktop-base = "target:scidesktop"
+    coding-agents   = "target:coding-agents"
+    t3-code         = "target:t3-code"
+  }
+  tags   = [MICRODESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
+target "aidesktop" {
+  inherits = ["_common"]
+  context  = "images/aidesktop"
+  contexts = {
+    scidesktop-base = "target:scidesktop"
+    ai-ready        = "target:ai-ready"
+    coding-agents   = "target:coding-agents"
+    t3-code         = "target:t3-code"
+  }
+  tags   = [AIDESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
+# scidesktop for neuroimaging: what neurodesk/neurodesktop gives its users,
+# from components (docs/neurodesktop.md).
+target "neurodesktop" {
+  inherits = ["_common"]
+  context  = "images/neurodesktop"
+  contexts = {
+    scidesktop-base  = "target:scidesktop"
+    neurodesk-cvmfs  = "target:neurodesk-cvmfs"
+    datalad          = "target:datalad"
+    code-server      = "target:code-server"
+    coding-agents    = "target:coding-agents"
+    t3-code          = "target:t3-code"
+    neurodesk-agents = "target:neurodesk-agents"
+  }
+  tags   = [NEURODESKTOP_IMAGE]
+  output = ["type=docker"]
 }
