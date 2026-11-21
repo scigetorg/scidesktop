@@ -2,7 +2,7 @@
 
 `neurodesktop` gives users what
 [neurodesk/neurodesktop](https://github.com/neurodesk/neurodesktop) gives
-them, built from scidesktop components. It is scidesktop plus twelve optional
+them, built from scidesktop components. It is scidesktop plus thirteen optional
 components (see [images.md](images.md#optional-components)). Each one is
 reusable: another image copies it with one line.
 
@@ -221,7 +221,7 @@ earlier review of what belongs in the base is in
 | Slurm (a local single-node cluster), started as root with munge, MariaDB and `slurmdbd` | `slurm`: the same queue run as the notebook user, with none of those ([slurm.md](slurm.md)); added after the first port |
 | git, ssh client, nano, tmux, `jupyterlab-git` | the OS layer and `jupyter-env` |
 | Codex, Claude Code, OpenCode | `coding-agents` |
-| Jupyter AI, the chat panel in JupyterLab | `jupyter-env`, in every image, with the OpenCode persona ([jupyter-ai.md](jupyter-ai.md)); added after the first port |
+| Jupyter AI, the chat panel in JupyterLab, with its Codex, Claude and OpenCode personas | `jupyter-env`, in every image, and `acp-adapters` for the Codex and Claude personas ([jupyter-ai.md](jupyter-ai.md)); added after the first port |
 | T3 Code tile | `t3-code` |
 
 **(b) Generic, new components in this change**
@@ -261,7 +261,7 @@ Each of these is a follow-up of its own. None blocks using the image.
 | neurodesktop | Why it waits |
 | --- | --- |
 | A neuroimaging Python kernel (`nipype`, `nibabel`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`) | A kernel component with a large lock, like `ai-ready`'s. It needs its own review |
-| Notebook Intelligence; the Claude Code and Codex personas in Jupyter AI | Notebook Intelligence is a second chat panel with patches of its own. The two personas need Node.js adapters ([jupyter-ai.md](jupyter-ai.md#what-is-left-out)) |
+| Notebook Intelligence | A second chat panel with patches of its own |
 | `jupyterlab-slurm`, the Slurm panel in JupyterLab | A JupyterLab extension neurodesktop builds from source and patches |
 | SSH into the session (`openssh-server`, `jupyter-sshd-proxy`) | A system service and a server extension |
 | `neurodesk uv`, `jobs`, `update`, `test`, `t3`, `agent preflight`, `astra`, `lightcone materialize` | Each needs a part of neurodesktop that is not here: uv environments, remote jobs, the application menu, the installed test suite, Tailscale, ASTRA |

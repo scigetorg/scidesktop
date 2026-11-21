@@ -66,6 +66,14 @@ variable "OPENCODE_VERSION" { default = "2.2.5" }
 variable "OPENCODE_SHA256_AMD64" { default = "92690eee07a680d3cb760ca02ba43878de9eab1b4e5d5dfae8795518c53628f4" }
 variable "OPENCODE_SHA256_ARM64" { default = "f8c5a82075fede9b5b044ed6c8a6d13ad807a7e62caea1cd0a878adef49eb053" }
 
+# Node.js for the Agent Client Protocol adapters (components/acp-adapters):
+# the release from nodejs.org. The adapters' own versions are in that
+# component's package.json and package-lock.json.
+# renovate: datasource=node-version depName=node
+variable "ACP_NODE_VERSION" { default = "24.22.3" }
+variable "ACP_NODE_SHA256_AMD64" { default = "4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb" }
+variable "ACP_NODE_SHA256_ARM64" { default = "6e51a2ada00f0011cc266f65d98922b403d7ad88f809ca2aa615a5fe1ce6e86c" }
+
 # T3 Code (components/t3-code). Its base-path adapter is written against the
 # web client of this release; the component's test says when a bump moves it.
 # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.*)$
@@ -182,6 +190,7 @@ group "test" {
     "micromamba-test",
     "ai-ready-test",
     "coding-agents-test",
+    "acp-adapters-test",
     "t3-code-test",
     "t3-connect-test",
     "code-server-test",
@@ -497,6 +506,30 @@ target "coding-agents-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: the adapters that give Jupyter AI's chat a Codex and a Claude
+# Code persona, for images with the coding agents. Their test starts them
+# with those agents and the Jupyter environment.
+target "acp-adapters" {
+  inherits = ["_component"]
+  context  = "components/acp-adapters"
+  target   = "component"
+  contexts = {
+    coding-agents = "target:coding-agents"
+    jupyter-env   = "target:jupyter-env"
+  }
+  args = {
+    ACP_NODE_VERSION      = ACP_NODE_VERSION
+    ACP_NODE_SHA256_AMD64 = ACP_NODE_SHA256_AMD64
+    ACP_NODE_SHA256_ARM64 = ACP_NODE_SHA256_ARM64
+  }
+}
+
+target "acp-adapters-test" {
+  inherits = ["acp-adapters"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # Optional: T3 Code behind the notebook server, as the scigent.ai tile. Its
 # test runs it through a notebook server, so it borrows the Jupyter
 # environment.
@@ -696,6 +729,7 @@ target "microdesktop" {
     jupyterlab-niivue     = "target:jupyterlab-niivue"
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
     coding-agents         = "target:coding-agents"
+    acp-adapters          = "target:acp-adapters"
     t3-code               = "target:t3-code"
     t3-connect            = "target:t3-connect"
   }
@@ -711,6 +745,7 @@ target "aidesktop" {
     sciget-neuroimaging = "target:sciget-neuroimaging"
     ai-ready            = "target:ai-ready"
     coding-agents       = "target:coding-agents"
+    acp-adapters        = "target:acp-adapters"
     t3-code             = "target:t3-code"
     t3-connect          = "target:t3-connect"
   }
@@ -732,6 +767,7 @@ target "neurodesktop" {
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
     code-server           = "target:code-server"
     coding-agents         = "target:coding-agents"
+    acp-adapters          = "target:acp-adapters"
     t3-code               = "target:t3-code"
     t3-connect            = "target:t3-connect"
     neurodesk-agents      = "target:neurodesk-agents"

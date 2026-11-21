@@ -1,0 +1,10 @@
+{
+  "name": "scidesktop-acp-adapters",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Agent Client Protocol adapters Jupyter AI uses for Codex and Claude Code. Run components/acp-adapters/lock after changing a version.",
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.99.1",
+    "@agentclientprotocol/codex-acp": "2.6.0"
+  }
+}

@@ -26,6 +26,7 @@ images/
 | `sciget-microscopy` ([tool catalogs](#tool-catalogs)) | no | yes | no | no |
 | `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)) | no | yes | no | yes |
 | `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | no | yes | yes | yes |
+| `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | no | yes | yes | yes |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no |
 | `code-server`, `datalad` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
 | `neurodesk-cvmfs`, `neurodesk-agents`, `neurodesk-vscode`, `neurodesk-cli` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |

@@ -166,11 +166,10 @@ integration were not:
 - **The launcher extension.** The tile is a Jupyter Server Proxy launcher
   entry. Links in T3's chat do not open files in JupyterLab, and there is no
   retry dialog: if T3 exits, the next request starts it again.
-- **The Jupyter AI agent adapters** (`codex-acp`, `claude-agent-acp`).
-  Jupyter AI is in every image and OpenCode appears in its chat without an
-  adapter. The two adapters need Node.js; see
-  [jupyter-ai.md](jupyter-ai.md#what-is-left-out).
-- **Node.js.** Every binary here is self-contained, so no runtime is added.
+- **Node.js on `PATH`.** The agents are self-contained binaries. The two
+  Jupyter AI adapters, `codex-acp` and `claude-agent-acp`, are Node.js
+  programs and come with a Node.js of their own in the `acp-adapters`
+  component ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)).
 
 ## Updating
 

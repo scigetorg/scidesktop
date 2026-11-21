@@ -13,11 +13,16 @@ persona to `@`-mention:
 | --- | --- |
 | `scidesktop` | none: the chat opens and says no persona is available |
 | images with the `coding-agents` component | **OpenCode** |
+| images that also have the `acp-adapters` component: `microdesktop`, `aidesktop`, `neurodesktop` | **OpenCode**, **Codex** and **Claude** |
 
-The agent a persona runs is the image's own (`/opt/coding-agents/bin/opencode
-acp`), started for the chat as the notebook user. It uses that agent's
-sign-in and configuration: what `opencode` does in a terminal, it does in the
-chat. Sign in to it in a terminal first ([coding-agents.md](coding-agents.md)).
+The agent a persona runs is the image's own, started for the chat as the
+notebook user. It uses that agent's sign-in and configuration: what `codex`,
+`claude` or `opencode` does in a terminal, it does in the chat. Sign in to it
+in a terminal first ([coding-agents.md](coding-agents.md)).
+
+OpenCode speaks the protocol itself (`opencode acp`). Codex and Claude Code
+need an adapter each, which the `acp-adapters` component brings
+([below](#the-adapters-for-codex-and-claude-code)).
 
 ## Nothing preset
 
@@ -51,13 +56,33 @@ from neurodesktop (`components/jupyter-env/patches/acp_client_workarounds.py`):
 Each is tied to the exact upstream text, and the build fails when that text
 changes, so an update cannot keep or misapply a workaround silently.
 
+## The adapters for Codex and Claude Code
+
+`acp-adapters` is an optional component for images that have the coding
+agents. It holds `codex-acp` and `claude-agent-acp`, the programs Jupyter AI
+starts for its Codex and Claude personas, at `/opt/acp-adapters`.
+
+- **They are Node.js programs.** The component brings the Node.js release
+  from nodejs.org, checked against its checksum, at
+  `/opt/acp-adapters/node`. Only its interpreter is kept, nothing else uses
+  it, and no `node` or `npm` command is added to `PATH`.
+- **They are installed from a lock.** `npm ci` installs exactly
+  `components/acp-adapters/package-lock.json`, checks each package's
+  integrity hash and runs no install script.
+- **They run the image's agents.** Each adapter's package would bring its
+  own copy of its agent, about 250 MB each. The lock's optional packages are
+  left out, and the commands point the adapters at
+  `/opt/coding-agents/bin/codex` and `/opt/coding-agents/bin/claude`
+  (`CODEX_PATH` and `CLAUDE_CODE_EXECUTABLE` name others). The build fails
+  if a copy is installed after all.
+
+To update an adapter, change its version in
+`components/acp-adapters/package.json` and run `components/acp-adapters/lock`.
+An adapter is written against a range of its agent's versions; the
+component's test starts both against the agents in `coding-agents`.
+
 ## What is left out
 
-- **Claude Code and Codex personas.** They need an adapter each
-  (`claude-agent-acp`, `codex-acp`). Both are Node.js programs, and
-  scidesktop has no Node.js runtime; each also installs its own copy of its
-  agent. A component with a pinned Node.js and a locked `npm ci` is the way
-  to add them, in images that have the agents.
 - **Notebook Intelligence**, neurodesktop's other chat panel.
 - **Seeding `AGENTS.md` into a chat's folder**, which neurodesktop does with a
   contents hook. The agents here read their instructions from the home
@@ -71,10 +96,13 @@ changes, so an update cannot keep or misapply a workaround silently.
 `components/jupyter-env`'s test checks the extensions load, are compatible
 with this JupyterLab and carry the workarounds. `test/smoke.sh` checks on
 every image that JupyterLab's page loads the chat extensions and the
-notebook server loads theirs. Opening a chat needs a browser, and the smoke
-test says so (`NOT TESTED`).
+notebook server loads theirs. `test/acp-adapters-smoke.sh` starts each
+adapter in a session and speaks the protocol's first message to it. Opening
+a chat needs a browser, and the smoke tests say so (`NOT TESTED`).
 
 ## Licences
 
 Jupyter AI and its packages are BSD-3-Clause (Project Jupyter). The
-workarounds file is MIT, from neurodesktop.
+workarounds file is MIT, from neurodesktop. The two adapters are Apache-2.0;
+their dependencies' licences are in `/opt/acp-adapters/lib/node_modules`.
+Node.js is MIT with the notices in `/opt/acp-adapters/node/LICENSE`.

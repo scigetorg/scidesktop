@@ -32,6 +32,7 @@ COPY --link --from=jupyterlab-niivue / /
 COPY --link --from=jupyterlab-freebrowse / /
 COPY --link --from=code-server / /
 COPY --link --from=coding-agents / /
+COPY --link --from=acp-adapters / /
 COPY --link --from=t3-code / /
 COPY --link --from=t3-connect / /
 COPY --link --from=neurodesk-agents / /
