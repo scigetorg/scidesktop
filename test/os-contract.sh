@@ -12,13 +12,20 @@ check() {
     fi
 }
 has() { command -v "$1"; }
-lib() { ldconfig -p | grep -q "$1"; }
+# The list is read once and searched from memory: under pipefail,
+# `ldconfig -p | grep -q` fails when grep finds its match and exits before
+# ldconfig has written the rest of a long list.
+LIBRARIES="$(ldconfig -p)"
+lib() { grep -q "$1" <<<"${LIBRARIES}"; }
 
 echo "os-contract: $(. /etc/os-release && echo "${PRETTY_NAME}") $(uname -m)"
 
 # core
 for b in bash curl sudo tini usermod groupmod useradd locale-gen; do check "core: ${b}" has "${b}"; done
 check "core: CA bundle" test -s /etc/ssl/certs/ca-certificates.crt
+
+# batch jobs: Slurm's daemons and commands, for the session's queue
+for b in slurmctld slurmd sbatch srun squeue scancel sinfo scontrol; do check "slurm: ${b}" has "${b}"; done
 
 # locale
 check "locale: C.UTF-8" bash -c 'LC_ALL=C.UTF-8 locale 2>&1 | grep -qv "Cannot set"'

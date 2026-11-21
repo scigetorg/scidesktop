@@ -1,0 +1,5 @@
+# The workshop kernel at /opt/ai-ready/env. Its libraries (pandas,
+# scikit-learn, MLflow, ...) are upstream's docker/base/requirements.txt at
+# AI_READY_COMMIT, which ./lock fetches and compiles with this file. Only what
+# the image adds is listed here.
+ipykernel==7.4.0

@@ -1,0 +1,8 @@
+#!/bin/sh
+# The Agent Client Protocol adapter for Claude Code, which Jupyter AI starts for
+# its Claude Code persona. The adapter is installed without the copy of the agent
+# its package would bring: it runs the image's own (components/coding-agents),
+# unless CLAUDE_CODE_EXECUTABLE names another.
+: "${CLAUDE_CODE_EXECUTABLE:=/opt/coding-agents/bin/claude}"
+export CLAUDE_CODE_EXECUTABLE
+exec /opt/acp-adapters/node/bin/node /opt/acp-adapters/lib/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js "$@"

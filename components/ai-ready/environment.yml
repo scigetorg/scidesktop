@@ -1,0 +1,16 @@
+# Interpreter and PostgreSQL for the AI Ready workshop at /opt/ai-ready/env.
+# The notebook libraries and MLflow are installed into it from
+# requirements.lock; Airflow gets its own environment on the same interpreter.
+#
+# Airflow publishes its constraints per Python minor, and a PostgreSQL major
+# cannot open a data directory an earlier one created (~/.ai-ready/postgres),
+# so both stay on their line until moved on purpose.
+#
+# After changing this file or a requirements file, regenerate the locks: ./lock
+name: ai-ready
+channels:
+  - conda-forge
+dependencies:
+  - python==3.12.16
+  - postgresql==15.20
+  - pip

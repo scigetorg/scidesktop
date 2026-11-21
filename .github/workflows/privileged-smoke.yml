@@ -28,13 +28,8 @@ jobs:
 
       # Reads the caches the Image workflow writes; does not write its own.
       - name: Build image
-        env:
-          IMAGE: scidesktop:privileged-smoke
         run: |
-          args=()
-          for t in os-ubuntu micromamba startup jupyter-env selkies apptainer lmod sciget scidesktop; do
-              args+=(--set "${t}.cache-from=type=gha,scope=${t}")
-          done
+          mapfile -t args < <(.github/scripts/bake-args amd64 privileged-smoke)
           docker buildx bake "${args[@]}" scidesktop
 
       - name: Run privileged smoke test

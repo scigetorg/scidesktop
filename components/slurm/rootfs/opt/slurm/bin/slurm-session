@@ -1,0 +1,202 @@
+#!/bin/bash
+# One session's Slurm: a controller and a worker for this container alone,
+# run as the notebook user.
+#
+#   slurm-session run     write the configuration, start the daemons, stay
+#                         until SIGTERM or one of them exits, then stop them
+#   slurm-session wait    return when the queue accepts jobs (or after 60 s)
+#
+# Everything is in /run/slurm and /run/slurmctld, which the image gives to the
+# notebook user: configuration, key, state, logs and sockets. None of it
+# outlives the container, and neither would a job. Both daemons listen on
+# loopback only. No root, no setuid helper, no munge: Slurm's own
+# authentication (auth/slurm) with a key made for this container.
+#
+# SCIDESKTOP_SLURM_PARTITION           the queue's name (default: scidesktop)
+# SCIDESKTOP_SLURM_MEMORY_RESERVE_MB   memory kept back from jobs for the
+#                                      notebook server and desktop (default: 512)
+# SCIDESKTOP_SLURM_PORTS               the controller's and the worker's
+#                                      loopback ports (default: 6817,6818)
+# CPU_LIMIT, MEM_LIMIT                 the container's limits, as the startup
+#                                      component exports them from its cgroup
+set -u
+
+RUN=/run/slurm
+CONF="${RUN}/conf"
+LOG="${RUN}/log"
+PRELOAD=/opt/slurm/lib/loopback_bind.so
+STOP_SECONDS=20
+
+log() { echo "[slurm] $*"; }
+
+node_name() { hostname -s 2>/dev/null || hostname; }
+
+cpus() {
+    local n=""
+    if [[ "${CPU_LIMIT:-}" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        n="$(awk -v c="${CPU_LIMIT}" 'BEGIN { n = int(c); if (n < c) n++; print n }' 2>/dev/null)"
+    fi
+    [ "${n:-0}" -ge 1 ] 2>/dev/null || n="$(nproc)"
+    echo "${n}"
+}
+
+# Megabytes jobs may use: the container's limit, or the machine's memory,
+# less what the session itself needs.
+memory_mb() {
+    local total reserve="${SCIDESKTOP_SLURM_MEMORY_RESERVE_MB:-512}"
+    if [[ "${MEM_LIMIT:-}" =~ ^[0-9]+$ ]] && [ "${MEM_LIMIT}" -gt 0 ]; then
+        total=$(( MEM_LIMIT / 1048576 ))
+    else
+        total="$(awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo)"
+    fi
+    [[ "${reserve}" =~ ^[0-9]+$ ]] || reserve=512
+    if [ "$(( total - reserve ))" -ge 256 ]; then
+        echo $(( total - reserve ))
+    else
+        echo "${total}"
+    fi
+}
+
+write_configuration() {
+    local node user cpus memory partition="${SCIDESKTOP_SLURM_PARTITION:-scidesktop}"
+    local ports="${SCIDESKTOP_SLURM_PORTS:-6817,6818}" ctl_port node_port
+    [[ "${partition}" =~ ^[A-Za-z0-9._-]+$ ]] || partition=scidesktop
+    if [[ "${ports}" =~ ^[0-9]+,[0-9]+$ ]]; then
+        ctl_port="${ports%,*}"
+        node_port="${ports#*,}"
+        if [ "${ctl_port}" -lt 1 ] || [ "${ctl_port}" -gt 65535 ] \
+            || [ "${node_port}" -lt 1 ] || [ "${node_port}" -gt 65535 ] \
+            || [ "${ctl_port}" -eq "${node_port}" ]; then
+            ports=6817,6818
+        fi
+    else
+        ports=6817,6818
+    fi
+    node="$(node_name)"
+    user="$(id -un)"
+    cpus="$(cpus)"
+    memory="$(memory_mb)"
+    # A restarted container starts a new queue: jobs did not survive it.
+    rm -rf "${RUN:?}/state" "${RUN:?}/spool" "${CONF}"
+    mkdir -p "${CONF}" "${RUN}/state" "${RUN}/spool" "${LOG}"
+    chmod 0755 "${CONF}"
+    ( umask 077; head -c 64 /dev/urandom > "${CONF}/slurm.key" )
+    # Without cgroups Slurm does not confine a job to its share; the node's
+    # size below only decides how many jobs run at once.
+    echo "CgroupPlugin=disabled" > "${CONF}/cgroup.conf"
+    cat > "${CONF}/slurm.conf" <<CONF
+# Written by /opt/slurm/bin/slurm-session at each start. Do not edit.
+ClusterName=scidesktop
+SlurmctldHost=${node}(127.0.0.1)
+SlurmUser=${user}
+SlurmdUser=${user}
+AuthType=auth/slurm
+CredType=cred/slurm
+SlurmctldPort=${ports%,*}
+SlurmdPort=${ports#*,}
+StateSaveLocation=${RUN}/state
+SlurmdSpoolDir=${RUN}/spool
+SlurmctldPidFile=${RUN}/slurmctld.pid
+SlurmdPidFile=${RUN}/slurmd.pid
+SlurmctldLogFile=${LOG}/slurmctld.log
+SlurmdLogFile=${LOG}/slurmd.log
+ProctrackType=proctrack/linuxproc
+TaskPlugin=task/none
+JobAcctGatherType=jobacct_gather/none
+AccountingStorageType=accounting_storage/none
+SelectType=select/cons_tres
+SelectTypeParameters=CR_Core_Memory
+SchedulerType=sched/backfill
+SwitchType=switch/none
+MpiDefault=none
+SlurmdParameters=config_overrides
+ReturnToService=2
+SlurmctldTimeout=120
+SlurmdTimeout=300
+InactiveLimit=0
+MinJobAge=300
+KillWait=30
+Waittime=0
+DefMemPerCPU=$(( memory / cpus > 0 ? memory / cpus : 1 ))
+NodeName=${node} NodeAddr=127.0.0.1 CPUs=${cpus} RealMemory=${memory} State=UNKNOWN
+PartitionName=${partition} Nodes=${node} Default=YES MaxTime=INFINITE State=UP
+CONF
+    log "queue ${partition}: ${cpus} CPUs, ${memory} MB on ${node}"
+}
+
+# stop <pid file>: SIGTERM, then SIGKILL after STOP_SECONDS.
+stop() {
+    local pid expected comm
+    pid="$(cat "$1" 2>/dev/null)" || return 0
+    expected="$(basename "$1" .pid)"
+    if [ -n "${pid}" ] && [ -r "/proc/${pid}/comm" ]; then
+        comm="$(cat "/proc/${pid}/comm" 2>/dev/null || true)"
+        [ "${comm}" = "${expected}" ] || return 0
+    fi
+    [ -n "${pid}" ] && kill -TERM "${pid}" 2>/dev/null || return 0
+    for _ in $(seq $(( STOP_SECONDS * 10 ))); do
+        kill -0 "${pid}" 2>/dev/null || return 0
+        sleep 0.1
+    done
+    log "${expected} did not stop in ${STOP_SECONDS} s; killing it"
+    kill -KILL "${pid}" 2>/dev/null
+}
+
+alive() {
+    local pid
+    pid="$(cat "$1" 2>/dev/null)" && [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null
+}
+
+run() {
+    if [ "$(id -u)" -eq 0 ]; then
+        log "runs as the notebook user, not as root"; return 1
+    fi
+    if ! { [ -w "${RUN}" ] && [ -w /run/slurmctld ]; }; then
+        log "not started: $(id -un) cannot write ${RUN} and /run/slurmctld (another user ID, or /run is mounted over)"
+        return 1
+    fi
+    command -v slurmctld >/dev/null && command -v slurmd >/dev/null \
+        || { log "not started: slurmctld and slurmd are not installed"; return 1; }
+    stop "${RUN}/slurmd.pid"; stop "${RUN}/slurmctld.pid"
+    rm -f "${RUN}/slurmd.pid" "${RUN}/slurmctld.pid"
+    write_configuration
+
+    stopping=""
+    trap 'stopping=yes' TERM INT
+    # The daemons put themselves in the background and write their PID files.
+    LD_PRELOAD="${PRELOAD}" slurmctld -f "${CONF}/slurm.conf" \
+        || { log "FAILED: slurmctld did not start; see ${LOG}/slurmctld.log"; return 1; }
+    LD_PRELOAD="${PRELOAD}" slurmd -f "${CONF}/slurm.conf" -N "$(node_name)" \
+        || { log "FAILED: slurmd did not start; see ${LOG}/slurmd.log"; stop "${RUN}/slurmctld.pid"; return 1; }
+    if wait_ready; then
+        log "started; logs in ${LOG}"
+    elif [ -z "${stopping}" ]; then
+        log "the queue is not ready after 60 s; see ${LOG}"
+    fi
+    while [ -z "${stopping}" ] && alive "${RUN}/slurmctld.pid" && alive "${RUN}/slurmd.pid"; do
+        sleep 1 &
+        wait $!
+    done
+    [ -n "${stopping}" ] || log "a daemon exited; stopping the other. See ${LOG}"
+    trap '' TERM INT
+    # The worker first: it ends running jobs and tells the controller.
+    stop "${RUN}/slurmd.pid"
+    stop "${RUN}/slurmctld.pid"
+    log "stopped"
+}
+
+wait_ready() {
+    for _ in $(seq 60); do
+        [ -z "${stopping:-}" ] || return 1
+        if sinfo -h -o '%T' 2>/dev/null | grep -qx 'idle'; then return 0; fi
+        sleep 1 &
+        wait $!
+    done
+    return 1
+}
+
+case "${1:-}" in
+    run) run ;;
+    wait) wait_ready ;;
+    *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

@@ -5,6 +5,16 @@ must provide, and how to check and triage a deployment. Deploy an image digest
 or an immutable short-SHA tag from `ghcr.io/scigetorg/scidesktop`, not
 `latest`.
 
+Every tag is one image for amd64 and arm64; each node pulls its own
+architecture.
+
+| Tag | Moves | Use |
+| --- | --- | --- |
+| `<short sha>` (seven characters of the commit on `main`) | never | deployments |
+| `<YYYY-MM-DD>` (UTC) | to the last build of that day | finding a build by date |
+| `latest` | with every build of `main` | trying it out |
+| `run-<number>-<arch>` | never | none: single-architecture parts of the tags above |
+
 ## Platform requirements
 
 scidesktop exists to launch containerised tools with Apptainer, inside the
@@ -83,17 +93,20 @@ when the user first opens **Desktop** from the launcher.
 | `APPTAINER_HOME` | the notebook user's home | Set at start so Apptainer does not look the home up for the host uid, which fails under rootless Podman ("failed to add  as session directory"). An explicit value is kept. |
 | `APPTAINER_NV` | `1` when the NVIDIA driver is loaded | Binds the host's NVIDIA devices and libraries into tool containers. Set `0` if a tool fails with `GLIBC_* not found` from a host library. |
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`: use the `/cvmfs` the platform mounts. `internal`: mount inside the container (needs root, `/dev/fuse`, mount capability, an AppArmor profile that allows FUSE mounts, repository config and keys under `/etc/cvmfs`; with `docker run`: `--cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor=unconfined`). `disabled`: skip. |
-| `SCIDESKTOP_CVMFS_REPOSITORIES` | empty | Repositories to mount in `internal` mode, comma-separated. |
+| `SCIDESKTOP_CVMFS_REPOSITORIES` | empty; `neurodesk.ardc.edu.au` in neurodesktop | Repositories to mount in `internal` mode, comma-separated. An image with a repository's configuration (the `neurodesk-cvmfs` component) names it as the default. |
 | `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
+| `CVMFS_NFILES` | `65536`, or the container's hard open-file limit when that is lower | The open-file limit the CVMFS client sets for itself in `internal` mode. The client refuses to mount when it may not raise the limit that far. |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. |
+| `SCIDESKTOP_SLURM` | `yes` | Start the session's Slurm queue, sized from `CPU_LIMIT` and `MEM_LIMIT`. It needs no privilege. `SCIDESKTOP_SLURM_PARTITION` and `SCIDESKTOP_SLURM_MEMORY_RESERVE_MB` are in [slurm.md](slurm.md). |
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | The desktop's internal credential; generated per container when unset. |
 | `CPU_LIMIT`, `MEM_LIMIT` | from the pod's cgroup | Set by KubeSpawner, or derived at start from the cgroup when it does not. `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS` and `NUMEXPR_NUM_THREADS` follow `CPU_LIMIT` unless set, so numerical libraries use the pod's CPUs. |
 
 sciget's settings and catalog for every user are its system layer in
 `/etc/sciget/`, read on every run beneath each user's own files: a user's
 settings win and their catalogs come first, and `sciget doctor` names a user
-file that hides a system one. A derived image adds its own with
-`sciget catalog add --system` and `sciget config set --system`.
+file that hides a system one. The catalog is the domain image's: `neuroimaging`
+in neurodesktop and aidesktop, `microscopy` in microdesktop, none in plain
+scidesktop ([images.md](images.md#tool-catalogs)).
 
 ## Deployment check
 
@@ -115,6 +128,6 @@ file that hides a system one. A derived image adds its own with
 | Browser stuck at "waiting for stream" | Request `/desktop/` again and read the Selkies log; check `/opt/selkies/bin/python -c 'import pixelflux, pcmflux'` succeeds. |
 | sciget lists nothing | `sciget catalog list`; `~/.cache/sciget/refresh.log` for the download at start; `sciget doctor`; whether the catalog's `dir` exists under `/cvmfs`. |
 | `[cvmfs] /cvmfs is empty` | The pod's CVMFS volume and mount path; whether the node or CSI mount is populated before the pod starts. |
-| Internal CVMFS does not mount | The pod starts as root, has `/dev/fuse` and mount capability, an AppArmor profile that allows the mount (Docker's default profile denies it: run with `--security-opt apparmor=unconfined`), names repositories in `SCIDESKTOP_CVMFS_REPOSITORIES`, and has their config and keys under `/etc/cvmfs`. |
+| Internal CVMFS does not mount | The pod starts as root, has `/dev/fuse` and mount capability, an AppArmor profile that allows the mount (Docker's default profile denies it: run with `--security-opt apparmor=unconfined`), names repositories in `SCIDESKTOP_CVMFS_REPOSITORIES`, and has their config and keys under `/etc/cvmfs`. The `[cvmfs] the client said:` line in the container log has the client's own reason. |
 | `/desktop/` returns an error | jupyter-server-proxy and Selkies logs; that no deployment override replaced `start.sh`. |
 | Slow starts at one CPU | Give each pod at least two CPUs; a CPU limit is a quota for the whole pod, so process priority does not help. |

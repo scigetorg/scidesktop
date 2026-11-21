@@ -14,3 +14,6 @@ dependencies:
   - mamba==2.10.0
   - ipywidgets==8.1.9
   - jupyterlab-git==0.55.0
+  # Jupyter AI: the chat panel in JupyterLab, for the coding agents an image
+  # has (docs/jupyter-ai.md). No model, key or endpoint comes with it.
+  - jupyter-ai==3.2.0
