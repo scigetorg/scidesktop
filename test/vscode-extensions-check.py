@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks the VS Code extensions a component installs for every user, in the
 image or on the OS layer with code-server. Called by the component's test
-and by neurodesk-vscode-smoke.sh, with the Jupyter environment's Python.
+and by vscode-extensions-smoke.sh, with the Jupyter environment's Python.
 
     vscode-extensions-check.py <component>
 

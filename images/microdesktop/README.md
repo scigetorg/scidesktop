@@ -37,7 +37,9 @@ Only the assembly: this image is scidesktop plus components from
 | --- | --- |
 | `sciget-microscopy` | the microscopy catalog for sciget |
 | `jupyterlab-niivue`, `jupyterlab-freebrowse` | the NiiVue and FreeBrowse viewers for NIfTI files |
+| `code-server`, `vscode-core`, `vscode-niivue` | VS Code in the browser with Python, Jupyter, GitHub PRs, CSV, Slurm and NiiVue extensions |
 | `coding-agents`, `t3-code` | Codex, Claude Code, OpenCode and the **scigent.ai** tile |
+| `scigethelpers-cli` | the `scigethelpers` command (`cite`, `kernel`, `check`, `info`) |
 
 The microscopy tools are whatever the catalog publishes; none is listed in
 this repository. See [docs/images.md](../../docs/images.md) for what an image

@@ -14,8 +14,13 @@ bake="${here}/../docker-bake.hcl"
 MICROMAMBA_VERSION=$(sed -n 's/^variable "MICROMAMBA_VERSION" { default = "\(.*\)" }$/\1/p' "${bake}")
 [ -n "${MICROMAMBA_VERSION}" ] || { echo "MICROMAMBA_VERSION not found in docker-bake.hcl" >&2; exit 1; }
 UBUNTU=$(sed -n 's/^variable "UBUNTU" { default = "\(.*\)" }$/\1/p' "${bake}")
+[ -n "${UBUNTU}" ] || { echo "UBUNTU not found in docker-bake.hcl" >&2; exit 1; }
 # The architecture the container below runs on, in Docker's own naming.
-host=$(TARGETARCH="$(docker version --format '{{.Server.Arch}}')" "${here}/target-arch" conda)
+host_arch="$(docker version --format '{{.Server.Arch}}')"
+host=$(TARGETARCH="${host_arch}" "${here}/target-arch" conda)
+sha_var="MICROMAMBA_SHA256_${host_arch^^}"
+MICROMAMBA_SHA256=$(sed -n "s/^variable \"${sha_var}\" { default = \"\\(.*\\)\" }\$/\\1/p" "${bake}")
+[ -n "${MICROMAMBA_SHA256}" ] || { echo "${sha_var} not found in docker-bake.hcl" >&2; exit 1; }
 platforms=()
 for arch in $("${here}/target-arch" list); do
     platforms+=("$(TARGETARCH="${arch}" "${here}/target-arch" conda)")
@@ -24,6 +29,7 @@ docker run --rm -v "${PWD}:/work" -w /work "docker.io/library/ubuntu:${UBUNTU}" 
     apt-get update -qq >/dev/null && apt-get install -qq -y curl ca-certificates jq >/dev/null 2>&1
     curl -fsSL -o /usr/local/bin/micromamba \
         https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/micromamba-${host}
+    echo '${MICROMAMBA_SHA256}  /usr/local/bin/micromamba' | sha256sum -c - >/dev/null
     chmod +x /usr/local/bin/micromamba
     for platform in ${platforms[*]}; do
         micromamba create --yes --dry-run --json --root-prefix /tmp/root --prefix /tmp/env \

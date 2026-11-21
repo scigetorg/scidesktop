@@ -9,6 +9,7 @@ Airflow logs, MLflow artifacts, generated credentials) lives in ~/.ai-ready.
 """
 
 import base64
+from contextlib import suppress
 import json
 import os
 from pathlib import Path
@@ -49,10 +50,18 @@ class Session(NamedTuple):
     @classmethod
     def from_environ(cls):
         home = Path.home()
+        origin = os.environ.get("AI_READY_PUBLIC_ORIGIN", "").strip()
+        if not origin:
+            public_url = os.environ.get("JUPYTERHUB_PUBLIC_URL", "").strip()
+            parts = urlsplit(public_url)
+            if parts.scheme and parts.netloc:
+                origin = f"{parts.scheme}://{parts.netloc}"
+            else:
+                origin = "http://127.0.0.1:8888"
         return cls(
             state=home / ".ai-ready",
             content=home / "ai-ready",
-            origin=os.environ.get("AI_READY_PUBLIC_ORIGIN", "http://127.0.0.1:8888").rstrip("/"),
+            origin=origin.rstrip("/"),
             base_path=os.environ.get("JUPYTERHUB_SERVICE_PREFIX", "/").rstrip("/") + "/",
         )
 
@@ -298,13 +307,15 @@ def stop(running):
     for group, until in ((running[1:], deadline - POSTGRES_STOP_SECONDS), (running[:1], deadline)):
         for service, process in reversed(group):
             if process.poll() is None:
-                os.killpg(process.pid, service.stop_signal)
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, service.stop_signal)
         for service, process in group:
             try:
                 process.wait(timeout=max(0.1, until - time.monotonic()))
             except subprocess.TimeoutExpired:
                 log(f"{service.name} did not stop in time; killing it")
-                os.killpg(process.pid, signal.SIGKILL)
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
     log("services stopped")
 
