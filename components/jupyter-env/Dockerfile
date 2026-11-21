@@ -35,9 +35,10 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && /opt/conda/bin/python -m pip install --no-cache-dir --no-deps --require-hashes \
         -r /tmp/requirements.lock \
     # Startup-time patches; see each file.
-    && for p in /tmp/patches/*.py; do /opt/conda/bin/python "${p}"; done \
+    && for p in /tmp/patches/*.py; do /opt/conda/bin/python "${p}" || exit 1; done \
     && /opt/conda/bin/python -m compileall -q /opt/conda/lib/python3*/site-packages/rfc3987_syntax \
         /opt/conda/lib/python3*/site-packages/simpervisor \
+        /opt/conda/lib/python3*/site-packages/jupyter_ai_acp_client \
     && MAMBA_ROOT_PREFIX=/opt/conda micromamba clean --all --force-pkgs-dirs --yes \
     && /opt/conda/bin/jupyter lab clean \
     # Disabled JupyterLab plugins live in the environment. The server settings
@@ -48,7 +49,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
         '@jupyterlab/extensionmanager-extension:plugin' \
         '@jupyterlab/help-extension:about' \
     && install -d -m 0755 /out/manifest \
-    && /opt/conda/bin/python -c 'import json, glob; v = {m["name"]: m["version"] for m in map(lambda f: json.load(open(f)), glob.glob("/opt/conda/conda-meta/*.json"))}; json.dump({k: v.get(k) for k in ("python", "jupyterlab", "jupyterhub-singleuser", "jupyter-server-proxy", "ipykernel", "mamba", "ipywidgets", "jupyterlab-git")}, open("/out/manifest/jupyter-env.json", "w"))' \
+    && /opt/conda/bin/python -c 'import json, glob; v = {m["name"]: m["version"] for m in map(lambda f: json.load(open(f)), glob.glob("/opt/conda/conda-meta/*.json"))}; json.dump({k: v.get(k) for k in ("python", "jupyterlab", "jupyterhub-singleuser", "jupyter-server-proxy", "ipykernel", "mamba", "ipywidgets", "jupyterlab-git", "jupyter-ai")}, open("/out/manifest/jupyter-env.json", "w"))' \
     && chown -R "${NB_UID:?}:${NB_GID:?}" /opt/conda \
     && chmod -R g+rwX /opt/conda \
     && find /opt/conda -type d -exec chmod g+s {} +
@@ -74,14 +75,14 @@ USER ${NB_UID}
 RUN set -e \
     && jupyter lab --version \
     && jupyterhub-singleuser --version \
-    && python -c 'import jupyter_server_proxy, ipykernel, jupyterlab, ipywidgets, jupyterlab_git, jupyterlmod' \
+    && python -c 'import jupyter_server_proxy, ipykernel, jupyterlab, ipywidgets, jupyterlab_git, jupyterlmod, jupyter_ai_acp_client, jupyterlab_chat' \
     && pip check \
     && mamba --version \
     && ! command -v conda \
     && test -r /opt/conda/etc/profile.d/mamba.sh \
     && touch /opt/conda/.write-test && rm /opt/conda/.write-test \
     && exts=$(jupyter server extension list 2>&1) \
-    && for e in jupyter_server_proxy jupyterlab_git jupyterlmod; do \
+    && for e in jupyter_server_proxy jupyterlab_git jupyterlmod jupyter_ai_acp_client jupyter_ai_persona_manager jupyter_ai_router jupyterlab_chat jupyter_live_content; do \
          echo "${exts}" | grep -q "${e}.*enabled" || { echo "server extension ${e} not enabled"; exit 1; }; \
        done \
     # The server settings are loaded, not just installed.
@@ -95,5 +96,12 @@ RUN set -e \
     && us=$(cd /tmp && python -X importtime -c 'import jsonschema' 2>&1 \
             | awk -F'|' '/rfc3987_syntax.syntax_helpers/ { gsub(/ /, "", $2); print $2 }') \
     && echo "rfc3987_syntax import: ${us:-0} us" && [ "${us:-0}" -lt 200000 ] \
+    # Jupyter AI's JupyterLab extensions are compatible with this JupyterLab,
+    # and its agent client carries the two workarounds (patches/acp_client_workarounds.py).
+    && labs=$(jupyter labextension list 2>&1) \
+    && for e in '@jupyter-ai/acp-client' '@jupyter-ai/persona-manager' jupyterlab-chat-extension; do \
+         echo "${labs}" | grep -q "${e} .*enabled.*OK" || { echo "JupyterLab extension ${e} not OK"; exit 1; }; \
+       done \
+    && python -c 'import pathlib, jupyter_ai_acp_client as c; d = pathlib.Path(c.__file__).parent; assert "scidesktop-acp-per-event-debug-log" in (d / "default_acp_client.py").read_text(); assert "scidesktop-acp-opencode-2" in (d / "acp_personas/opencode.py").read_text()' \
     # The desktop's readiness poll is capped (patches/simpervisor_ready_backoff.py).
     && python -c 'import inspect, simpervisor.process as p; assert "min(2 * wait_time, 0.1)" in inspect.getsource(p)'

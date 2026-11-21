@@ -56,6 +56,25 @@ else
     fail "jupyter responds"; exit 1
 fi
 
+# Jupyter AI's chat is part of the page JupyterLab loads, in every image. A
+# persona appears in it for each coding agent an image has; that, and the
+# chat itself, need a browser.
+page="$(curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/lab")"
+if grep -q '"name": "jupyterlab-chat-extension"' <<<"${page}" && grep -q '"name": "@jupyter-ai/acp-client"' <<<"${page}" \
+    && grep -q '"name": "@jupyter-ai/persona-manager"' <<<"${page}"; then
+    pass "JupyterLab's page loads the Jupyter AI chat extensions"
+else
+    fail "JupyterLab's page loads the Jupyter AI chat extensions"
+fi
+docker exec "${NAME}" bash -lc 'jupyter server extension list' >"/tmp/${NAME}.extensions" 2>&1
+if [ "$(grep -c -E '(jupyter_ai_acp_client|jupyter_ai_persona_manager|jupyter_ai_router|jupyterlab_chat|jupyter_live_content) .*OK' "/tmp/${NAME}.extensions")" = 5 ]; then
+    pass "the notebook server loads the Jupyter AI extensions"
+else
+    fail "the notebook server loads the Jupyter AI extensions"
+fi
+rm -f "/tmp/${NAME}.extensions"
+echo "        NOT TESTED: OPENING A JUPYTER AI CHAT AND ITS AGENT PERSONAS. THAT NEEDS A BROWSER."
+
 # Server extensions reach what they wrap: jupyterlmod finds Lmod (through the
 # start-up hook's environment), jupyterlab-git finds git.
 body=$(curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/module/system" 2>/dev/null)

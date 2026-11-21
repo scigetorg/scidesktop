@@ -83,6 +83,7 @@ commit's short SHA, the date and `latest`.
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget, which gets its catalog of tools from the domain image |
 | Modules | Lmod, built from the upstream release |
+| AI chat | [Jupyter AI](docs/jupyter-ai.md) in JupyterLab: a chat with the coding agents an image has. No model, key or endpoint comes with it |
 | Batch jobs | A [Slurm queue](docs/slurm.md) for the session, run as the notebook user: `sbatch` and `srun` work in every terminal |
 
 The domain images add components the base leaves out

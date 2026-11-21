@@ -165,7 +165,9 @@ integration were not:
   entry. Links in T3's chat do not open files in JupyterLab, and there is no
   retry dialog: if T3 exits, the next request starts it again.
 - **The Jupyter AI agent adapters** (`codex-acp`, `claude-agent-acp`).
-  scidesktop does not ship Jupyter AI.
+  Jupyter AI is in every image and OpenCode appears in its chat without an
+  adapter. The two adapters need Node.js; see
+  [jupyter-ai.md](jupyter-ai.md#what-is-left-out).
 - **Node.js.** Every binary here is self-contained, so no runtime is added.
 
 ## Updating
