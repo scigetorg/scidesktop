@@ -108,19 +108,22 @@ out="$(run_job "${NAME}")"
     || { fail "a restarted container has a working queue"; printf '%s\n' "${out}" | sed 's/^/        /'; }
 docker rm -f "${NAME}" >/dev/null
 
-# Started as root (a deployment that changes the user at start): the queue
-# and its jobs still belong to the notebook user.
-docker run -d --name "${NAME}-root" --user root -e JUPYTER_TOKEN="${TOKEN}" "${IMAGE}" >/dev/null
+# Started as root with another user ID for the account (a deployment that
+# changes the user at start): the queue and its jobs still belong to the
+# notebook user. CHOWN_HOME gives that user the image's home, as a mounted
+# home would be theirs.
+docker run -d --name "${NAME}-root" --user root -e NB_UID=1234 -e CHOWN_HOME=yes \
+    -e JUPYTER_TOKEN="${TOKEN}" "${IMAGE}" >/dev/null
 for _ in $(seq 1 120); do
     docker exec "${NAME}-root" curl -fsS -o /dev/null "http://127.0.0.1:8888/api" 2>/dev/null && break
     sleep 1
 done
 as_user "${NAME}-root" '/opt/slurm/bin/slurm-session wait' >/dev/null
 out="$(run_job "${NAME}-root")"
-owners="$(docker exec "${NAME}-root" ps -o user= -C slurmctld,slurmd | sort -u | tr -d ' ')"
-[ "$(head -n 2 <<<"${out}")" = "$(printf 'JobState=COMPLETED\nuser=jovyan cpus=1')" ] && [ "${owners}" = jovyan ] \
-    && pass "a container started as root runs the queue and its jobs as the notebook user" \
-    || { fail "a container started as root runs the queue and its jobs as the notebook user"; printf '%s\n' "${out}" | sed 's/^/        /'; }
+owners="$(docker exec "${NAME}-root" ps -o user=,uid= -C slurmctld,slurmd | sort -u | tr -s ' ')"
+[ "$(head -n 2 <<<"${out}")" = "$(printf 'JobState=COMPLETED\nuser=jovyan cpus=1')" ] && [ "${owners}" = "jovyan 1234" ] \
+    && pass "a container started as root with NB_UID=1234 runs the queue and its jobs as the notebook user" \
+    || { fail "a container started as root with NB_UID=1234 runs the queue and its jobs as the notebook user (daemons: ${owners:-none})"; printf '%s\n' "${out}" | sed 's/^/        /'; }
 docker rm -f "${NAME}-root" >/dev/null
 
 # Off on request.
