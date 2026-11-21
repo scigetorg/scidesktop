@@ -19,6 +19,9 @@ else
     if [ "$(id -u)" -eq 0 ]; then
         # Started as root: run as the notebook user, like the server will.
         # setpriv replaces itself with the command, so signals reach it.
+        # start.sh has given the account the UID and GID asked for (NB_UID,
+        # NB_GID) by now; the queue's directories still have the image's.
+        chown "$(id -u "${NB_USER}"):$(id -g "${NB_USER}")" /run/slurm /run/slurmctld
         _slurm=(setpriv --reuid "${NB_USER}" --regid "$(id -g "${NB_USER}")" --init-groups
             env "HOME=$(getent passwd "${NB_USER}" | cut -d: -f6)" "USER=${NB_USER}" "${_slurm[@]}")
     fi
