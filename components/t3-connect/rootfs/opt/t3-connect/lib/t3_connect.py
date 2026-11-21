@@ -59,6 +59,12 @@ class ConnectError(Exception):
         self.connections_url = connections_url
 
 
+RELAY_RECORD_LEFT = (
+    "This session's tunnel has stopped, but T3's relay still lists the environment. "
+    "Choose Disconnect to try again when the relay is reachable, or remove the "
+    "environment from your T3 connections.")
+
+
 class ConnectManager:
     """One session's T3 Connect setup. `t3` is the command to run."""
 
@@ -268,6 +274,11 @@ class ConnectManager:
         # the running tunnel or revoke the relay's record; it says which on
         # its output, of which only these fixed sentences are looked for.
         said = (await self._process("unlink", warnings=True)).decode("utf-8", errors="replace")
+        # Recorded before anything below can stop this attempt.
+        if "Revoked the relay-side environment record." in said:
+            self.revoke_pending.unlink(missing_ok=True)
+        elif had_link and "relay-side environment record" in said:
+            self.revoke_pending.touch()
         saved = await self.saved_status()
         if saved.get("desired") or saved.get("linked"):
             raise ConnectError("Disconnect has not completed. Retry Disconnect when the relay is reachable.")
@@ -280,14 +291,8 @@ class ConnectManager:
                 "stopped and may still give remote access. Choose Disconnect to try again; the "
                 "tunnel also ends when the session stops.")
         # T3 also says it revoked nothing when there was never a link to revoke.
-        if had_link and "relay-side environment record" in said and "Revoked the relay-side environment record." not in said:
-            self.revoke_pending.touch()
-            raise ConnectError(
-                "This session's tunnel has stopped, but T3's relay still lists the environment. "
-                "Choose Disconnect to try again when the relay is reachable, or remove the "
-                "environment from your T3 connections.",
-                connections_url=CONNECTIONS_PAGE)
-        self.revoke_pending.unlink(missing_ok=True)
+        if self.revoke_pending.exists():
+            raise ConnectError(RELAY_RECORD_LEFT, connections_url=CONNECTIONS_PAGE)
         self.set_state("idle", "Disconnected. T3 Code still works here.")
 
     async def _run(self, operation):
@@ -338,6 +343,11 @@ class ConnectManager:
                 return
             if self.state == "idle" and self.last_checked == 0:
                 self.last_checked = time.time()
+                if self.revoke_pending.exists():
+                    # A disconnect before this server started left the record.
+                    self.set_state("error", RELAY_RECORD_LEFT)
+                    self.connections_url = CONNECTIONS_PAGE
+                    return
                 with suppress(Exception):
                     saved = await self.saved_status()
                     if saved.get("desired") and saved.get("authenticated"):
