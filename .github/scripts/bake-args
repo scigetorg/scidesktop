@@ -1,0 +1,29 @@
+#!/bin/bash
+# Arguments for `docker buildx bake` in CI, one per line.
+#
+#   bake-args <arch> <tag> [write-cache]
+#
+# Every folder in components/ and images/ gets its own GitHub Actions cache
+# scope per architecture, so an unchanged component is not rebuilt and the two
+# architectures do not evict each other's layers. Every image in images/ is
+# tagged <image>:<tag>. The lists come from the folders: a new component or
+# image needs no change here or in the workflows.
+set -euo pipefail
+arch="${1:?usage: bake-args <arch> <tag> [write-cache]}"
+tag="${2:?usage: bake-args <arch> <tag> [write-cache]}"
+cd "$(dirname "$0")/../.."
+for dockerfile in components/*/Dockerfile images/*/Dockerfile; do
+    target="$(basename "$(dirname "${dockerfile}")")"
+    echo "--set=${target}.cache-from=type=gha,scope=${target}-${arch}"
+    if [ "${3:-}" = write-cache ]; then
+        echo "--set=${target}.cache-to=type=gha,scope=${target}-${arch},mode=max"
+    fi
+done
+echo "--set=os-ubuntu-build.cache-from=type=gha,scope=os-ubuntu-build-${arch}"
+if [ "${3:-}" = write-cache ]; then
+    echo "--set=os-ubuntu-build.cache-to=type=gha,scope=os-ubuntu-build-${arch},mode=max"
+fi
+for dockerfile in images/*/Dockerfile; do
+    image="$(basename "$(dirname "${dockerfile}")")"
+    echo "--set=${image}.tags=${image}:${tag}"
+done

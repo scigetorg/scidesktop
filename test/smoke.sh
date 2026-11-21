@@ -20,7 +20,17 @@ FAILED=0
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 
+# logs_have <container> <pattern>: whether the container's log has a line
+# matching the extended regular expression. The log is saved before it is
+# searched: under pipefail, `docker logs | grep -q` fails when grep finds its
+# match and exits before docker has written the rest of a long log.
+logs_have() {
+    docker logs "$1" >"/tmp/$1.search.log" 2>&1
+    grep -qE "$2" "/tmp/$1.search.log"
+}
+
 cleanup() {
+    rm -f "/tmp/${NAME}.search.log" "/tmp/${NAME}-tile.search.log"
     docker logs "${NAME}" >/tmp/${NAME}.log 2>&1 || true
     docker rm -f "${NAME}" >/dev/null 2>&1 || true
     for mode in disabled external internal; do
@@ -151,7 +161,7 @@ framebuffer_ok "${NAME}" && pass "framebuffer readable" || fail "framebuffer rea
 #     the log check below is a backstop rather than proof.
 docker exec "${NAME}" "${SELKIES_PY:-python3}" -c 'import pixelflux, pcmflux' >/dev/null 2>&1 \
     && pass "encoders import" || fail "encoders import"
-if docker logs "${NAME}" 2>&1 | grep -qE "failed to import|video pipeline did not start"; then
+if logs_have "${NAME}" "failed to import|video pipeline did not start"; then
     fail "no encoder errors logged"
     docker logs "${NAME}" 2>&1 | grep -E "failed to import|did not start" | tail -2 | sed 's/^/        /'
 else
@@ -178,42 +188,21 @@ for mode in -ic -lic; do
         fail "bash ${mode}: clean, module and mamba"; printf '%s\n' "${out}" | head -5 | sed 's/^/        /'
     fi
 done
-# sciget arrives configured: the user sees the image's catalog from sciget's
-# system layer, with nothing copied into the home, and the start-up refresh
-# downloads it.
+# sciget arrives configured from its system layer, with nothing copied into
+# the home. Which catalog an image has is its catalog component's to check
+# (test/sciget-catalog-check.sh); the base has none.
 docker exec -u "${NB_USER}" "${NAME}" bash -c '
-    sciget catalog list | grep -q neuroimaging && [ ! -e ~/.config/sciget/catalogs.json ]' 2>/dev/null \
-    && pass "sciget catalog from the system layer" \
-    || fail "sciget catalog from the system layer"
-docker exec -u "${NB_USER}" "${NAME}" bash -c '
-    for _ in $(seq 1 60); do ls ~/.cache/sciget/catalogs/neuroimaging-*/ >/dev/null 2>&1 && exit 0; sleep 1; done
-    exit 1' 2>/dev/null \
-    && pass "sciget catalog downloaded at start" \
-    || fail "sciget catalog downloaded at start (see ~/.cache/sciget/refresh.log)"
-
-# Modules sciget installs are on the path: in new login shells (JupyterLab
-# terminals) and other interactive shells (desktop terminals), and for the
-# Jupyter server's Lmod panel, which lists the folders it started with.
-docker exec -u "${NB_USER}" "${NAME}" bash -c '
-    d="$(sciget config get module_dir)/neuroimaging/smoketool"
-    mkdir -p "${d}" && echo "whatis(\"smoke\")" >"${d}/1.0.lua"' 2>/dev/null
-for mode in -lc -ic; do
-    docker exec -u "${NB_USER}" -w /tmp "${NAME}" bash "${mode}" 'module -t avail smoketool' 2>&1 \
-        | grep -q '^smoketool/1.0' \
-        && pass "sciget modules on the path (bash ${mode})" \
-        || fail "sciget modules on the path (bash ${mode})"
-done
-curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/module/paths" 2>/dev/null \
-    | grep -q 'sciget/modules/neuroimaging' \
-    && pass "sciget modules on the Jupyter server's path" \
-    || fail "sciget modules on the Jupyter server's path"
+    sciget catalog list >/dev/null && [ ! -e ~/.config/sciget/catalogs.json ] \
+        && sciget config get display_start_command | grep -q /opt/scidesktop/start_desktop.sh' 2>/dev/null \
+    && pass "sciget settings from the system layer" \
+    || fail "sciget settings from the system layer"
 
 # Files that component tests cannot check on the OS layer, which has no
 # Python: sciget's system settings are valid JSON (sciget ignores a malformed
 # file) and the startup scripts parse.
 docker exec "${NAME}" python3 -c '
 import ast, json
-json.load(open("/etc/sciget/catalogs.json")); json.load(open("/etc/sciget/config.json"))
+json.load(open("/etc/sciget/config.json"))
 for f in ("/usr/local/bin/start-notebook.py", "/usr/local/bin/start-singleuser.py"):
     ast.parse(open(f).read())
 ' >/dev/null 2>&1 && pass "sciget settings valid JSON, startup scripts parse" \
@@ -301,11 +290,18 @@ for mode in disabled external internal; do
     docker rm "${mode_name}" >/dev/null 2>&1 || true
 done
 
-# 8. Nothing from the neurodesk lineage came along
-if docker exec "${NAME}" bash -c 'ls -d /opt/neurodesk* /neurocommand /cvmfs/neurodesk* 2>/dev/null | head -1' 2>/dev/null | grep -q .; then
-    fail "no neurodesk payload"
+# 8. Nothing from the neurodesk lineage came along. An image that copies a
+#    neurodesk-* component holds that component's /opt/neurodesk-* folder,
+#    which rule I1 accounts for; nothing else of the lineage belongs in any
+#    image.
+if docker exec "${NAME}" bash -c '
+    for path in /opt/neurodesk* /neurocommand /cvmfs/neurodesk*; do
+        [ -e "${path}" ] || continue
+        [ -e "/opt/scidesktop/manifest.d/${path#/opt/}.json" ] || echo "${path}"
+    done' 2>/dev/null | grep -q .; then
+    fail "no neurodesk payload outside a neurodesk-* component"
 else
-    pass "no neurodesk payload"
+    pass "no neurodesk payload outside a neurodesk-* component"
 fi
 
 # 8b. The desktop comes back after a container restart, which kills the
@@ -409,10 +405,10 @@ curl -s "http://127.0.0.1:${TILE_PORT}/server-proxy/servers-info?token=${TOKEN}"
 tile_code=$(curl -s -o /dev/null -w '%{http_code}' -m 120 \
     "http://127.0.0.1:${TILE_PORT}/app-smoke-terminal/launch?token=${TOKEN}" 2>/dev/null)
 for _ in $(seq 1 60); do
-    docker logs "${NAME}-tile" 2>&1 | grep -q "window 0x[0-9a-f]* maximised" && break
+    logs_have "${NAME}-tile" "window 0x[0-9a-f]* maximised" && break
     sleep 0.5
 done
-if [ "${tile_code}" = 200 ] && docker logs "${NAME}-tile" 2>&1 | grep -q "window 0x[0-9a-f]* maximised"; then
+if [ "${tile_code}" = 200 ] && logs_have "${NAME}-tile" "window 0x[0-9a-f]* maximised"; then
     pass "app tile starts its application maximised"
 else
     fail "app tile starts its application maximised (HTTP ${tile_code})"
