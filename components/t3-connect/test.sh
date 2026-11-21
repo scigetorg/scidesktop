@@ -7,7 +7,9 @@ python=/opt/conda/bin/python
 work="$(mktemp -d)"
 server=""
 trap 'echo "t3-connect test: the check at line ${LINENO} failed" >&2' ERR
-trap '[ -z "${server}" ] || kill "${server}" 2>/dev/null; rm -rf "${work}"' EXIT
+# The server is waited for before its folder is removed: it writes there
+# until it has exited, and under `set -e` a failed removal would fail the test.
+trap '[ -z "${server}" ] || { kill "${server}" 2>/dev/null; wait "${server}" 2>/dev/null; } || true; rm -rf "${work}" || true' EXIT
 export HOME="${work}/home"
 mkdir -p "${HOME}"
 
