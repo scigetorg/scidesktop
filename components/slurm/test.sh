@@ -5,7 +5,7 @@ session=/opt/slurm/bin/slurm-session
 log=/tmp/slurm-session.log
 
 [ "$(id -u)" != 0 ]
-[ "$(stat -c '%U %a' /run/slurm /run/slurmctld)" = "$(printf '%s 755\n%s 755' "$(id -un)" "$(id -un)")" ]
+[ "$(stat -c '%U %a' /run/slurm /run/slurmctld)" = "$(printf '%s 775\n%s 775' "$(id -un)" "$(id -un)")" ]
 [ "$(readlink /etc/slurm/slurm.conf)" = /run/slurm/conf/slurm.conf ]
 
 # Ports of this test's own: on some builders the tests of several components
