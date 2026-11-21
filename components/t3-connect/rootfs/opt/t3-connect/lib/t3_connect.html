@@ -17,7 +17,6 @@
 link gives your T3 account remote access to this session, through T3's relay,
 for as long as T3 Code runs here. It is off until you set it up.</p>
 <p id="status" role="status" aria-live="polite">Checking.</p>
-<p id="label"></p>
 <strong id="code" aria-live="polite"></strong>
 <p id="expiry"></p>
 <p><a id="authorize" hidden target="_blank" rel="noopener noreferrer" href="https://accounts.t3.codes/device">Open https://accounts.t3.codes/device to approve this code</a></p>
@@ -47,7 +46,6 @@ scigent.ai tile starts it.</p>
   function render(value) {
     // Server text is shown as text, never as markup or a link target.
     element('status').textContent = value.message;
-    element('label').textContent = value.label ? 'Environment: ' + value.label : '';
     element('code').textContent = value.code || '';
     element('expiry').textContent = value.expires_at
       ? 'The code expires at ' + new Date(value.expires_at * 1000).toLocaleTimeString() + '.' : '';

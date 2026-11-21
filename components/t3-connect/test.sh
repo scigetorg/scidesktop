@@ -75,6 +75,63 @@ asyncio.run(main())
 print("device authorization: the code is shown, the rest is not, Cancel ends it")
 PYTHON
 
+# What T3 0.1.5's commands do after an approval, with a stand-in `t3` that
+# answers from a scenario file.
+mkdir -p "${work}/after/t3home/userdata/secrets"
+cat > "${work}/after/t3" <<'STUB'
+#!/bin/bash
+here="$(dirname "$0")"
+scenario="$(cat "${here}/scenario")"
+status() {
+    echo "{\"desired\": $1, \"authenticated\": $1, \"linked\": $1, \"relayClient\": {\"status\": \"available\"}, \"reachability\": $2}"
+}
+reachable='{"status": "reachable", "checkedAt": "2026-01-01T00:00:00Z", "readyConnections": 4, "protocol": "quic"}'
+unreachable='{"status": "unreachable", "checkedAt": "2026-01-01T00:00:00Z", "cause": "connector_not_ready", "reason": "r", "hint": null, "fix": "f"}'
+case "$2 ${scenario}" in
+    "status reachable") status true "${reachable}" ;;
+    "status unreachable") status true "${unreachable}" ;;
+    "status "*) status false null ;;
+    "link "*) echo "Authorized secret-refresh-token-0123456789" ;;
+esac
+STUB
+chmod +x "${work}/after/t3"
+PYTHONPATH=/opt/t3-code/lib:/opt/t3-connect/lib "${python}" - "${work}/after" <<'PYTHON'
+import asyncio, json, os, pathlib, sys, t3_connect
+
+work = pathlib.Path(sys.argv[1])
+environ = {**os.environ, "T3CODE_HOME": str(work / "t3home")}
+
+
+def scenario(name):
+    (work / "scenario").write_text(name)
+
+
+async def settled(manager, action):
+    """The state once the action's command has ended."""
+    await manager.action(action)
+    await manager.task
+    state = manager.snapshot()
+    assert "secret" not in json.dumps(state), state
+    return state
+
+
+async def main():
+    manager = t3_connect.ConnectManager(t3=str(work / "t3"), environ=environ)
+
+    # T3 Code's own check says the relay reaches the session. The command's
+    # cached access token has expired, which is the command's to refresh.
+    (work / "t3home/userdata/secrets/cloud-cli-oauth-token.bin").write_text(
+        json.dumps({"accessToken": "secret-access-token", "expiresAtEpochMs": 1}))
+    (work / "t3home/userdata/environment-id").write_text("environment")
+    scenario("reachable")
+    state = await settled(manager, "link")
+    assert state["state"] == "ready" and state["linked"], state
+    print("ready follows T3's own reachability check, not the cached token's expiry")
+
+
+asyncio.run(main())
+PYTHON
+
 # T3 Code learns of the relay client and of the page through its extension
 # points, and of nothing when the files are absent.
 PYTHONPATH=/opt/t3-code/lib "${python}" - "${work}" <<'PYTHON'
