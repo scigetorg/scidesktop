@@ -29,7 +29,11 @@ grep -q '^\[FAIL\] cvmfs' "${HOME}/cvmfs"
 SCIDESKTOP_CVMFS_MODE=disabled neurodesk check cvmfs | grep -q '^\[SKIP\] cvmfs'
 if neurodesk check slurm >"${HOME}/slurm"; then exit 1; fi
 grep -q '^\[FAIL\] slurm' "${HOME}/slurm"
-# With the session's queue, the check passes and names its partition.
+# With the session's queue, the check passes and names its partition. The
+# queue gets ports of this test's own: on some builders the tests of several
+# components run at once and share one network.
+controller_port="$(shuf -i 20000-39999 -n 1)"
+export SCIDESKTOP_SLURM_PORTS="${controller_port},$(( controller_port + 20000 ))"
 /opt/slurm/bin/slurm-session run >"${HOME}/slurm-session.log" 2>&1 &
 supervisor=$!
 /opt/slurm/bin/slurm-session wait
