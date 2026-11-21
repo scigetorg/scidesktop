@@ -6,3 +6,6 @@
 if [ -z "${T3CODE_CLOUDFLARED_PATH:-}" ]; then
     export T3CODE_CLOUDFLARED_PATH=/opt/t3-connect/bin/cloudflared
 fi
+if [ -z "${TUNNEL_METRICS:-}" ]; then
+    export TUNNEL_METRICS=127.0.0.1:0
+fi

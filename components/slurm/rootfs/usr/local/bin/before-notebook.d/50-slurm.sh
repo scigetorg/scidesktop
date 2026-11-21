@@ -21,9 +21,11 @@ else
         # setpriv replaces itself with the command, so signals reach it.
         # start.sh has given the account the UID and GID asked for (NB_UID,
         # NB_GID) by now; the queue's directories still have the image's.
-        chown "$(id -u "${NB_USER}"):$(id -g "${NB_USER}")" /run/slurm /run/slurmctld
-        _slurm=(setpriv --reuid "${NB_USER}" --regid "$(id -g "${NB_USER}")" --init-groups
-            env "HOME=$(getent passwd "${NB_USER}" | cut -d: -f6)" "USER=${NB_USER}" "${_slurm[@]}")
+        _nb_user="${NB_USER:-jovyan}"
+        chown -R "$(id -u "${_nb_user}"):$(id -g "${_nb_user}")" /run/slurm /run/slurmctld
+        _slurm=(setpriv --reuid "${_nb_user}" --regid "$(id -g "${_nb_user}")" --init-groups
+            env "HOME=$(getent passwd "${_nb_user}" | cut -d: -f6)" "USER=${_nb_user}" "${_slurm[@]}")
+        unset _nb_user
     fi
     "${_slurm[@]}" </dev/null &
     # The notebook server waits for this process when it exits

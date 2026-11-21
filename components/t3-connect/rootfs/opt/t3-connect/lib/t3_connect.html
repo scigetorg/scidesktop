@@ -58,7 +58,9 @@ scigent.ai tile starts it.</p>
     // Also after an error, an expired code or a cancelled setup: the approval may have arrived late.
     buttons.disconnect.hidden = busy || (!value.linked && value.state === 'idle');
     // T3 Code opens the tunnel, and Jupyter starts T3 Code when it is asked for a page.
-    if (value.needs_server) fetch(base + 't3-code/api/auth/session', { credentials: 'same-origin' }).catch(() => {});
+    if (value.needs_server && value.state !== 'ready') {
+      fetch(base + 't3-code/api/auth/session', { credentials: 'same-origin' }).catch(() => {});
+    }
   }
   async function request(action) {
     if (pending) return;

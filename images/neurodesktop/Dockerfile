@@ -17,11 +17,11 @@
 #   datalad           DataLad and git-annex
 #   jupyterlab-niivue, jupyterlab-freebrowse  viewers for NIfTI files in JupyterLab
 #   code-server       the VS Code tile
+#   vscode-core, vscode-niivue, vscode-coding-agents  preinstalled VS Code extensions
 #   coding-agents     Codex, Claude Code and OpenCode (docs/coding-agents.md)
 #   t3-code           the scigent.ai tile
 #   neurodesk-agents  Neurodesk's instructions and model provider for the agents
-#   neurodesk-vscode  the VS Code extensions neurodesktop preinstalls
-#   neurodesk-cli     the `neurodesk` command
+#   scigethelpers-cli the `scigethelpers` command (cite, kernel, check, info)
 
 FROM scidesktop-base
 
@@ -31,13 +31,15 @@ COPY --link --from=datalad / /
 COPY --link --from=jupyterlab-niivue / /
 COPY --link --from=jupyterlab-freebrowse / /
 COPY --link --from=code-server / /
+COPY --link --from=vscode-core / /
+COPY --link --from=vscode-niivue / /
+COPY --link --from=vscode-coding-agents / /
 COPY --link --from=coding-agents / /
 COPY --link --from=acp-adapters / /
 COPY --link --from=t3-code / /
 COPY --link --from=t3-connect / /
 COPY --link --from=neurodesk-agents / /
-COPY --link --from=neurodesk-vscode / /
-COPY --link --from=neurodesk-cli / /
+COPY --link --from=scigethelpers-cli / /
 
 LABEL org.opencontainers.image.title="neurodesktop" \
       org.opencontainers.image.description="scidesktop for neuroimaging: the Neurodesk tools as modules"

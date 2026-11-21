@@ -201,6 +201,26 @@
       ]
     },
     {
+      "description": "Component jupyterlab-niivue: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/jupyterlab-niivue/**"
+      ],
+      "groupName": "component jupyterlab-niivue",
+      "addLabels": [
+        "component:jupyterlab-niivue"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-freebrowse: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/jupyterlab-freebrowse/**"
+      ],
+      "groupName": "component jupyterlab-freebrowse",
+      "addLabels": [
+        "component:jupyterlab-freebrowse"
+      ]
+    },
+    {
       "description": "AI Ready: Airflow's constraints are per Python minor, and a PostgreSQL major cannot open the data directory an earlier one created in a user's home.",
       "matchFileNames": [
         "components/ai-ready/environment.yml"
@@ -337,6 +357,100 @@
       "groupName": "component code-server",
       "addLabels": [
         "component:code-server"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-niivue: a bump needs JUPYTERLAB_NIIVUE_SHA256 updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "jupyterlab-niivue"
+      ],
+      "groupName": "component jupyterlab-niivue",
+      "addLabels": [
+        "component:jupyterlab-niivue"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-freebrowse: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "freebrowse",
+        "freebrowse-node"
+      ],
+      "groupName": "component jupyterlab-freebrowse",
+      "addLabels": [
+        "component:jupyterlab-freebrowse"
+      ]
+    },
+    {
+      "description": "Component vscode-core: its Open VSX extensions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "github.vscode-pull-request-github",
+        "repreng.csv",
+        "xy-sss.slurm--extension"
+      ],
+      "groupName": "component vscode-core",
+      "addLabels": [
+        "component:vscode-core"
+      ]
+    },
+    {
+      "description": "Component vscode-niivue: its Open VSX extension in docker-bake.hcl joins the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "korbinianeckstein.niivue"
+      ],
+      "groupName": "component vscode-niivue",
+      "addLabels": [
+        "component:vscode-niivue"
+      ]
+    },
+    {
+      "description": "Component vscode-coding-agents: its Open VSX extensions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "anthropic.claude-code",
+        "openai.chatgpt"
+      ],
+      "groupName": "component vscode-coding-agents",
+      "addLabels": [
+        "component:vscode-coding-agents"
+      ]
+    },
+    {
+      "description": "Component t3-connect: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/t3-connect/**"
+      ],
+      "groupName": "component t3-connect",
+      "addLabels": [
+        "component:t3-connect"
+      ]
+    },
+    {
+      "description": "Component t3-connect: a bump needs both T3_CLOUDFLARED_SHA256 variables updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "cloudflare/cloudflared"
+      ],
+      "groupName": "component t3-connect",
+      "addLabels": [
+        "component:t3-connect"
       ]
     }
   ],

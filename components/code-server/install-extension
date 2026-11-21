@@ -26,9 +26,14 @@ echo "${sha256}  ${work}/extension.vsix" | sha256sum -c - >/dev/null \
 unzip -q "${work}/extension.vsix" 'extension/*' -d "${work}"
 
 manifest="${work}/extension/package.json"
-field() { sed -n "s/^[[:space:]]*\"$1\":[[:space:]]*\"\([^\"]*\)\".*/\1/p" "${manifest}" | head -n 1; }
-[ "$(field version)" = "${version}" ] && [ "$(field name | tr '[:upper:]' '[:lower:]')" = "${name,,}" ] \
-    || { echo "install-extension: ${url} holds $(field publisher).$(field name) $(field version)" >&2; exit 1; }
+field() { jq -er --arg k "$1" '.[$k] // ""' "${manifest}"; }
+got_publisher="$(field publisher)"
+got_name="$(field name)"
+got_version="$(field version)"
+[ "${got_version}" = "${version}" ] \
+    && [ "${got_name,,}" = "${name,,}" ] \
+    && [ "${got_publisher,,}" = "${namespace,,}" ] \
+    || { echo "install-extension: ${url} holds ${got_publisher}.${got_name} ${got_version}, expected ${namespace}.${name} ${version}" >&2; exit 1; }
 
 folder="${out}/usr/local/share/code-server/extensions/${namespace,,}.${name,,}-${version}"
 install -d -m 0755 "$(dirname "${folder}")"
