@@ -31,7 +31,16 @@ hook=/usr/local/bin/before-notebook.d/45-neurodesk-agents.sh
 # OpenCode offers the Neurodesk model with the hook's setting, on top of the
 # user's own configuration, and does not without it. No key is needed to list.
 . "${hook}"
-opencode models --standalone > "${HOME}/models" 2>&1 || { cat "${HOME}/models" >&2; exit 1; }
+# OpenCode gives its own start-up a fixed time ("Location plugins did not
+# finish activating"), which a builder running every component's test at once
+# can exceed. Only that error is tried again.
+for attempt in 1 2 3 4 5; do
+    opencode models --standalone > "${HOME}/models" 2>&1 && break
+    if [ "${attempt}" = 5 ] || ! grep -q 'did not finish activating' "${HOME}/models"; then
+        cat "${HOME}/models" >&2
+        exit 1
+    fi
+done
 grep -qx 'neurodesk/neurodesk' "${HOME}/models" || { cat "${HOME}/models" >&2; exit 1; }
 env -u OPENCODE_CONFIG opencode models --standalone > "${HOME}/models-without" 2>&1
 if grep -q '^neurodesk/' "${HOME}/models-without"; then
