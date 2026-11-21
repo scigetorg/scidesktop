@@ -551,6 +551,7 @@ target "microdesktop" {
     sciget-microscopy     = "target:sciget-microscopy"
     jupyterlab-niivue     = "target:jupyterlab-niivue"
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
+    code-server           = "target:code-server"
     coding-agents         = "target:coding-agents"
     t3-code               = "target:t3-code"
   }
