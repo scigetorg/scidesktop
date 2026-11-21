@@ -1,9 +1,8 @@
 # Coding agents and T3 Code
 
-`microdesktop` and `aidesktop` come with three command-line
-coding agents and a browser interface for them. The base image, `scidesktop`,
-has neither. They are two optional components
-(see [images.md](images.md#optional-components)):
+`scidesktop` (and every domain image built on it) comes with three command-line
+coding agents and a browser interface for them. They are separate components in
+`components/`:
 
 | Component | What it adds | Where |
 | --- | --- | --- |
@@ -42,8 +41,8 @@ terminal first, or in T3 Code's provider settings, where each agent can also
 be turned on or off.
 
 **T3 Connect** (using this session's T3 Code from the T3 desktop or mobile
-app, through T3's relay) is the `t3-connect` component, which the images
-that have T3 Code copy too. It is off until the user sets it up; see
+app, through T3's relay) is the `t3-connect` component, also included in
+`scidesktop`. It is off until the user sets it up; see
 [t3-connect.md](t3-connect.md).
 
 ## What runs

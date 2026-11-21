@@ -1,10 +1,7 @@
 # syntax=docker/dockerfile:1
-# The neuroimaging tools for sciget: the catalog every user of the image gets
-# (sciget's system layer, /etc/sciget/catalogs.json), and the module folders
-# of its containers on CVMFS (/etc/scidesktop/modulepath.d/60-neurodesk-cvmfs).
-# Configuration only; sciget itself is the base's. An image offers the tools
-# of the one catalog component it copies: the file has one owner
-# (docs/images.md).
+# The neuroimaging tools for sciget: narrows /etc/sciget/catalogs.json to the
+# neuroimaging catalog only (overriding the base's sciget-all). Configuration
+# only; sciget itself and the CVMFS modulepath hook are in the base.
 
 ARG UBUNTU_IMAGE
 
@@ -31,6 +28,4 @@ COPY --from=sciget / /
 COPY --from=component / /
 USER ${NB_UID}
 RUN [ "$(sciget catalog list | cut -f 1-3)" = "$(printf 'neuroimaging\t1\tsystem')" ] \
-    && [ "$(stat -c '%a %u' /etc/sciget /etc/sciget/catalogs.json)" = "$(printf '755 0\n644 0')" ] \
-    && test -x /etc/scidesktop/modulepath.d/60-neurodesk-cvmfs \
-    && /etc/scidesktop/modulepath.d/60-neurodesk-cvmfs
+    && [ "$(stat -c '%a %u' /etc/sciget /etc/sciget/catalogs.json)" = "$(printf '755 0\n644 0')" ]

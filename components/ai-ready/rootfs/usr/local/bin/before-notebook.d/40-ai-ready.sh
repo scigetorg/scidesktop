@@ -7,18 +7,7 @@
 # this shell's process group: when the container stops, tini signals the
 # group and the supervisor shuts the services down in order.
 
-_ai_ready=(/opt/ai-ready/env/bin/python /opt/ai-ready/lib/ai_ready_services.py)
-
-if [ "$(id -u)" -eq 0 ]; then
-    # Started as root: run as the notebook user, like the server will. setpriv
-    # replaces itself with the command. runuser would stay in front of it and
-    # kill it two seconds after a SIGTERM, before PostgreSQL has shut down.
-    _nb_user="${NB_USER:-jovyan}"
-    _nb_home="$(getent passwd "${_nb_user}" | cut -d: -f6)"
-    _ai_ready=(setpriv --reuid "${_nb_user}" --regid "$(id -g "${_nb_user}")" --init-groups
-        env "HOME=${_nb_home}" "USER=${_nb_user}" "${_ai_ready[@]}")
-    unset _nb_user _nb_home
-fi
+_ai_ready=(/opt/scidesktop/run-as-user /opt/ai-ready/env/bin/python /opt/ai-ready/lib/ai_ready_services.py)
 
 # The supervisor owns these values; nothing is repeated here.
 eval "$("${_ai_ready[@]}" env)"

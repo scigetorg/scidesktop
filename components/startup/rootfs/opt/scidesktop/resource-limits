@@ -1,0 +1,35 @@
+#!/bin/bash
+# Reads container CPU and memory limits from cgroup v2 or cgroup v1 and prints
+# shell-friendly KEY=VALUE lines (CPU_LIMIT, MEM_LIMIT) for each limit found.
+# Honors existing CPU_LIMIT/MEM_LIMIT env vars and SCIDESKTOP_CGROUP_ROOT.
+set -u
+cg="${SCIDESKTOP_CGROUP_ROOT:-/sys/fs/cgroup}"
+q="" p="" m=""
+
+if [ -n "${CPU_LIMIT:-}" ]; then
+    echo "CPU_LIMIT=${CPU_LIMIT}"
+else
+    if [ -r "${cg}/cpu.max" ]; then
+        read -r q p < "${cg}/cpu.max" || true
+    elif [ -r "${cg}/cpu/cpu.cfs_quota_us" ]; then
+        q=$(cat "${cg}/cpu/cpu.cfs_quota_us" 2>/dev/null || true)
+        p=$(cat "${cg}/cpu/cpu.cfs_period_us" 2>/dev/null || true)
+    fi
+    if [[ "${q}" =~ ^[0-9]+$ ]] && [[ "${p}" =~ ^[1-9][0-9]*$ ]]; then
+        echo "CPU_LIMIT=$(( (q + p - 1) / p ))"
+    fi
+fi
+
+if [ -n "${MEM_LIMIT:-}" ]; then
+    echo "MEM_LIMIT=${MEM_LIMIT}"
+else
+    if [ -r "${cg}/memory.max" ]; then
+        m=$(cat "${cg}/memory.max" 2>/dev/null || true)
+    elif [ -r "${cg}/memory/memory.limit_in_bytes" ]; then
+        m=$(cat "${cg}/memory/memory.limit_in_bytes" 2>/dev/null || true)
+    fi
+    # cgroup v1 reports "unlimited" as a huge number (>= 19 digits).
+    if [[ "${m}" =~ ^[0-9]+$ ]] && [ "${#m}" -lt 19 ]; then
+        echo "MEM_LIMIT=${m}"
+    fi
+fi

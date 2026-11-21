@@ -66,13 +66,14 @@ variable "OPENCODE_VERSION" { default = "2.2.5" }
 variable "OPENCODE_SHA256_AMD64" { default = "92690eee07a680d3cb760ca02ba43878de9eab1b4e5d5dfae8795518c53628f4" }
 variable "OPENCODE_SHA256_ARM64" { default = "f8c5a82075fede9b5b044ed6c8a6d13ad807a7e62caea1cd0a878adef49eb053" }
 
-# Node.js for the Agent Client Protocol adapters (components/acp-adapters):
-# the release from nodejs.org. The adapters' own versions are in that
-# component's package.json and package-lock.json.
+# Node.js for the Agent Client Protocol adapters (components/acp-adapters)
+# and the FreeBrowse build (components/jupyterlab-freebrowse): the release
+# from nodejs.org. The adapters' own versions are in acp-adapters'
+# package.json and package-lock.json.
 # renovate: datasource=node-version depName=node
-variable "ACP_NODE_VERSION" { default = "24.22.3" }
-variable "ACP_NODE_SHA256_AMD64" { default = "4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb" }
-variable "ACP_NODE_SHA256_ARM64" { default = "6e51a2ada00f0011cc266f65d98922b403d7ad88f809ca2aa615a5fe1ce6e86c" }
+variable "NODE_VERSION" { default = "24.22.3" }
+variable "NODE_SHA256_AMD64" { default = "4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb" }
+variable "NODE_SHA256_ARM64" { default = "6e51a2ada00f0011cc266f65d98922b403d7ad88f809ca2aa615a5fe1ce6e86c" }
 
 # T3 Code (components/t3-code). Its base-path adapter is written against the
 # web client of this release; the component's test says when a bump moves it.
@@ -99,11 +100,6 @@ variable "CODE_SERVER_SHA256_ARM64" { default = "e867a34416e2da4a83496b095800018
 # renovate: datasource=pypi depName=jupyterlab-niivue
 variable "JUPYTERLAB_NIIVUE_VERSION" { default = "0.2.7" }
 variable "JUPYTERLAB_NIIVUE_SHA256" { default = "192d71973065358fd6151ad2c6fef2e207275d3323f175e682ab7d30686b33a7" }
-
-# FreeBrowse for JupyterLab (components/jupyterlab-freebrowse) is built with
-# this Node.js. Its source is FREEBROWSE_COMMIT below.
-# renovate: datasource=docker depName=freebrowse-node packageName=node
-variable "FREEBROWSE_NODE_VERSION" { default = "24.22.3-bookworm-slim" }
 
 # Preinstalled VS Code extensions (components/vscode-core, vscode-niivue,
 # vscode-coding-agents), from Open VSX. Three are published per
@@ -183,6 +179,7 @@ group "test" {
     "lmod-test",
     "sciget-test",
     "slurm-test",
+    "sciget-all-test",
     "sciget-neuroimaging-test",
     "sciget-microscopy-test",
     "jupyterlab-niivue-test",
@@ -392,8 +389,23 @@ target "slurm-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: the catalog of tools sciget offers every user of an image. An
-# image copies one of them. Their tests run sciget, so they borrow it.
+# The catalogs of tools sciget offers every user of an image. The base image
+# copies sciget-all (every domain catalog); domain images narrow the offered
+# tools by copying their own catalog component over /etc/sciget/catalogs.json.
+# Their tests run sciget, so they borrow it.
+target "sciget-all" {
+  inherits = ["_component"]
+  context  = "components/sciget-all"
+  target   = "component"
+  contexts = { sciget = "target:sciget" }
+}
+
+target "sciget-all-test" {
+  inherits = ["sciget-all"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 target "sciget-neuroimaging" {
   inherits = ["_component"]
   context  = "components/sciget-neuroimaging"
@@ -420,9 +432,9 @@ target "sciget-microscopy-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: file viewers for JupyterLab. Each is a JupyterLab extension and a
-# server extension outside the Jupyter environment; their builds and tests
-# borrow that environment.
+# File viewers for JupyterLab (NiiVue and FreeBrowse). Each is a JupyterLab
+# extension and a server extension outside the Jupyter environment; their
+# builds and tests borrow that environment.
 target "jupyterlab-niivue" {
   inherits = ["_component"]
   context  = "components/jupyterlab-niivue"
@@ -449,8 +461,8 @@ target "jupyterlab-freebrowse" {
     freebrowse-src = FREEBROWSE_SRC
   }
   args = {
-    FREEBROWSE_NODE_VERSION = FREEBROWSE_NODE_VERSION
-    FREEBROWSE_COMMIT       = FREEBROWSE_COMMIT
+    NODE_VERSION      = NODE_VERSION
+    FREEBROWSE_COMMIT = FREEBROWSE_COMMIT
   }
 }
 
@@ -483,8 +495,7 @@ target "ai-ready-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: Codex, Claude Code and OpenCode for terminals. Every domain image
-# copies it; the base does not.
+# Codex, Claude Code and OpenCode for terminals (included in scidesktop).
 target "coding-agents" {
   inherits = ["_component"]
   context  = "components/coding-agents"
@@ -508,9 +519,9 @@ target "coding-agents-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: the adapters that give Jupyter AI's chat a Codex and a Claude
-# Code persona, for images with the coding agents. Their test starts them
-# with those agents and the Jupyter environment.
+# The adapters that give Jupyter AI's chat a Codex and a Claude Code persona
+# (included in scidesktop). Their test starts them with those agents and the
+# Jupyter environment.
 target "acp-adapters" {
   inherits = ["_component"]
   context  = "components/acp-adapters"
@@ -520,9 +531,9 @@ target "acp-adapters" {
     jupyter-env   = "target:jupyter-env"
   }
   args = {
-    ACP_NODE_VERSION      = ACP_NODE_VERSION
-    ACP_NODE_SHA256_AMD64 = ACP_NODE_SHA256_AMD64
-    ACP_NODE_SHA256_ARM64 = ACP_NODE_SHA256_ARM64
+    NODE_VERSION      = NODE_VERSION
+    NODE_SHA256_AMD64 = NODE_SHA256_AMD64
+    NODE_SHA256_ARM64 = NODE_SHA256_ARM64
   }
 }
 
@@ -532,9 +543,9 @@ target "acp-adapters-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: T3 Code behind the notebook server, as the scigent.ai tile. Its
-# test runs it through a notebook server, so it borrows the Jupyter
-# environment.
+# T3 Code behind the notebook server, as the scigent.ai tile (included in
+# scidesktop). Its test runs it through a notebook server, so it borrows the
+# Jupyter environment.
 target "t3-code" {
   inherits = ["_component"]
   context  = "components/t3-code"
@@ -553,8 +564,8 @@ target "t3-code-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: T3 Connect for images with T3 Code. Its test runs both through a
-# notebook server, so it borrows T3 Code and the Jupyter environment.
+# T3 Connect for T3 Code (included in scidesktop). Its test runs both through
+# a notebook server, so it borrows T3 Code and the Jupyter environment.
 target "t3-connect" {
   inherits = ["_component"]
   context  = "components/t3-connect"
@@ -745,14 +756,21 @@ target "scidesktop" {
   inherits = ["_common"]
   context  = "images/scidesktop"
   contexts = {
-    os          = "target:os-ubuntu"
-    startup     = "target:startup"
-    jupyter-env = "target:jupyter-env"
-    selkies     = "target:selkies"
-    apptainer   = "target:apptainer"
-    lmod        = "target:lmod"
-    sciget      = "target:sciget"
-    slurm       = "target:slurm"
+    os                    = "target:os-ubuntu"
+    startup               = "target:startup"
+    jupyter-env           = "target:jupyter-env"
+    selkies               = "target:selkies"
+    apptainer             = "target:apptainer"
+    lmod                  = "target:lmod"
+    sciget                = "target:sciget"
+    slurm                 = "target:slurm"
+    sciget-all            = "target:sciget-all"
+    jupyterlab-niivue     = "target:jupyterlab-niivue"
+    jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
+    coding-agents         = "target:coding-agents"
+    acp-adapters          = "target:acp-adapters"
+    t3-code               = "target:t3-code"
+    t3-connect            = "target:t3-connect"
   }
   tags   = [IMAGE]
   output = ["type=docker"]
@@ -765,18 +783,12 @@ target "microdesktop" {
   inherits = ["_common"]
   context  = "images/microdesktop"
   contexts = {
-    scidesktop-base       = "target:scidesktop"
-    sciget-microscopy     = "target:sciget-microscopy"
-    jupyterlab-niivue     = "target:jupyterlab-niivue"
-    jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
-    code-server           = "target:code-server"
-    vscode-core           = "target:vscode-core"
-    vscode-niivue         = "target:vscode-niivue"
-    coding-agents         = "target:coding-agents"
-    acp-adapters          = "target:acp-adapters"
-    t3-code               = "target:t3-code"
-    t3-connect            = "target:t3-connect"
-    scigethelpers-cli     = "target:scigethelpers-cli"
+    scidesktop-base   = "target:scidesktop"
+    sciget-microscopy = "target:sciget-microscopy"
+    code-server       = "target:code-server"
+    vscode-core       = "target:vscode-core"
+    vscode-niivue     = "target:vscode-niivue"
+    scigethelpers-cli = "target:scigethelpers-cli"
   }
   tags   = [MICRODESKTOP_IMAGE]
   output = ["type=docker"]
@@ -789,10 +801,6 @@ target "aidesktop" {
     scidesktop-base     = "target:scidesktop"
     sciget-neuroimaging = "target:sciget-neuroimaging"
     ai-ready            = "target:ai-ready"
-    coding-agents       = "target:coding-agents"
-    acp-adapters        = "target:acp-adapters"
-    t3-code             = "target:t3-code"
-    t3-connect          = "target:t3-connect"
   }
   tags   = [AIDESKTOP_IMAGE]
   output = ["type=docker"]
@@ -804,22 +812,16 @@ target "neurodesktop" {
   inherits = ["_common"]
   context  = "images/neurodesktop"
   contexts = {
-    scidesktop-base       = "target:scidesktop"
-    sciget-neuroimaging   = "target:sciget-neuroimaging"
-    neurodesk-cvmfs       = "target:neurodesk-cvmfs"
-    datalad               = "target:datalad"
-    jupyterlab-niivue     = "target:jupyterlab-niivue"
-    jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
-    code-server           = "target:code-server"
-    vscode-core           = "target:vscode-core"
-    vscode-niivue         = "target:vscode-niivue"
-    vscode-coding-agents  = "target:vscode-coding-agents"
-    coding-agents         = "target:coding-agents"
-    acp-adapters          = "target:acp-adapters"
-    t3-code               = "target:t3-code"
-    t3-connect            = "target:t3-connect"
-    neurodesk-agents      = "target:neurodesk-agents"
-    scigethelpers-cli     = "target:scigethelpers-cli"
+    scidesktop-base      = "target:scidesktop"
+    sciget-neuroimaging  = "target:sciget-neuroimaging"
+    neurodesk-cvmfs      = "target:neurodesk-cvmfs"
+    datalad              = "target:datalad"
+    code-server          = "target:code-server"
+    vscode-core          = "target:vscode-core"
+    vscode-niivue        = "target:vscode-niivue"
+    vscode-coding-agents = "target:vscode-coding-agents"
+    neurodesk-agents     = "target:neurodesk-agents"
+    scigethelpers-cli    = "target:scigethelpers-cli"
   }
   tags   = [NEURODESKTOP_IMAGE]
   output = ["type=docker"]

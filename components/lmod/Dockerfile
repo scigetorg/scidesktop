@@ -18,10 +18,10 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
     apt-get update && apt-get install --no-install-recommends -y \
         gcc make bc pkg-config liblua5.4-dev tcl-dev \
         lua5.4 lua-posix lua-filesystem tcl curl ca-certificates
-RUN : "${LMOD_VERSION:?}" "${LMOD_SHA256:?}" \
-    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused \
-        "https://github.com/TACC/Lmod/archive/refs/tags/${LMOD_VERSION}.tar.gz" -o /tmp/lmod.tar.gz \
-    && echo "${LMOD_SHA256}  /tmp/lmod.tar.gz" | sha256sum -c - \
+RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
+    : "${LMOD_VERSION:?}" "${LMOD_SHA256:?}" \
+    && fetch "https://github.com/TACC/Lmod/archive/refs/tags/${LMOD_VERSION}.tar.gz" \
+        "${LMOD_SHA256}" /tmp/lmod.tar.gz \
     && mkdir -p /tmp/lmod && tar -xzf /tmp/lmod.tar.gz -C /tmp/lmod --strip-components=1 \
     && cd /tmp/lmod \
     && ./configure --prefix=/opt/apps --with-spiderCacheDir=/var/cache/lmod \

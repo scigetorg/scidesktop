@@ -56,5 +56,8 @@ RUN printf '#!/bin/bash\necho hook-ran\n' > /usr/local/bin/before-notebook.d/10-
     && [ "$(stat -c %U "/home/${NB_USER}/.probe")" = "${NB_USER}" ] \
     && printf 'mine\n' > "/home/${NB_USER}/.probe" && start.sh true >/dev/null 2>&1 \
     && [ "$(cat "/home/${NB_USER}/.probe")" = mine ] \
+    && [ "$(/opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
+    && [ "$(runuser -u "${NB_USER}" -- /opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
+    && test -r /opt/scidesktop/stop_supervisor.py \
     # The OS layer has no Python; the smoke test parses these with Jupyter's.
     && test -x /usr/local/bin/start-notebook.py && test -x /usr/local/bin/start-singleuser.py

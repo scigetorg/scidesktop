@@ -10,26 +10,20 @@
 # launcher tiles and checks; changes to them belong in components/, where
 # other images can copy them too (docs/images.md).
 #
-#   sciget-microscopy  the microscopy catalog for sciget: the only tools offered
-#   jupyterlab-niivue, jupyterlab-freebrowse  viewers for NIfTI files in JupyterLab
+#   sciget-microscopy  narrows sciget to the microscopy catalog only
 #   code-server        the VS Code tile
 #   vscode-core, vscode-niivue  core and NiiVue VS Code extensions
-#   coding-agents      Codex, Claude Code and OpenCode (docs/coding-agents.md)
-#   t3-code            the scigent.ai tile
 #   scigethelpers-cli  the `scigethelpers` command (cite, kernel, check, info)
+#
+# NiiVue/FreeBrowse JupyterLab viewers, coding agents, ACP adapters, T3 Code and
+# T3 Connect are inherited from scidesktop.
 
 FROM scidesktop-base
 
 COPY --link --from=sciget-microscopy / /
-COPY --link --from=jupyterlab-niivue / /
-COPY --link --from=jupyterlab-freebrowse / /
 COPY --link --from=code-server / /
 COPY --link --from=vscode-core / /
 COPY --link --from=vscode-niivue / /
-COPY --link --from=coding-agents / /
-COPY --link --from=acp-adapters / /
-COPY --link --from=t3-code / /
-COPY --link --from=t3-connect / /
 COPY --link --from=scigethelpers-cli / /
 
 LABEL org.opencontainers.image.title="microdesktop" \

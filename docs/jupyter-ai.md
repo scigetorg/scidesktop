@@ -11,9 +11,8 @@ persona to `@`-mention:
 
 | Image | Personas |
 | --- | --- |
-| `scidesktop` | none: the chat opens and says no persona is available |
-| images with the `coding-agents` component | **OpenCode** |
-| images that also have the `acp-adapters` component: `microdesktop`, `aidesktop`, `neurodesktop` | **OpenCode**, **Codex** and **Claude** |
+| `scidesktop` and every image built on it (`microdesktop`, `aidesktop`, `neurodesktop`) | **OpenCode**, **Codex** and **Claude** |
+| a custom image without `coding-agents` or `acp-adapters` | none (or **OpenCode** only, with `coding-agents` alone) |
 
 The agent a persona runs is the image's own, started for the chat as the
 notebook user. It uses that agent's sign-in and configuration: what `codex`,
@@ -58,8 +57,8 @@ changes, so an update cannot keep or misapply a workaround silently.
 
 ## The adapters for Codex and Claude Code
 
-`acp-adapters` is an optional component for images that have the coding
-agents. It holds `codex-acp` and `claude-agent-acp`, the programs Jupyter AI
+`acp-adapters` is included in `scidesktop` alongside `coding-agents`. It holds
+`codex-acp` and `claude-agent-acp`, the programs Jupyter AI
 starts for its Codex and Claude personas, at `/opt/acp-adapters`.
 
 - **They are Node.js programs.** The component brings the Node.js release

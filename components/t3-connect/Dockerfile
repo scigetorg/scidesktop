@@ -24,13 +24,13 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
 # One static executable per architecture. T3 would otherwise download its own
 # copy into each home when a user sets Connect up.
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${T3_CLOUDFLARED_VERSION:?}" "${T3_CLOUDFLARED_SHA256_AMD64:?}" "${T3_CLOUDFLARED_SHA256_ARM64:?}" \
     && sha256="T3_CLOUDFLARED_SHA256_${TARGETARCH^^}" \
     && release="https://github.com/cloudflare/cloudflared/releases/download/${T3_CLOUDFLARED_VERSION}" \
     && install -d -m 0755 /out/opt/t3-connect/bin /out/opt/scidesktop/manifest.d \
-    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o /out/opt/t3-connect/bin/cloudflared \
-        "${release}/cloudflared-linux-$(target-arch deb)" \
-    && echo "${!sha256}  /out/opt/t3-connect/bin/cloudflared" | sha256sum -c - \
+    && fetch "${release}/cloudflared-linux-$(target-arch deb)" \
+        "${!sha256}" /out/opt/t3-connect/bin/cloudflared \
     && chmod 0755 /out/opt/t3-connect/bin/cloudflared \
     && /out/opt/t3-connect/bin/cloudflared --version | grep -F "version ${T3_CLOUDFLARED_VERSION} " \
     && curl -fsSL --retry 5 -o /out/opt/t3-connect/LICENSE-cloudflared \

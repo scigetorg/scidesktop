@@ -17,7 +17,8 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y curl ca-certificates jq unzip
-RUN --mount=type=bind,from=components,source=code-server/install-extension,target=/usr/local/bin/install-extension \
+RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
+    --mount=type=bind,from=components,source=code-server/install-extension,target=/usr/local/bin/install-extension \
     install-extension KorbinianEckstein niivue "${VSCODE_NIIVUE_VERSION:?}" "${VSCODE_NIIVUE_SHA256:?}" /out \
     && install -d -m 0755 /out/opt/scidesktop/manifest.d \
     && printf '{"korbinianeckstein.niivue": "%s"}\n' "${VSCODE_NIIVUE_VERSION}" \

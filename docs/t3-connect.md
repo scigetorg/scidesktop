@@ -1,9 +1,8 @@
 # T3 Connect: this session's T3 Code from the T3 apps
 
-Images with T3 Code can be reached from the T3 desktop and mobile apps
-through [T3 Connect](https://t3.codes), T3's relay. It is the `t3-connect`
-component, which `microdesktop`, `aidesktop` and `neurodesktop` copy beside
-`t3-code` ([coding-agents.md](coding-agents.md)).
+`scidesktop` (and every image built on it) can be reached from the T3 desktop
+and mobile apps through [T3 Connect](https://t3.codes), T3's relay. It is the
+`t3-connect` component beside `t3-code` ([coding-agents.md](coding-agents.md)).
 
 **It is off until you set it up.** A session that never sets it up runs
 nothing of it and contacts nobody.

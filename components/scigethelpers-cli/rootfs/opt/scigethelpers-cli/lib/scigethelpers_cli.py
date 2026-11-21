@@ -262,38 +262,38 @@ def read_text(path: str) -> str:
         return ""
 
 
+def read_resource_limits() -> dict[str, str]:
+    """Read CPU_LIMIT and MEM_LIMIT from env or startup's /opt/scidesktop/resource-limits."""
+    limits = {k: os.environ[k].strip() for k in ("CPU_LIMIT", "MEM_LIMIT") if os.environ.get(k, "").strip()}
+    helper = Path("/opt/scidesktop/resource-limits")
+    if len(limits) < 2 and os.access(helper, os.X_OK):
+        result = run([str(helper)], 5)
+        if result is not None and result.returncode == 0:
+            for line in result.stdout.splitlines():
+                key, sep, val = line.partition("=")
+                if sep and key in ("CPU_LIMIT", "MEM_LIMIT") and val.strip():
+                    limits.setdefault(key, val.strip())
+    return limits
+
+
 def memory_limit() -> str:
     total_kib = next((int(line.split()[1]) for line in read_text("/proc/meminfo").splitlines()
                       if line.startswith("MemTotal:")), 0)
     limit_bytes = total_kib * 1024
-    env_mem = os.environ.get("MEM_LIMIT", "").strip()
-    if env_mem.isdigit() and int(env_mem) > 0:
-        limit_bytes = min(limit_bytes, int(env_mem)) if limit_bytes else int(env_mem)
-    else:
-        for path in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
-            raw = read_text(path)
-            if raw.isdigit() and int(raw) > 0:
-                val = int(raw)
-                limit_bytes = min(limit_bytes, val) if limit_bytes else val
-                break
+    raw = read_resource_limits().get("MEM_LIMIT", "")
+    if raw.isdigit() and int(raw) > 0:
+        limit_bytes = min(limit_bytes, int(raw)) if limit_bytes else int(raw)
     return f"{limit_bytes / 2**30:.1f} GiB" if limit_bytes else "unknown"
 
 
 def cpu_limit() -> str:
     available = len(os.sched_getaffinity(0))
-    env_cpu = os.environ.get("CPU_LIMIT", "").strip()
+    raw = read_resource_limits().get("CPU_LIMIT", "")
     try:
-        if env_cpu and float(env_cpu) > 0:
-            return f"{min(float(available), float(env_cpu)):g}"
+        if raw and float(raw) > 0:
+            return f"{min(float(available), float(raw)):g}"
     except ValueError:
         pass
-    quota, _, period = read_text("/sys/fs/cgroup/cpu.max").partition(" ")
-    if quota.isdigit() and period.strip().isdigit() and int(period):
-        return f"{min(available, int(quota) / int(period)):g}"
-    q1 = read_text("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
-    p1 = read_text("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
-    if q1.isdigit() and p1.isdigit() and int(q1) > 0 and int(p1) > 0:
-        return f"{min(available, int(q1) / int(p1)):g}"
     return str(available)
 
 

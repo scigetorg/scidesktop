@@ -1,0 +1,14 @@
+#!/bin/bash
+# Runs a command as the notebook user, replacing itself via setpriv/exec so
+# signals (SIGTERM/SIGINT) reach the child directly. Safe whether invoked as
+# root or already as the notebook user.
+#
+#   /opt/scidesktop/run-as-user <command> [args...]
+set -euo pipefail
+if [ "$(id -u)" -eq 0 ]; then
+    user="${NB_USER:-jovyan}"
+    home="$(getent passwd "${user}" | cut -d: -f6)"
+    exec setpriv --reuid "${user}" --regid "$(id -g "${user}")" --init-groups \
+        env "HOME=${home}" "USER=${user}" "$@"
+fi
+exec "$@"

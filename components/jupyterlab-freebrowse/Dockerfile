@@ -9,13 +9,13 @@
 # domain images copy it (docs/images.md).
 
 # Versions come from docker-bake.hcl.
-ARG FREEBROWSE_NODE_VERSION
+ARG NODE_VERSION
 ARG UBUNTU_IMAGE
 
 # JavaScript only: the result is the same on every architecture. JupyterLab's
 # own build tools (jlpm, jupyter-builder) come from the Jupyter environment,
 # so the extension is built against the JupyterLab the image runs.
-FROM docker.io/library/node:${FREEBROWSE_NODE_VERSION} AS build
+FROM docker.io/library/node:${NODE_VERSION}-bookworm-slim AS build
 ARG FREEBROWSE_COMMIT
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 COPY --from=freebrowse-src . /src

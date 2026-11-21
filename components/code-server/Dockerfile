@@ -19,12 +19,12 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y curl ca-certificates
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${CODE_SERVER_VERSION:?}" "${CODE_SERVER_SHA256_AMD64:?}" "${CODE_SERVER_SHA256_ARM64:?}" \
     && sha256="CODE_SERVER_SHA256_${TARGETARCH^^}" \
     && release="code-server-${CODE_SERVER_VERSION}-linux-$(target-arch deb)" \
-    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o /tmp/code-server.tar.gz \
-        "https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/${release}.tar.gz" \
-    && echo "${!sha256}  /tmp/code-server.tar.gz" | sha256sum -c - \
+    && fetch "https://github.com/coder/code-server/releases/download/v${CODE_SERVER_VERSION}/${release}.tar.gz" \
+        "${!sha256}" /tmp/code-server.tar.gz \
     && mkdir -p /opt/code-server \
     && tar -xzf /tmp/code-server.tar.gz -C /opt/code-server --strip-components=1 --no-same-owner \
     && rm /tmp/code-server.tar.gz \

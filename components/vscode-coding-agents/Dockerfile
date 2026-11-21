@@ -23,6 +23,7 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y curl ca-certificates jq unzip
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     --mount=type=bind,from=components,source=code-server/install-extension,target=/usr/local/bin/install-extension \
     platform="linux-$(target-arch node)" \
     && claude="VSCODE_CLAUDE_CODE_SHA256_${TARGETARCH^^}" \

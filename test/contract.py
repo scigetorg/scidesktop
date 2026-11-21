@@ -365,8 +365,13 @@ def layers():
                 fail("L4", f"{u}: {want} is not valid JSON: {e}")
         for path, (kind, mode, uid, gid) in entries.items():
             if kind != "dir":
-                # L1: one owner per file in an image. L2: no shadowing the OS layer.
+                # L1: one owner per file in an image (except domain sciget-*
+                # catalog components intentionally narrowing sciget-all's
+                # /etc/sciget/catalogs.json). L2: no shadowing the OS layer.
                 for other in seen.setdefault(path, []):
+                    if path == "/etc/sciget/catalogs.json" and "sciget-all" in (other, u) \
+                            and other.startswith("sciget-") and u.startswith("sciget-"):
+                        continue
                     if any({other, u} <= held for held in together):
                         fail("L1", f"{path} is written by both {other} and {u}")
                 seen[path].append(u)

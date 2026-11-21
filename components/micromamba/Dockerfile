@@ -15,13 +15,13 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y curl ca-certificates
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${MICROMAMBA_VERSION:?}" "${MICROMAMBA_SHA256_AMD64:?}" "${MICROMAMBA_SHA256_ARM64:?}" \
     && platform="$(target-arch conda)" \
     && sha256="MICROMAMBA_SHA256_${TARGETARCH^^}" \
     && install -d -m 0755 /out/usr/local/bin \
-    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o /out/usr/local/bin/micromamba \
-        "https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/micromamba-${platform}" \
-    && echo "${!sha256}  /out/usr/local/bin/micromamba" | sha256sum -c - \
+    && fetch "https://github.com/mamba-org/micromamba-releases/releases/download/${MICROMAMBA_VERSION}/micromamba-${platform}" \
+        "${!sha256}" /out/usr/local/bin/micromamba \
     && chmod 0755 /out/usr/local/bin/micromamba
 
 FROM scratch AS component

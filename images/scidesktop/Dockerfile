@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
-# scidesktop: JupyterLab, an IceWM desktop streamed by Selkies, Apptainer, Lmod
-# and sciget on the OS layer. Built with `docker buildx bake`; every component is a
-# named context (see docker-bake.hcl and docs/components.md). Domain images in
-# images/ build FROM this one (docs/images.md).
+# scidesktop: JupyterLab, an IceWM desktop streamed by Selkies, Apptainer, Lmod,
+# sciget (all domain catalogs), Slurm, NiiVue/FreeBrowse viewers, coding agents,
+# ACP adapters, T3 Code and T3 Connect on the OS layer. Built with
+# `docker buildx bake`; every component is a named context (see docker-bake.hcl
+# and docs/components.md). Domain images in images/ build FROM this one
+# (docs/images.md).
 #
 # This file only assembles. Each component ships its own files, hooks, symlinks and
 # manifest entry; what stays here is image metadata that only a Dockerfile can
@@ -22,6 +24,13 @@ COPY --link --from=selkies / /
 COPY --link --from=jupyter-env / /
 COPY --link --from=sciget / /
 COPY --link --from=slurm / /
+COPY --link --from=sciget-all / /
+COPY --link --from=jupyterlab-niivue / /
+COPY --link --from=jupyterlab-freebrowse / /
+COPY --link --from=coding-agents / /
+COPY --link --from=acp-adapters / /
+COPY --link --from=t3-code / /
+COPY --link --from=t3-connect / /
 
 LABEL maintainer="Sciget project <sciget.org>" \
       org.scidesktop.status="experimental" \

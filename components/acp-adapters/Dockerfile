@@ -13,9 +13,9 @@
 ARG UBUNTU_IMAGE
 
 FROM ${UBUNTU_IMAGE} AS build
-ARG ACP_NODE_VERSION
-ARG ACP_NODE_SHA256_AMD64
-ARG ACP_NODE_SHA256_ARM64
+ARG NODE_VERSION
+ARG NODE_SHA256_AMD64
+ARG NODE_SHA256_ARM64
 ARG TARGETARCH
 ARG APT_CACHE_ID
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -23,14 +23,14 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y curl ca-certificates xz-utils
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
-    : "${ACP_NODE_VERSION:?}" "${ACP_NODE_SHA256_AMD64:?}" "${ACP_NODE_SHA256_ARM64:?}" \
-    && sha256="ACP_NODE_SHA256_${TARGETARCH^^}" \
-    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o /tmp/node.tar.xz \
-        "https://nodejs.org/dist/v${ACP_NODE_VERSION}/node-v${ACP_NODE_VERSION}-linux-$(target-arch node).tar.xz" \
-    && echo "${!sha256}  /tmp/node.tar.xz" | sha256sum -c - \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
+    : "${NODE_VERSION:?}" "${NODE_SHA256_AMD64:?}" "${NODE_SHA256_ARM64:?}" \
+    && sha256="NODE_SHA256_${TARGETARCH^^}" \
+    && fetch "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-$(target-arch node).tar.xz" \
+        "${!sha256}" /tmp/node.tar.xz \
     && mkdir -p /opt/node && tar -xJf /tmp/node.tar.xz -C /opt/node --strip-components=1 --no-same-owner \
     && rm /tmp/node.tar.xz \
-    && test "$(/opt/node/bin/node --version)" = "v${ACP_NODE_VERSION}"
+    && test "$(/opt/node/bin/node --version)" = "v${NODE_VERSION}"
 COPY package.json package-lock.json /opt/acp-adapters/lib/
 # npm installs exactly the lock, checks each package's integrity hash, and
 # runs no install script. --omit=optional leaves out the per-platform
@@ -52,7 +52,7 @@ RUN cd /opt/acp-adapters/lib \
     && install -d -m 0755 /out/manifest \
     && version() { sed -n 's/^  "version": "\(.*\)",$/\1/p' "${modules}/@agentclientprotocol/$1/package.json"; } \
     && printf '{"node": "%s", "codex-acp": "%s", "claude-agent-acp": "%s"}\n' \
-        "${ACP_NODE_VERSION}" "$(version codex-acp)" "$(version claude-agent-acp)" > /out/manifest/acp-adapters.json \
+        "${NODE_VERSION}" "$(version codex-acp)" "$(version claude-agent-acp)" > /out/manifest/acp-adapters.json \
     && cat /out/manifest/acp-adapters.json
 
 # Integration files from rootfs/ (the two commands and their links) at their

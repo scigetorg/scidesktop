@@ -14,12 +14,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y curl ca-certificates
-# `fetch <url> <sha256> <file>`: a release file, refused unless its checksum matches.
-RUN printf '%s\n' '#!/bin/bash' 'set -euo pipefail' \
-        'curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "$3" "$1"' \
-        'echo "$2  $3" | sha256sum -c - >/dev/null' > /usr/local/bin/fetch \
-    && chmod 0755 /usr/local/bin/fetch \
-    && install -d -m 0755 /opt/coding-agents/bin /opt/coding-agents/licenses /out/versions
+RUN install -d -m 0755 /opt/coding-agents/bin /opt/coding-agents/licenses /out/versions
 
 # One agent per stage, so updating one downloads only that one.
 FROM build AS codex
@@ -27,6 +22,7 @@ ARG CODEX_VERSION
 ARG CODEX_SHA256_AMD64
 ARG CODEX_SHA256_ARM64
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${CODEX_VERSION:?}" "${CODEX_SHA256_AMD64:?}" "${CODEX_SHA256_ARM64:?}" \
     && sha256="CODEX_SHA256_${TARGETARCH^^}" \
     && release="codex-$(target-arch uname)-unknown-linux-musl" \
@@ -47,6 +43,7 @@ ARG CLAUDE_CODE_VERSION
 ARG CLAUDE_CODE_SHA256_AMD64
 ARG CLAUDE_CODE_SHA256_ARM64
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${CLAUDE_CODE_VERSION:?}" "${CLAUDE_CODE_SHA256_AMD64:?}" "${CLAUDE_CODE_SHA256_ARM64:?}" \
     && sha256="CLAUDE_CODE_SHA256_${TARGETARCH^^}" \
     && fetch "https://downloads.claude.ai/claude-code-releases/${CLAUDE_CODE_VERSION}/linux-$(target-arch node)/claude" \
@@ -64,6 +61,7 @@ ARG OPENCODE_VERSION
 ARG OPENCODE_SHA256_AMD64
 ARG OPENCODE_SHA256_ARM64
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${OPENCODE_VERSION:?}" "${OPENCODE_SHA256_AMD64:?}" "${OPENCODE_SHA256_ARM64:?}" \
     && sha256="OPENCODE_SHA256_${TARGETARCH^^}" \
     && package="cli-linux-$(target-arch node)" \

@@ -22,11 +22,11 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
 # architecture. pip only unpacks it (no index, no dependencies, no build); it
 # needs jupyter-server, which the Jupyter environment has.
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${JUPYTERLAB_NIIVUE_VERSION:?}" "${JUPYTERLAB_NIIVUE_SHA256:?}" \
     && wheel="jupyterlab_niivue-${JUPYTERLAB_NIIVUE_VERSION}-py3-none-any.whl" \
-    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "/tmp/${wheel}" \
-        "https://files.pythonhosted.org/packages/py3/j/jupyterlab_niivue/${wheel}" \
-    && echo "${JUPYTERLAB_NIIVUE_SHA256}  /tmp/${wheel}" | sha256sum -c - \
+    && fetch "https://files.pythonhosted.org/packages/py3/j/jupyterlab_niivue/${wheel}" \
+        "${JUPYTERLAB_NIIVUE_SHA256}" "/tmp/${wheel}" \
     && /opt/conda/bin/python -m pip install --no-deps --no-index --no-compile --no-cache-dir \
         --target /out/opt/jupyterlab-niivue/lib "/tmp/${wheel}" \
     && labextension=/out/opt/jupyterlab-niivue/lib/share/jupyter/labextensions/@niivue/jupyter \

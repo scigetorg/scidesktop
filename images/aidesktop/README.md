@@ -20,8 +20,8 @@ Open <http://localhost:8888/?token=aidesktop>.
 
 ## What is here
 
-Only the assembly: this image is scidesktop plus three components from
-`components/`: `ai-ready`, and
-`coding-agents` and `t3-code`, which microdesktop copies too. See
+Only the assembly: this image is scidesktop (which already includes the
+NiiVue/FreeBrowse viewers, coding agents, ACP adapters, T3 Code and T3 Connect)
+plus `sciget-neuroimaging` and `ai-ready` from `components/`. See
 [docs/ai-ready.md](../../docs/ai-ready.md) for what a workshop session runs
 and how to deploy it.

@@ -1,0 +1,13 @@
+[
+  {
+    "name": "neuroimaging",
+    "url": "https://apps-catalog.scigetorg.workers.dev/neuroimaging/apps.json",
+    "use": true,
+    "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
+  },
+  {
+    "name": "microscopy",
+    "url": "https://apps-catalog.scigetorg.workers.dev/microscopy/apps.json",
+    "use": true
+  }
+]

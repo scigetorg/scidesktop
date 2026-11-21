@@ -87,9 +87,12 @@ components/<component>/
   versions would drift between builds; generating `environment.yml` from bake
   would add templating for the few top-level pins only, while the lock file
   stays the record of everything installed.
-- **Checksums** are not updated by Renovate: update the `*_SHA256` variable
-  with its version. A file that differs per architecture has one variable per
-  architecture, `NAME_SHA256_AMD64` and `NAME_SHA256_ARM64` (S5); update both.
+- **Checksums and downloads.** Checksums are not updated by Renovate: update
+  the `*_SHA256` variable with its version. A file that differs per
+  architecture has one variable per architecture, `NAME_SHA256_AMD64` and
+  `NAME_SHA256_ARM64` (S5); update both. Components download and verify
+  artefacts through the shared `components/fetch` helper (`fetch <url>
+  <sha256> <dest>`), mounted from context `components`.
 
 ### Architectures
 
@@ -142,8 +145,8 @@ Components meet in a few shared folders. Each file in them has one owner.
 | `/usr/local/share/jupyter/kernels/` | notebook kernels from components outside the Jupyter environment | `<component>/` |
 | `/usr/local/share/jupyter/labextensions/` | JupyterLab extensions from optional components, which cannot install into the Jupyter environment every image shares; a link into the component's prefix. A server extension that comes with one is imported from the prefix and switched on in the component's part of the server configuration | the extension's own name |
 | `/usr/local/share/code-server/extensions/` | VS Code extensions for every user of an image with code-server: `code-server` links its release's own here and starts on this folder; other components add theirs with `components/code-server/install-extension` ([neurodesktop.md](neurodesktop.md#vs-code)) | `<publisher>.<name>-<version>/` |
-| `/etc/sciget/` | sciget's system layer: `config.json` is `sciget`'s, `catalogs.json` belongs to the one catalog component an image copies ([images.md](images.md#tool-catalogs)) | sciget's file names |
-| `/opt/scidesktop/` | scidesktop's own scripts; `manifest.d/<component>.json` | `<component>.json` |
+| `/etc/sciget/` | sciget's system layer: `config.json` is `sciget`'s, `catalogs.json` comes from `sciget-all` in `scidesktop` and may be narrowed by a domain `sciget-*` catalog component ([images.md](images.md#tool-catalogs)) | sciget's file names |
+| `/opt/scidesktop/` | scidesktop's own helpers (`run-as-user`, `stop_supervisor.py`, `resource-limits`, owned by `startup`) and `manifest.d/<component>.json` | `<component>.json` |
 | `/etc/scidesktop/modulepath.d/` | executables that print module folders to add to `MODULEPATH`, one per line; run as the user by every shell and at server start, so keep them fast | `NN-<component>`: order of the folders on the path |
 | `/etc/scidesktop/home-defaults/` | files copied into each user's home at start, never overwriting the user's own (derived images' default settings) | the path the file should have in the home |
 
@@ -151,10 +154,10 @@ The layer check enforces what it can:
 
 The layer rules cover the base's components and those a domain image copies.
 
-- **L1:** no file is written by two components of one image. Components
-  that no image combines may be alternatives for the same file: the sciget
-  catalog components each ship `/etc/sciget/catalogs.json`
-  ([images.md](images.md#tool-catalogs)).
+- **L1:** no file is written by two components of one image, except that a
+  domain `sciget-*` catalog component may override `sciget-all`'s
+  `/etc/sciget/catalogs.json` ([images.md](images.md#tool-catalogs)). Two
+  domain catalog components still collide and fail L1.
 - **L2:** no component file shadows a file in the OS layer.
 - **L3:** a folder a component creates must have the same mode and owner as the
   existing one. A linked layer silently replaces the folder's permissions

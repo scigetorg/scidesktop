@@ -40,16 +40,16 @@ Then, in a terminal: `module avail`, `module load niimath/<version>`, `niimath`.
 
 ## What is here
 
-Only the assembly: this image is scidesktop plus optional components from
-`components/`. Any other image can copy the same ones.
+Only the assembly: this image is scidesktop (which already includes the
+NiiVue/FreeBrowse viewers, coding agents, ACP adapters, T3 Code and T3 Connect)
+plus optional components from `components/`. Any other image can copy the same
+ones.
 
 | Component | What it adds |
 | --- | --- |
-| `sciget-neuroimaging` | the neuroimaging catalog for sciget |
+| `sciget-neuroimaging` | narrows sciget to the neuroimaging catalog |
 | `neurodesk-cvmfs` | the Neurodesk CVMFS repository: its mirrors and public key |
 | `datalad` | DataLad, datalad-container and git-annex |
-| `jupyterlab-niivue`, `jupyterlab-freebrowse` | the NiiVue and FreeBrowse viewers for NIfTI files |
 | `code-server`, `vscode-core`, `vscode-niivue`, `vscode-coding-agents` | the **VS Code** tile and eight preinstalled extensions, with no download at start |
-| `coding-agents`, `t3-code` | Codex, Claude Code, OpenCode and the **scigent.ai** tile |
 | `neurodesk-agents` | the agents' instructions for Neurodesk tools, and the Neurodesk model provider for OpenCode |
 | `scigethelpers-cli` | the `scigethelpers` command: `cite`, `kernel`, `check`, `info` |

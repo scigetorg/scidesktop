@@ -22,12 +22,12 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
 # install script runs. The `t3` npm package would download this same archive
 # into each home at first use.
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${T3_CODE_VERSION:?}" "${T3_CODE_SHA256_AMD64:?}" "${T3_CODE_SHA256_ARM64:?}" \
     && sha256="T3_CODE_SHA256_${TARGETARCH^^}" \
     && arch="$(target-arch node)" \
-    && curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o /tmp/t3-code.tar.gz \
-        "https://github.com/pingdotgg/t3code/releases/download/v${T3_CODE_VERSION}/t3-${T3_CODE_VERSION}-linux-${arch}.tar.gz" \
-    && echo "${!sha256}  /tmp/t3-code.tar.gz" | sha256sum -c - \
+    && fetch "https://github.com/pingdotgg/t3code/releases/download/v${T3_CODE_VERSION}/t3-${T3_CODE_VERSION}-linux-${arch}.tar.gz" \
+        "${!sha256}" /tmp/t3-code.tar.gz \
     && install -d -m 0755 /opt/t3-code/app /out/opt/scidesktop/manifest.d \
     && tar -xzf /tmp/t3-code.tar.gz -C /opt/t3-code/app --strip-components=1 --no-same-owner \
     && rm /tmp/t3-code.tar.gz \

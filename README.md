@@ -33,8 +33,10 @@ Open <http://localhost:8888/lab?token=scidesktop> and choose **Desktop** from th
 The desktop session starts on first use, so a session that only ever uses notebooks never
 pays for it.
 
-**Tools** come from sciget's catalog. A domain image chooses it; plain
-scidesktop has none until you add one (`sciget catalog add <name> <url>`).
+**Tools** come from sciget's catalogs. `scidesktop` ships all sciget domains
+(`neuroimaging` and `microscopy`) out of the box; domain images narrow the
+offered catalog to their own community (and users can add more with
+`sciget catalog add <name> <url>`).
 
 **Applications** start from launcher tiles: each desktop entry in `/opt/sciget/applications`
 (where sciget writes its launchers) becomes a tile under *Desktop applications*, which
@@ -57,10 +59,10 @@ enough for a large virtual screen.
 
 | Image | Folder | What it adds |
 |---|---|---|
-| scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below |
-| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: sciget offers the microscopy tools and no others. The [NiiVue and FreeBrowse viewers](docs/viewers.md), and the [coding agents and T3 Code](docs/coding-agents.md) |
-| aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL. Also the coding agents and T3 Code |
-| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): the Neurodesk tools as modules from CVMFS, DataLad, VS Code, the NiiVue and FreeBrowse viewers, the coding agents with Neurodesk's defaults, preinstalled VS Code extensions and the `neurodesk` command |
+| scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below, including all sciget domains (`sciget-all`), the [NiiVue and FreeBrowse viewers](docs/viewers.md), and the [coding agents, Jupyter AI ACP adapters, T3 Code and T3 Connect](docs/coding-agents.md) |
+| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: narrows sciget to the microscopy tools, and adds VS Code (`code-server`, `vscode-core`, `vscode-niivue`) and `scigethelpers` |
+| aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL, with the neuroimaging catalog |
+| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): narrows sciget to neuroimaging, and adds the Neurodesk CVMFS config, DataLad, VS Code with preinstalled extensions, Neurodesk's coding-agent defaults and the `scigethelpers` command |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
 [docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
@@ -81,24 +83,25 @@ commit's short SHA, the date and `latest`.
 | Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked) |
 | Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio |
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
-| Containers | Apptainer built from source; sciget, which gets its catalog of tools from the domain image |
+| Containers | Apptainer built from source; sciget with all domain catalogs (`sciget-all`) by default |
 | Modules | Lmod, built from the upstream release |
-| AI chat | [Jupyter AI](docs/jupyter-ai.md) in JupyterLab: a chat with the coding agents an image has. No model, key or endpoint comes with it |
+| Viewers | [NiiVue and FreeBrowse](docs/viewers.md) for NIfTI files in JupyterLab, at `/opt/jupyterlab-niivue` and `/opt/jupyterlab-freebrowse` |
+| Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
+| AI chat | [Jupyter AI](docs/jupyter-ai.md) in JupyterLab with OpenCode, Codex and Claude personas (`acp-adapters`). No model, key or endpoint comes with it |
+| T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
+| T3 Connect | [Remote access](docs/t3-connect.md) to T3 Code from the T3 apps, through T3's relay. Off until the user sets it up; at `/opt/t3-connect` |
 | Batch jobs | A [Slurm queue](docs/slurm.md) for the session, run as the notebook user: `sbatch` and `srun` work in every terminal |
 
-The domain images add components the base leaves out
-([which image has which](docs/images.md)):
+The domain images add components the base leaves out (and narrow the sciget
+catalog to their domain; [which image has which](docs/images.md)):
 
 | | |
 |---|---|
-| Tool catalogs | Which tools sciget offers: `sciget-neuroimaging` or `sciget-microscopy`, one per image ([docs/images.md](docs/images.md#tool-catalogs)) |
-| Viewers | [NiiVue and FreeBrowse](docs/viewers.md) for NIfTI files in JupyterLab, at `/opt/jupyterlab-niivue` and `/opt/jupyterlab-freebrowse` |
-| Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
-| T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
-| T3 Connect | [Remote access](docs/t3-connect.md) to that T3 Code from the T3 apps, through T3's relay. Off until the user sets it up; at `/opt/t3-connect` |
-| VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile; at `/opt/code-server` |
+| Domain catalogs | Narrow sciget to one domain: `sciget-neuroimaging` or `sciget-microscopy` ([docs/images.md](docs/images.md#tool-catalogs)) |
+| VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile; at `/opt/code-server`, with split extension components (`vscode-core`, `vscode-niivue`, `vscode-coding-agents`) |
+| Helper CLI | The `scigethelpers` command (`cite`, `kernel`, `check`, `info`) at `/opt/scigethelpers-cli` |
 | DataLad | DataLad and git-annex for terminals, in their own locked environment at `/opt/datalad` |
-| Neurodesk | The Neurodesk CVMFS repository's mirrors and key, Neurodesk's instructions and model provider for the coding agents, its VS Code extensions for every user, and the `neurodesk` command |
+| Neurodesk | The Neurodesk CVMFS repository's mirrors and key, and Neurodesk's instructions and model provider for the coding agents |
 | AI Ready | A Python 3.12 kernel with the workshop's libraries and MLflow, Airflow in its own environment, PostgreSQL from conda-forge; all locked, at `/opt/ai-ready` |
 
 `/opt/scidesktop/manifest.d/` holds one JSON file per component with its versions. Design and rationale:

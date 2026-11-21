@@ -8,27 +8,27 @@ that builds on it and adds what its community needs.
 
 ```
 images/
-  scidesktop/      the base; its Dockerfile only assembles components
-  microdesktop/    FROM scidesktop, plus sciget-microscopy, the viewers,
-                   code-server, vscode-core, vscode-niivue, coding-agents,
-                   t3-code and scigethelpers-cli: microscopy
-  aidesktop/       FROM scidesktop, plus sciget-neuroimaging, ai-ready,
-                   coding-agents and t3-code
+  scidesktop/      the base; includes all sciget domains (sciget-all),
+                   NiiVue/FreeBrowse viewers, coding agents, ACP adapters,
+                   T3 Code and T3 Connect
+  microdesktop/    FROM scidesktop, plus sciget-microscopy, code-server,
+                   vscode-core, vscode-niivue and scigethelpers-cli: microscopy
+  aidesktop/       FROM scidesktop, plus sciget-neuroimaging and ai-ready
   neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
-                   datalad, the viewers, code-server, vscode-core,
-                   vscode-niivue, vscode-coding-agents, coding-agents,
-                   t3-code, neurodesk-agents and scigethelpers-cli:
-                   neuroimaging
+                   datalad, code-server, vscode-core, vscode-niivue,
+                   vscode-coding-agents, neurodesk-agents and
+                   scigethelpers-cli: neuroimaging
 ```
 
 | Component | scidesktop | microdesktop | aidesktop | neurodesktop |
 | --- | --- | --- | --- | --- |
-| the base's components | yes | yes | yes | yes |
+| core base (`startup`, `lmod`, `apptainer`, `selkies`, `jupyter-env`, `sciget`, `slurm`) | yes | yes | yes | yes |
+| `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed |
+| `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)) | yes | yes | yes | yes |
+| `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes |
+| `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | yes | yes | yes | yes |
 | `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | yes | yes |
 | `sciget-microscopy` ([tool catalogs](#tool-catalogs)) | no | yes | no | no |
-| `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)) | no | yes | no | yes |
-| `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | no | yes | yes | yes |
-| `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | no | yes | yes | yes |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no |
 | `code-server`, `vscode-core`, `vscode-niivue` ([neurodesktop.md](neurodesktop.md#vs-code)) | no | yes | no | yes |
 | `scigethelpers-cli` ([neurodesktop.md](neurodesktop.md#the-scigethelpers-command)) | no | yes | no | yes |
@@ -71,25 +71,23 @@ build would take whatever version is stored there.)
 ## Optional components
 
 Some software is a component but does not belong in every image: the AI Ready
-workshop adds 2.6 GB and background services, and the coding agents add
-1.3 GB of other vendors' binaries. Such a component lives in `components/`
+workshop adds 2.6 GB and background services, and `code-server` with its VS Code
+extensions adds over 2 GB. Such a component lives in `components/`
 like any other, with its own test, and stays out of the base's assembly. The
 domain images that want it copy it the way the assembly does:
 
 ```dockerfile
 FROM scidesktop-base
 
+COPY --link --from=sciget-neuroimaging / /
 COPY --link --from=ai-ready / /
-COPY --link --from=coding-agents / /
-COPY --link --from=t3-code / /
 ```
 
 ```hcl
 contexts = {
-  scidesktop-base = "target:scidesktop"
-  ai-ready        = "target:ai-ready"
-  coding-agents   = "target:coding-agents"
-  t3-code         = "target:t3-code"
+  scidesktop-base     = "target:scidesktop"
+  sciget-neuroimaging = "target:sciget-neuroimaging"
+  ai-ready            = "target:ai-ready"
 }
 ```
 
@@ -106,12 +104,15 @@ through that component's
 community's defaults then stay out of the generic component, and the image
 still only assembles.
 
-Several images can copy the same component, as `microdesktop` and `aidesktop`
-do, and nodes download its layer once. An image gets the components of the
+Several images can copy the same component, as `microdesktop` and `neurodesktop`
+do with `code-server`, `vscode-core`, `vscode-niivue` and `scigethelpers-cli`,
+and nodes download its layer once. An image gets the components of the
 image it is `FROM` and must not copy them again. Rule S6 checks the `COPY` line,
 the bake context, and that nothing is copied twice. The layer rules (L1 to L5)
 cover every component an image copies, so an optional component may not
-overwrite a file of the base's components either. Rule I1 checks the built
+overwrite a file of the base's components either (with one explicit exception:
+domain `sciget-*` catalog components may override `sciget-all`'s
+`/etc/sciget/catalogs.json`). Rule I1 checks the built
 image: it holds its components and no file of any other, which is what keeps
 optional components out of `scidesktop`.
 
@@ -121,21 +122,23 @@ An optional component keeps to its own prefix (`/opt/<component>`) and the
 ## Tool catalogs
 
 sciget offers the tools of its catalogs. The catalogs every user of an image
-gets are sciget's system layer, one file: `/etc/sciget/catalogs.json`. A
-file has one owner, so the list is a component of its own, and an image
-copies the one for its domain:
+gets are sciget's system layer, one file: `/etc/sciget/catalogs.json`. The base
+image copies `sciget-all` so plain `scidesktop` offers every published domain
+catalog; a domain image narrows the list by copying its own catalog component
+over `/etc/sciget/catalogs.json`:
 
-| Component | Catalog | Also |
+| Component | Catalogs | Also |
 | --- | --- | --- |
-| `sciget-neuroimaging` | `neuroimaging` | the module folders of its containers on the Neurodesk CVMFS repository |
+| `sciget-all` (in `scidesktop`) | `neuroimaging`, `microscopy` | the module folders of containers on the Neurodesk CVMFS repository |
+| `sciget-neuroimaging` | `neuroimaging` | |
 | `sciget-microscopy` | `microscopy` | |
 
-The base's `sciget` component ships no catalog, as sciget itself does: plain
-`scidesktop` offers no tools until its user adds a catalog
-(`sciget catalog add <name> <url>`). An image with `sciget-microscopy`
-offers the microscopy tools and no neuroimaging tool, which
-`test/sciget-microscopy-smoke.sh` checks from a session. Copying two catalog
-components into one image fails rule L1.
+`scidesktop` therefore offers both neuroimaging and microscopy tools out of the
+box (`test/sciget-all-smoke.sh`). An image with `sciget-microscopy` overrides
+`/etc/sciget/catalogs.json` and offers the microscopy tools and no neuroimaging
+tool (`test/sciget-microscopy-smoke.sh`); an image with `sciget-neuroimaging`
+offers neuroimaging tools only (`test/sciget-neuroimaging-smoke.sh`). Copying
+two domain catalog components into one image still fails rule L1.
 
 Both catalogs are published by the
 [sciget catalog service](https://apps-catalog.scigetorg.workers.dev/domains.json).

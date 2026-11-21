@@ -1,9 +1,8 @@
 # Viewers: NiiVue and FreeBrowse in JupyterLab
 
-`neurodesktop` and `microdesktop` open NIfTI images in JupyterLab with two
-viewers. Each is an optional component
-(see [images.md](images.md#optional-components)) that another image copies
-with one line. They are the viewers
+`scidesktop` (and every image built on it) opens NIfTI images in JupyterLab
+with two viewers. Each is a standalone component in `components/` built outside
+`/opt/conda`. They are the viewers
 [neurodesktop](https://github.com/neurodesk/neurodesktop) ships, set up the
 same way.
 
@@ -52,7 +51,7 @@ if upstream moves that line.
 | --- | --- | --- |
 | jupyterlab-niivue | `JUPYTERLAB_NIIVUE_VERSION` in `docker-bake.hcl` | Renovate proposes the version. Update `JUPYTERLAB_NIIVUE_SHA256` from the wheel's SHA-256 on PyPI |
 | FreeBrowse | `FREEBROWSE_COMMIT` in `docker-bake.hcl` | Renovate proposes the fork's new commits |
-| Node.js for the FreeBrowse build | `FREEBROWSE_NODE_VERSION` | Renovate |
+| Node.js for the FreeBrowse build | `NODE_VERSION` (shared with `acp-adapters`) | Renovate |
 
 FreeBrowse is built against the JupyterLab in `components/jupyter-env`, so a
 JupyterLab update rebuilds it. `npm ci` installs exactly the fork's lock
@@ -64,8 +63,8 @@ image.
 
 ```sh
 docker buildx bake jupyterlab-niivue-test jupyterlab-freebrowse-test
-./test/jupyterlab-niivue-smoke.sh microdesktop
-./test/jupyterlab-freebrowse-smoke.sh microdesktop
+./test/jupyterlab-niivue-smoke.sh scidesktop
+./test/jupyterlab-freebrowse-smoke.sh scidesktop
 ```
 
 The checks cover what JupyterLab needs to open a file: the extension is
