@@ -229,7 +229,9 @@ PYTHON
 # A notebook server with both components' configuration, under a nested URL.
 base=/user/t3-connect-test/
 port="$("${python}" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+# Jupyter's MCP server takes a free port too, as in T3 Code's test.
 "${python}" -m jupyter server --no-browser --ip=127.0.0.1 --port="${port}" --ServerApp.port_retries=0 \
+    --MCPExtensionApp.mcp_port=0 \
     --ServerApp.base_url="${base}" --IdentityProvider.token=t3-connect-test --ServerApp.root_dir="${HOME}" \
     >"${work}/jupyter.log" 2>&1 &
 server=$!
