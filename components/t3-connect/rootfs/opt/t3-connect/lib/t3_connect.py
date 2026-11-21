@@ -73,11 +73,17 @@ class ConnectManager:
         self.connections_url = None
         self.last_checked = 0
         self.task = None
+        self.disconnecting = False
         self.lock = asyncio.Lock()
 
     @property
     def base(self):
         return base_dir(self.environ)
+
+    @property
+    def revoke_pending(self):
+        """Marks a disconnect that left the relay's record of this environment."""
+        return self.base / "connect-revoke-pending"
 
     def snapshot(self):
         return dict(state=self.state, message=self.message, code=self.code,
@@ -255,7 +261,9 @@ class ConnectManager:
     async def _unlink(self):
         self.set_state("disconnecting", "Disconnecting this environment.")
         saved = await self.saved_status()
-        had_link = any(saved.get(key) for key in ("desired", "authenticated", "linked"))
+        # The first attempt clears the saved link, so a later one cannot tell
+        # from T3's status that there is still a record to revoke.
+        had_link = self.revoke_pending.exists() or any(saved.get(key) for key in ("desired", "authenticated", "linked"))
         # T3 clears the saved link and exits 0 even when it could not stop
         # the running tunnel or revoke the relay's record; it says which on
         # its output, of which only these fixed sentences are looked for.
@@ -273,11 +281,13 @@ class ConnectManager:
                 "tunnel also ends when the session stops.")
         # T3 also says it revoked nothing when there was never a link to revoke.
         if had_link and "relay-side environment record" in said and "Revoked the relay-side environment record." not in said:
+            self.revoke_pending.touch()
             raise ConnectError(
                 "This session's tunnel has stopped, but T3's relay still lists the environment. "
                 "Choose Disconnect to try again when the relay is reachable, or remove the "
                 "environment from your T3 connections.",
                 connections_url=CONNECTIONS_PAGE)
+        self.revoke_pending.unlink(missing_ok=True)
         self.set_state("idle", "Disconnected. T3 Code still works here.")
 
     async def _run(self, operation):
@@ -297,6 +307,9 @@ class ConnectManager:
     async def action(self, action):
         async with self.lock:
             if action == "cancel":
+                if self.disconnecting and self.task and not self.task.done():
+                    # Stopping here would hide a disconnect that has not been confirmed.
+                    raise web.HTTPError(409, reason="Disconnect cannot be cancelled.")
                 await self.close()
                 with suppress(Exception):
                     await self.saved_status()
@@ -308,7 +321,11 @@ class ConnectManager:
             elif action in ("link", "retry", "disconnect"):
                 if self.task and not self.task.done():
                     raise web.HTTPError(409, reason="T3 Connect is already processing a request.")
-                self.set_state("starting", "Checking T3 Connect.")
+                self.disconnecting = action == "disconnect"
+                if self.disconnecting:
+                    self.set_state("disconnecting", "Disconnecting this environment.")
+                else:
+                    self.set_state("starting", "Checking T3 Connect.")
                 self.task = asyncio.create_task(self._run(self._unlink if action == "disconnect" else self._link))
             else:
                 raise web.HTTPError(400, reason="Unknown T3 Connect action.")
