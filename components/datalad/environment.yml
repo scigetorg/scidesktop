@@ -1,0 +1,10 @@
+# Interpreter for DataLad at /opt/datalad, kept apart from the Jupyter
+# environment so neither constrains the other's dependencies.
+#
+# After changing this file or requirements.in, regenerate the locks: ./lock
+name: datalad
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
