@@ -191,6 +191,23 @@ docker exec -u "${NB_USER}" "${NAME}" bash -c '
     && pass "sciget catalog downloaded at start" \
     || fail "sciget catalog downloaded at start (see ~/.cache/sciget/refresh.log)"
 
+# Modules sciget installs are on the path: in new login shells (JupyterLab
+# terminals) and other interactive shells (desktop terminals), and for the
+# Jupyter server's Lmod panel, which lists the folders it started with.
+docker exec -u "${NB_USER}" "${NAME}" bash -c '
+    d="$(sciget config get module_dir)/neuroimaging/smoketool"
+    mkdir -p "${d}" && echo "whatis(\"smoke\")" >"${d}/1.0.lua"' 2>/dev/null
+for mode in -lc -ic; do
+    docker exec -u "${NB_USER}" -w /tmp "${NAME}" bash "${mode}" 'module -t avail smoketool' 2>&1 \
+        | grep -q '^smoketool/1.0' \
+        && pass "sciget modules on the path (bash ${mode})" \
+        || fail "sciget modules on the path (bash ${mode})"
+done
+curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/module/paths" 2>/dev/null \
+    | grep -q 'sciget/modules/neuroimaging' \
+    && pass "sciget modules on the Jupyter server's path" \
+    || fail "sciget modules on the Jupyter server's path"
+
 # Files that component tests cannot check on the OS layer, which has no
 # Python: sciget's system settings are valid JSON (sciget ignores a malformed
 # file) and the startup scripts parse.
@@ -232,6 +249,12 @@ actual_setuid=$(docker exec "${NAME}" awk -F ' = ' '/^allow setuid = / { print $
     /opt/apptainer/etc/apptainer/apptainer.conf 2>/dev/null)
 [ "${actual_setuid}" = no ] && pass "apptainer setuid off by default" \
     || fail "apptainer setuid off by default (got ${actual_setuid:-missing})"
+# The server, and everything it starts, names the home for Apptainer.
+docker exec -u "${NB_USER}" "${NAME}" sh -c \
+    'tr "\0" "\n" </proc/$(pgrep -o -f "jupyter-lab|jupyter lab")/environ' 2>/dev/null \
+    | grep -qx "APPTAINER_HOME=/home/${NB_USER}" \
+    && pass "APPTAINER_HOME set for the Jupyter server" \
+    || fail "APPTAINER_HOME set for the Jupyter server"
 # Users are told when containers cannot run. Where the notebook user cannot
 # even create a user namespace, the warning must be there; the check against
 # Apptainer itself is with the user-namespace check below.
