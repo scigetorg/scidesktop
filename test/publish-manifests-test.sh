@@ -46,12 +46,13 @@ fi
 SHIM
 chmod +x "${work}/bin/docker"
 
-# digest <image>:<tag>: what the registry holds under that tag, or none.
-digest() {
+# holds <image>:<tag>: the images the registry's index under that tag points
+# at, or none. Two indexes of the same images can list them in another order.
+holds() {
     local found
-    found="$(curl --silent --fail --head --header 'Accept: application/vnd.oci.image.index.v1+json' \
-        "http://${registry}/v2/${name}/${1%%:*}/manifests/${1##*:}" | tr -d '\r' \
-        | awk 'tolower($1) == "docker-content-digest:" { print $2 }')" || true
+    found="$(curl --silent --fail --header 'Accept: application/vnd.oci.image.index.v1+json' \
+        "http://${registry}/v2/${name}/${1%%:*}/manifests/${1##*:}" \
+        | python3 -c 'import json, sys; print(" ".join(sorted(m["digest"] for m in json.load(sys.stdin)["manifests"])))')" || true
     echo "${found:-none}"
 }
 
@@ -89,11 +90,11 @@ failed=0
 # expect <what> <tag> <tag it must equal, or none>
 expect() {
     local want=none
-    [ "$3" = none ] || want="$(digest "$3")"
-    if [ "$(digest "$2")" = "${want}" ] && { [ "$3" = none ] || [ "${want}" != none ]; }; then
+    [ "$3" = none ] || want="$(holds "$3")"
+    if [ "$(holds "$2")" = "${want}" ] && { [ "$3" = none ] || [ "${want}" != none ]; }; then
         echo "ok: $1"
     else
-        echo "FAIL: $1 ($2 is $(digest "$2"), expected ${want})" >&2
+        echo "FAIL: $1 ($2 holds $(holds "$2"), expected ${want})" >&2
         failed=1
     fi
 }
