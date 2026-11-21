@@ -385,6 +385,50 @@
       "addLabels": [
         "component:jupyterlab-freebrowse"
       ]
+    },
+    {
+      "description": "Component vscode-core: its Open VSX extensions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "github.vscode-pull-request-github",
+        "repreng.csv",
+        "xy-sss.slurm--extension"
+      ],
+      "groupName": "component vscode-core",
+      "addLabels": [
+        "component:vscode-core"
+      ]
+    },
+    {
+      "description": "Component vscode-niivue: its Open VSX extension in docker-bake.hcl joins the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "korbinianeckstein.niivue"
+      ],
+      "groupName": "component vscode-niivue",
+      "addLabels": [
+        "component:vscode-niivue"
+      ]
+    },
+    {
+      "description": "Component vscode-coding-agents: its Open VSX extensions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "anthropic.claude-code",
+        "openai.chatgpt"
+      ],
+      "groupName": "component vscode-coding-agents",
+      "addLabels": [
+        "component:vscode-coding-agents"
+      ]
     }
   ],
   "customManagers": [

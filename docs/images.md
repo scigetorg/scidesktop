@@ -10,12 +10,14 @@ that builds on it and adds what its community needs.
 images/
   scidesktop/      the base; its Dockerfile only assembles components
   microdesktop/    FROM scidesktop, plus sciget-microscopy, the viewers,
-                   coding-agents and t3-code: microscopy
+                   code-server, vscode-core, vscode-niivue, coding-agents,
+                   t3-code and scigethelpers-cli: microscopy
   aidesktop/       FROM scidesktop, plus sciget-neuroimaging, ai-ready,
                    coding-agents and t3-code
   neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
-                   datalad, the viewers, code-server, coding-agents, t3-code
-                   neurodesk-agents, neurodesk-vscode and neurodesk-cli:
+                   datalad, the viewers, code-server, vscode-core,
+                   vscode-niivue, vscode-coding-agents, coding-agents,
+                   t3-code, neurodesk-agents and scigethelpers-cli:
                    neuroimaging
 ```
 
@@ -27,9 +29,10 @@ images/
 | `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)) | no | yes | no | yes |
 | `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)) | no | yes | yes | yes |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no |
-| `code-server` ([neurodesktop.md](neurodesktop.md#vs-code)) | no | yes | no | yes |
-| `datalad` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
-| `neurodesk-cvmfs`, `neurodesk-agents`, `neurodesk-vscode`, `neurodesk-cli` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
+| `code-server`, `vscode-core`, `vscode-niivue` ([neurodesktop.md](neurodesktop.md#vs-code)) | no | yes | no | yes |
+| `scigethelpers-cli` ([neurodesktop.md](neurodesktop.md#the-scigethelpers-command)) | no | yes | no | yes |
+| `datalad`, `vscode-coding-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
+| `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
 
 ## How a domain image gets the base
 

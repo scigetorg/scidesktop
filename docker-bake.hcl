@@ -90,8 +90,8 @@ variable "JUPYTERLAB_NIIVUE_SHA256" { default = "192d71973065358fd6151ad2c6fef2e
 # renovate: datasource=docker depName=freebrowse-node packageName=node
 variable "FREEBROWSE_NODE_VERSION" { default = "24.22.3-bookworm-slim" }
 
-# The VS Code extensions neurodesktop gives its users
-# (components/neurodesk-vscode), from Open VSX. Three are published per
+# Preinstalled VS Code extensions (components/vscode-core, vscode-niivue,
+# vscode-coding-agents), from Open VSX. Three are published per
 # platform and have a checksum per architecture; the others are one file.
 # renovate: datasource=custom.open-vsx depName=anthropic.claude-code packageName=Anthropic/claude-code
 variable "VSCODE_CLAUDE_CODE_VERSION" { default = "2.1.330" }
@@ -180,8 +180,10 @@ group "test" {
     "datalad-test",
     "neurodesk-cvmfs-test",
     "neurodesk-agents-test",
-    "neurodesk-cli-test",
-    "neurodesk-vscode-test",
+    "scigethelpers-cli-test",
+    "vscode-core-test",
+    "vscode-niivue-test",
+    "vscode-coding-agents-test",
   ]
 }
 
@@ -573,12 +575,64 @@ target "neurodesk-agents-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: the VS Code extensions neurodesktop gives its users, in
-# code-server's system extensions folder. Its test borrows code-server and
-# the Jupyter environment's Python.
-target "neurodesk-vscode" {
+# Optional: core scientific VS Code extensions (Python, Jupyter, GitHub PRs,
+# CSV, Slurm) in code-server's system extensions folder. Shared across domain
+# images with code-server.
+target "vscode-core" {
   inherits = ["_component"]
-  context  = "components/neurodesk-vscode"
+  context  = "components/vscode-core"
+  target   = "component"
+  contexts = {
+    code-server = "target:code-server"
+    jupyter-env = "target:jupyter-env"
+  }
+  args = {
+    VSCODE_PYTHON_VERSION      = VSCODE_PYTHON_VERSION
+    VSCODE_PYTHON_SHA256_AMD64 = VSCODE_PYTHON_SHA256_AMD64
+    VSCODE_PYTHON_SHA256_ARM64 = VSCODE_PYTHON_SHA256_ARM64
+    VSCODE_JUPYTER_VERSION     = VSCODE_JUPYTER_VERSION
+    VSCODE_JUPYTER_SHA256      = VSCODE_JUPYTER_SHA256
+    VSCODE_GITHUB_PR_VERSION   = VSCODE_GITHUB_PR_VERSION
+    VSCODE_GITHUB_PR_SHA256    = VSCODE_GITHUB_PR_SHA256
+    VSCODE_CSV_VERSION         = VSCODE_CSV_VERSION
+    VSCODE_CSV_SHA256          = VSCODE_CSV_SHA256
+    VSCODE_SLURM_VERSION       = VSCODE_SLURM_VERSION
+    VSCODE_SLURM_SHA256        = VSCODE_SLURM_SHA256
+  }
+}
+
+target "vscode-core-test" {
+  inherits = ["vscode-core"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: the NiiVue VS Code extension for imaging desktops.
+target "vscode-niivue" {
+  inherits = ["_component"]
+  context  = "components/vscode-niivue"
+  target   = "component"
+  contexts = {
+    code-server = "target:code-server"
+    jupyter-env = "target:jupyter-env"
+  }
+  args = {
+    VSCODE_NIIVUE_VERSION = VSCODE_NIIVUE_VERSION
+    VSCODE_NIIVUE_SHA256  = VSCODE_NIIVUE_SHA256
+  }
+}
+
+target "vscode-niivue-test" {
+  inherits = ["vscode-niivue"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: the Claude Code and Codex VS Code extensions (~1.5 GB together;
+# kept separate from vscode-core so images can take vscode-core without them).
+target "vscode-coding-agents" {
+  inherits = ["_component"]
+  context  = "components/vscode-coding-agents"
   target   = "component"
   contexts = {
     code-server = "target:code-server"
@@ -591,34 +645,21 @@ target "neurodesk-vscode" {
     VSCODE_CHATGPT_VERSION          = VSCODE_CHATGPT_VERSION
     VSCODE_CHATGPT_SHA256_AMD64     = VSCODE_CHATGPT_SHA256_AMD64
     VSCODE_CHATGPT_SHA256_ARM64     = VSCODE_CHATGPT_SHA256_ARM64
-    VSCODE_PYTHON_VERSION           = VSCODE_PYTHON_VERSION
-    VSCODE_PYTHON_SHA256_AMD64      = VSCODE_PYTHON_SHA256_AMD64
-    VSCODE_PYTHON_SHA256_ARM64      = VSCODE_PYTHON_SHA256_ARM64
-    VSCODE_JUPYTER_VERSION          = VSCODE_JUPYTER_VERSION
-    VSCODE_JUPYTER_SHA256           = VSCODE_JUPYTER_SHA256
-    VSCODE_GITHUB_PR_VERSION        = VSCODE_GITHUB_PR_VERSION
-    VSCODE_GITHUB_PR_SHA256         = VSCODE_GITHUB_PR_SHA256
-    VSCODE_CSV_VERSION              = VSCODE_CSV_VERSION
-    VSCODE_CSV_SHA256               = VSCODE_CSV_SHA256
-    VSCODE_NIIVUE_VERSION           = VSCODE_NIIVUE_VERSION
-    VSCODE_NIIVUE_SHA256            = VSCODE_NIIVUE_SHA256
-    VSCODE_SLURM_VERSION            = VSCODE_SLURM_VERSION
-    VSCODE_SLURM_SHA256             = VSCODE_SLURM_SHA256
   }
 }
 
-target "neurodesk-vscode-test" {
-  inherits = ["neurodesk-vscode"]
+target "vscode-coding-agents-test" {
+  inherits = ["vscode-coding-agents"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
 
-# Optional: the `neurodesk` command (cite, kernel, check, info). Its test
+# Optional: the `scigethelpers` command (cite, kernel, check, info). Its test
 # runs it with Lmod, the session's Slurm queue and the Jupyter environment's
 # Python, so it borrows those three components.
-target "neurodesk-cli" {
+target "scigethelpers-cli" {
   inherits = ["_component"]
-  context  = "components/neurodesk-cli"
+  context  = "components/scigethelpers-cli"
   target   = "component"
   contexts = {
     lmod        = "target:lmod"
@@ -627,8 +668,8 @@ target "neurodesk-cli" {
   }
 }
 
-target "neurodesk-cli-test" {
-  inherits = ["neurodesk-cli"]
+target "scigethelpers-cli-test" {
+  inherits = ["scigethelpers-cli"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -665,8 +706,11 @@ target "microdesktop" {
     jupyterlab-niivue     = "target:jupyterlab-niivue"
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
     code-server           = "target:code-server"
+    vscode-core           = "target:vscode-core"
+    vscode-niivue         = "target:vscode-niivue"
     coding-agents         = "target:coding-agents"
     t3-code               = "target:t3-code"
+    scigethelpers-cli     = "target:scigethelpers-cli"
   }
   tags   = [MICRODESKTOP_IMAGE]
   output = ["type=docker"]
@@ -699,11 +743,13 @@ target "neurodesktop" {
     jupyterlab-niivue     = "target:jupyterlab-niivue"
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
     code-server           = "target:code-server"
+    vscode-core           = "target:vscode-core"
+    vscode-niivue         = "target:vscode-niivue"
+    vscode-coding-agents  = "target:vscode-coding-agents"
     coding-agents         = "target:coding-agents"
     t3-code               = "target:t3-code"
     neurodesk-agents      = "target:neurodesk-agents"
-    neurodesk-vscode      = "target:neurodesk-vscode"
-    neurodesk-cli         = "target:neurodesk-cli"
+    scigethelpers-cli     = "target:scigethelpers-cli"
   }
   tags   = [NEURODESKTOP_IMAGE]
   output = ["type=docker"]
