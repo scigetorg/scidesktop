@@ -21,6 +21,7 @@ which only the `t3` command reads.
 """
 
 import asyncio
+import atexit
 from contextlib import suppress
 import json
 import os
@@ -83,6 +84,7 @@ class ConnectManager:
         self.connections_url = None
         self.last_checked = 0
         self.task = None
+        self._active_pgid = None
         self.disconnecting = False
         self.lock = asyncio.Lock()
 
@@ -121,6 +123,7 @@ class ConnectManager:
             start_new_session=True, limit=65536,
         )
         output = bytearray()
+        self._active_pgid = process.pid
         try:
             async with asyncio.timeout(timeout):
                 async for line in process.stdout:
@@ -142,6 +145,8 @@ class ConnectManager:
                     with suppress(ProcessLookupError):
                         os.killpg(process.pid, signal.SIGKILL)
                     await process.wait()
+            if self._active_pgid == process.pid:
+                self._active_pgid = None
 
     async def saved_status(self):
         try:
@@ -164,8 +169,10 @@ class ConnectManager:
             self.expires_at = time.time() + min(int(expiry[1]) * 60, AUTH_TIMEOUT)
 
     def active_chats(self):
-        """Whether a chat is running. Fails closed: unknown counts as running."""
+        """Whether a chat is running. Fails closed on DB errors, False when no DB exists yet."""
         path = self.base / "userdata/statev2.sqlite"
+        if not path.exists():
+            return False
         try:
             with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=1) as db:
                 return db.execute(
@@ -180,7 +187,7 @@ class ConnectManager:
         try:
             runtime = json.loads((self.base / "userdata/server-runtime.json").read_text())
             pid = int(runtime["pid"])
-            if os.readlink(f"/proc/{pid}/exe") == T3:
+            if os.readlink(f"/proc/{pid}/exe") == os.path.realpath(self.t3):
                 return pid
         except (OSError, ValueError, KeyError, TypeError):
             pass
@@ -247,6 +254,16 @@ class ConnectManager:
             connections_url=CONNECTIONS_PAGE,
         )
 
+    async def _recheck_ready(self):
+        """Verify an already-ready tunnel without flickering back to connecting."""
+        try:
+            if await self.reachable():
+                self.last_checked = time.time()
+                return
+        except (ConnectError, TimeoutError):
+            pass
+        await self._wait_reachable()
+
     async def _link(self):
         saved = await self.saved_status()
         if saved.get("relayClient", {}).get("status") != "available":
@@ -260,7 +277,7 @@ class ConnectManager:
             # T3 Code reads the link when it starts.
             self.set_state("waiting_idle", "Authorization saved. Waiting for running chats to finish before restarting T3 Code.")
             deadline = time.monotonic() + 1800
-            while self.server_pid() is not None and self.active_chats():
+            while self.server_pid() is not None and await asyncio.to_thread(self.active_chats):
                 if time.monotonic() > deadline:
                     raise ConnectError("T3 Code is still busy. Finish running chats and choose Retry.")
                 await asyncio.sleep(3)
@@ -357,7 +374,14 @@ class ConnectManager:
                     if saved.get("desired") and saved.get("authenticated"):
                         self.task = asyncio.create_task(self._run(self._wait_reachable))
             elif self.state == "ready" and time.time() - self.last_checked > 30:
-                self.task = asyncio.create_task(self._run(self._wait_reachable))
+                self.task = asyncio.create_task(self._run(self._recheck_ready))
+
+    def terminate_active(self):
+        """Stop any detached `t3 connect` process group on server exit."""
+        pgid = self._active_pgid
+        if pgid is not None:
+            with suppress(OSError):
+                os.killpg(pgid, signal.SIGTERM)
 
     async def close(self):
         if self.task and not self.task.done():
@@ -399,8 +423,9 @@ class ConnectPageHandler(JupyterHandler):
                         "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
         # Reading the token also sets its cookie, which the API checks the
         # page's requests against.
-        self.finish(PAGE.read_text().replace("__BASE_URL__", json.dumps(self.base_url))
-                    .replace("__XSRF__", json.dumps(self.xsrf_token.decode())))
+        self.finish(PAGE.read_text()
+                    .replace("__BASE_URL__", json.dumps(self.base_url).replace("<", "\\u003c"))
+                    .replace("__XSRF__", json.dumps(self.xsrf_token.decode()).replace("<", "\\u003c")))
 
 
 def _jupyter_server_extension_points():
@@ -409,6 +434,7 @@ def _jupyter_server_extension_points():
 
 def _load_jupyter_server_extension(server_app):
     manager = ConnectManager()
+    atexit.register(manager.terminate_active)
     base = server_app.web_app.settings["base_url"]
     server_app.web_app.add_handlers(".*$", [
         (url_path_join(base, ROUTE, "api"), ConnectApiHandler, {"manager": manager}),

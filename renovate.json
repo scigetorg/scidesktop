@@ -429,6 +429,29 @@
       "addLabels": [
         "component:vscode-coding-agents"
       ]
+    },
+    {
+      "description": "Component t3-connect: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/t3-connect/**"
+      ],
+      "groupName": "component t3-connect",
+      "addLabels": [
+        "component:t3-connect"
+      ]
+    },
+    {
+      "description": "Component t3-connect: a bump needs both T3_CLOUDFLARED_SHA256 variables updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "cloudflare/cloudflared"
+      ],
+      "groupName": "component t3-connect",
+      "addLabels": [
+        "component:t3-connect"
+      ]
     }
   ],
   "customManagers": [
