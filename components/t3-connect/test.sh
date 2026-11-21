@@ -76,8 +76,9 @@ print("device authorization: the code is shown, the rest is not, Cancel ends it"
 PYTHON
 
 # What T3 0.1.5's commands do after an approval, with a stand-in `t3` that
-# answers from a scenario file.
+# answers from a scenario file, and a stand-in relay client that only runs.
 mkdir -p "${work}/after/t3home/userdata/secrets"
+cp /bin/bash "${work}/after/cloudflared"
 cat > "${work}/after/t3" <<'STUB'
 #!/bin/bash
 here="$(dirname "$0")"
@@ -90,20 +91,43 @@ unreachable='{"status": "unreachable", "checkedAt": "2026-01-01T00:00:00Z", "cau
 case "$2 ${scenario}" in
     "status reachable") status true "${reachable}" ;;
     "status unreachable") status true "${unreachable}" ;;
-    "status "*) status false null ;;
+    "status never-linked") status false null ;;
+    "status "*) if [ -e "${here}/unlinked" ]; then status false null; else status true null; fi ;;
     "link "*) echo "Authorized secret-refresh-token-0123456789" ;;
+    "unlink never-linked")
+        echo "T3 Connect is disabled locally."
+        echo "The relay-side environment record was not revoked." >&2 ;;
+    # T3 clears the saved link and exits 0 whatever it could not undo.
+    "unlink tunnel-left")
+        touch "${here}/unlinked"
+        echo "T3 Connect is disabled, but the running server could not stop its tunnel." >&2
+        echo "Revoked the relay-side environment record." ;;
+    "unlink record-left")
+        touch "${here}/unlinked"
+        echo "T3 Connect is disabled locally."
+        echo "Could not revoke the relay-side environment record yet. secret-refresh-token-0123456789" >&2 ;;
+    "unlink "*)
+        touch "${here}/unlinked"
+        echo "T3 Connect is disabled locally."
+        echo "Revoked the relay-side environment record." ;;
 esac
 STUB
 chmod +x "${work}/after/t3"
 PYTHONPATH=/opt/t3-code/lib:/opt/t3-connect/lib "${python}" - "${work}/after" <<'PYTHON'
-import asyncio, json, os, pathlib, sys, t3_connect
+import asyncio, json, os, pathlib, subprocess, sys, time, t3_connect
 
 work = pathlib.Path(sys.argv[1])
-environ = {**os.environ, "T3CODE_HOME": str(work / "t3home")}
+environ = {**os.environ, "T3CODE_HOME": str(work / "t3home"), "T3CODE_CLOUDFLARED_PATH": str(work / "cloudflared")}
+
+
+def start_tunnel():
+    """The stand-in relay client, running until it is killed."""
+    return subprocess.Popen([str(work / "cloudflared"), "-c", "read -t 600"], stdin=subprocess.PIPE)
 
 
 def scenario(name):
     (work / "scenario").write_text(name)
+    (work / "unlinked").unlink(missing_ok=True)
 
 
 async def settled(manager, action):
@@ -128,7 +152,6 @@ async def main():
     assert state["state"] == "ready" and state["linked"], state
     print("ready follows T3's own reachability check, not the cached token's expiry")
 
-
     # Cancel while the approved link is still connecting: it is kept, and
     # the setup can be resumed.
     scenario("unreachable")
@@ -145,6 +168,40 @@ async def main():
     state = await settled(manager, "retry")
     assert state["state"] == "ready", state
     print("a setup cancelled after approval can be resumed")
+
+    # Disconnect, while T3 reports that it cleared the link (exit 0) but the
+    # relay client is still running.
+    tunnel = start_tunnel()
+    scenario("tunnel-left")
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "error" and "tunnel has not been confirmed stopped" in state["message"], state
+    # The tunnel has gone, but T3 does not confirm that it stopped it.
+    tunnel.kill()
+    tunnel.wait()
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "error" and "tunnel has not been confirmed stopped" in state["message"], state
+    # T3 confirms, and the relay client is still there.
+    tunnel = start_tunnel()
+    scenario("disconnected")
+    started = time.monotonic()
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "error" and "tunnel has not been confirmed stopped" in state["message"], state
+    assert time.monotonic() - started < 30, "Disconnect waited too long for the relay client"
+    tunnel.kill()
+    tunnel.wait()
+    # The relay's record of the environment was not revoked.
+    scenario("record-left")
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "error" and "relay still lists" in state["message"], state
+    assert state["connections_url"] == "https://app.t3.codes/settings/general", state
+    scenario("disconnected")
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "idle" and not state["linked"] and state["message"].startswith("Disconnected."), state
+    # Nothing was ever linked: T3 has no record to revoke, and says it revoked none.
+    scenario("never-linked")
+    state = await settled(manager, "disconnect")
+    assert state["state"] == "idle" and state["message"].startswith("Disconnected."), state
+    print("Disconnect reports success only once the tunnel has stopped and T3 confirms it")
 
 asyncio.run(main())
 PYTHON

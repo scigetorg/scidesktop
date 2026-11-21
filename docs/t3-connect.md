@@ -23,7 +23,10 @@ nothing of it and contacts nobody.
 **Cancel setup** stops a setup in progress. A link that was already approved
 is kept: **Retry** resumes the setup, and Disconnect revokes the link.
 
-**Disconnect** on the same page switches it off again. The same can be done
+**Disconnect** on the same page switches it off again. It says
+**Disconnected** once T3 confirms that it stopped the tunnel and no relay
+client is left running; until then it says what is still pending, and
+Disconnect stays available. The same can be done
 in a terminal with `t3 connect link --headless`, `t3 connect status` and
 `t3 connect unlink`.
 
@@ -108,8 +111,9 @@ docker buildx bake t3-connect-test
 The component's test drives the device authorization with a stand-in for the
 `t3` command: the code reaches the state, the rest of the output does not,
 and Cancel ends the command. A second stand-in answers as T3 does after an
-approval: Ready follows T3's own reachability check, and a setup cancelled after
-approval can be resumed. The smoke test checks that Connect is off,
+approval: Ready follows T3's own reachability check, a setup cancelled after
+approval can be resumed, and Disconnect succeeds only when the tunnel has
+stopped. The smoke test checks that Connect is off,
 behind the login, refused from another origin, and silent in the container
 log. Neither signs in to T3: linking needs an account and a person, and the
 smoke test says so (`NOT TESTED`).

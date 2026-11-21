@@ -47,6 +47,8 @@ ROUTE_TIMEOUT = 240
 # `t3 connect status` asks the running server to check its tunnel, and waits
 # 30 seconds for the answer.
 STATUS_TIMEOUT = 45
+# How long the relay client may take to exit once T3 Code has stopped it.
+TUNNEL_STOP_TIMEOUT = 10
 
 
 class ConnectError(Exception):
@@ -92,13 +94,15 @@ class ConnectManager:
         if state != "authorizing":
             self.code = self.expires_at = None
 
-    async def _process(self, *args, timeout=30, on_line=None):
+    async def _process(self, *args, timeout=30, on_line=None, warnings=False):
+        """The command's standard output, and with `warnings` its standard error too."""
         self.base.mkdir(mode=0o700, parents=True, exist_ok=True)
         process = await asyncio.create_subprocess_exec(
             self.t3, "connect", *args, "--base-dir", str(self.base),
             env={**server_environment(self.base, self.environ), "NO_COLOR": "1"}, cwd=str(Path.home()),
             stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL, start_new_session=True, limit=65536,
+            stderr=asyncio.subprocess.STDOUT if warnings else asyncio.subprocess.DEVNULL,
+            start_new_session=True, limit=65536,
         )
         output = bytearray()
         try:
@@ -183,6 +187,20 @@ class ConnectManager:
             await asyncio.sleep(0.1)
         raise ConnectError("T3 Code did not stop. Close its tab, wait a moment and choose Retry.")
 
+    def tunnel_running(self):
+        """Whether a relay client of this user's is running."""
+        client = server_environment(self.base, self.environ).get("T3CODE_CLOUDFLARED_PATH")
+        if not client:
+            return False
+        client = os.path.realpath(client)
+        for entry in os.scandir("/proc"):
+            if entry.name.isdigit():
+                # Another user's process cannot be read, and is not ours.
+                with suppress(OSError):
+                    if os.readlink(f"/proc/{entry.name}/exe") == client:
+                        return True
+        return False
+
     async def reachable(self):
         """Whether T3's relay reaches this session, by T3 Code's own check.
 
@@ -236,10 +254,30 @@ class ConnectManager:
 
     async def _unlink(self):
         self.set_state("disconnecting", "Disconnecting this environment.")
-        await self._process("unlink")
+        saved = await self.saved_status()
+        had_link = any(saved.get(key) for key in ("desired", "authenticated", "linked"))
+        # T3 clears the saved link and exits 0 even when it could not stop
+        # the running tunnel or revoke the relay's record; it says which on
+        # its output, of which only these fixed sentences are looked for.
+        said = (await self._process("unlink", warnings=True)).decode("utf-8", errors="replace")
         saved = await self.saved_status()
         if saved.get("desired") or saved.get("linked"):
             raise ConnectError("Disconnect has not completed. Retry Disconnect when the relay is reachable.")
+        deadline = time.monotonic() + TUNNEL_STOP_TIMEOUT
+        while self.tunnel_running() and time.monotonic() < deadline:
+            await asyncio.sleep(0.5)
+        if "T3 Connect is disabled locally." not in said or self.tunnel_running():
+            raise ConnectError(
+                "T3 Connect is switched off here, but this session's tunnel has not been confirmed "
+                "stopped and may still give remote access. Choose Disconnect to try again; the "
+                "tunnel also ends when the session stops.")
+        # T3 also says it revoked nothing when there was never a link to revoke.
+        if had_link and "relay-side environment record" in said and "Revoked the relay-side environment record." not in said:
+            raise ConnectError(
+                "This session's tunnel has stopped, but T3's relay still lists the environment. "
+                "Choose Disconnect to try again when the relay is reachable, or remove the "
+                "environment from your T3 connections.",
+                connections_url=CONNECTIONS_PAGE)
         self.set_state("idle", "Disconnected. T3 Code still works here.")
 
     async def _run(self, operation):
