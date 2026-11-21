@@ -9,16 +9,20 @@
 
 _ai_ready=(/opt/ai-ready/env/bin/python /opt/ai-ready/lib/ai_ready_services.py)
 
-# The supervisor owns these values; nothing is repeated here.
-eval "$("${_ai_ready[@]}" env)"
-
 if [ "$(id -u)" -eq 0 ]; then
     # Started as root: run as the notebook user, like the server will. setpriv
     # replaces itself with the command. runuser would stay in front of it and
     # kill it two seconds after a SIGTERM, before PostgreSQL has shut down.
-    _ai_ready=(setpriv --reuid "${NB_USER}" --regid "$(id -g "${NB_USER}")" --init-groups
-        env "HOME=$(getent passwd "${NB_USER}" | cut -d: -f6)" "USER=${NB_USER}" "${_ai_ready[@]}")
+    _nb_user="${NB_USER:-jovyan}"
+    _nb_home="$(getent passwd "${_nb_user}" | cut -d: -f6)"
+    _ai_ready=(setpriv --reuid "${_nb_user}" --regid "$(id -g "${_nb_user}")" --init-groups
+        env "HOME=${_nb_home}" "USER=${_nb_user}" "${_ai_ready[@]}")
+    unset _nb_user _nb_home
 fi
+
+# The supervisor owns these values; nothing is repeated here.
+eval "$("${_ai_ready[@]}" env)"
+
 "${_ai_ready[@]}" run </dev/null &
 # The notebook server waits for this process when it exits
 # (/etc/scidesktop/jupyter_server_config.d/ai-ready.py).
