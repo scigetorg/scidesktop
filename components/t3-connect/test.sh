@@ -228,6 +228,13 @@ async def main():
     scenario("both-left")
     state = await settled(manager, "disconnect")
     assert state["state"] == "error" and "tunnel has not been confirmed stopped" in state["message"], state
+    tunnel = start_tunnel()
+    restarted = t3_connect.ConnectManager(t3=manager.t3, environ=environ)
+    await restarted.refresh()
+    state = restarted.snapshot()
+    assert state["state"] == "error" and "tunnel has not been confirmed stopped" in state["message"], state
+    tunnel.kill()
+    tunnel.wait()
     scenario("never-linked")
     state = await settled(manager, "disconnect")
     assert state["state"] == "error" and "relay still lists" in state["message"], state

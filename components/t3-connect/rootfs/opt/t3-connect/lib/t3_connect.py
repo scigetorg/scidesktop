@@ -59,6 +59,10 @@ class ConnectError(Exception):
         self.connections_url = connections_url
 
 
+TUNNEL_LEFT = (
+    "T3 Connect is switched off here, but this session's tunnel has not been confirmed "
+    "stopped and may still give remote access. Choose Disconnect to try again; the "
+    "tunnel also ends when the session stops.")
 RELAY_RECORD_LEFT = (
     "This session's tunnel has stopped, but T3's relay still lists the environment. "
     "Choose Disconnect to try again when the relay is reachable, or remove the "
@@ -286,10 +290,7 @@ class ConnectManager:
         while self.tunnel_running() and time.monotonic() < deadline:
             await asyncio.sleep(0.5)
         if "T3 Connect is disabled locally." not in said or self.tunnel_running():
-            raise ConnectError(
-                "T3 Connect is switched off here, but this session's tunnel has not been confirmed "
-                "stopped and may still give remote access. Choose Disconnect to try again; the "
-                "tunnel also ends when the session stops.")
+            raise ConnectError(TUNNEL_LEFT)
         # T3 also says it revoked nothing when there was never a link to revoke.
         if self.revoke_pending.exists():
             raise ConnectError(RELAY_RECORD_LEFT, connections_url=CONNECTIONS_PAGE)
@@ -345,8 +346,11 @@ class ConnectManager:
                 self.last_checked = time.time()
                 if self.revoke_pending.exists():
                     # A disconnect before this server started left the record.
-                    self.set_state("error", RELAY_RECORD_LEFT)
-                    self.connections_url = CONNECTIONS_PAGE
+                    if self.tunnel_running():
+                        self.set_state("error", TUNNEL_LEFT)
+                    else:
+                        self.set_state("error", RELAY_RECORD_LEFT)
+                        self.connections_url = CONNECTIONS_PAGE
                     return
                 with suppress(Exception):
                     saved = await self.saved_status()
