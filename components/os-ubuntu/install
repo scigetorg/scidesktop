@@ -5,6 +5,8 @@ set -euo pipefail
 HERE=/tmp/os-ubuntu
 : "${APT_SNAPSHOT:?}" "${CVMFS_VERSION:?}" "${CVMFS_CONFIG_VERSION:?}"
 : "${TARGETARCH:?}" "${NB_USER:?}" "${NB_UID:?}" "${NB_GID:?}"
+# First, so an unsupported architecture stops before anything is downloaded.
+deb_arch="$(target-arch deb)"
 
 echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
 # The build caches /var/cache/apt; the image's docker-clean hook would empty it.
@@ -15,11 +17,9 @@ rm -f /etc/apt/apt.conf.d/docker-clean
 # live archive.
 sources=/etc/apt/sources.list.d/ubuntu.sources
 cp "${sources}" "${sources}.live"
-case "${TARGETARCH}" in
-    amd64) archive=ubuntu ;;
-    *) echo "os-ubuntu: no snapshot mapping for ${TARGETARCH}" >&2; exit 1 ;;
-esac
-sed -i -E "s|^URIs: https?://(archive\|security)\.ubuntu\.com/ubuntu/?|URIs: https://snapshot.ubuntu.com/${archive}/${APT_SNAPSHOT}|" "${sources}"
+# The snapshot service has every architecture under /ubuntu, including the
+# ones the live archive serves from ports.ubuntu.com/ubuntu-ports.
+sed -i -E "s#^URIs: https?://((archive|security)\.ubuntu\.com/ubuntu|ports\.ubuntu\.com/ubuntu-ports)/?#URIs: https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT}#" "${sources}"
 grep -q "snapshot.ubuntu.com" "${sources}"
 
 apt_get() { apt-get -o Acquire::https::CAInfo=/tmp/bootstrap-ca.crt "$@"; }
@@ -36,7 +36,7 @@ apt_get install --yes --no-install-recommends \
 cvmfs_tmp=$(mktemp -d)
 for p in cvmfs cvmfs-libs cvmfs-fuse3; do
     curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "${cvmfs_tmp}/${p}.deb" \
-        "https://ecsft.cern.ch/dist/cvmfs/cvmfs-${CVMFS_VERSION}/${p}_${CVMFS_VERSION}+ubuntu${VERSION_ID}_${TARGETARCH}.deb"
+        "https://ecsft.cern.ch/dist/cvmfs/cvmfs-${CVMFS_VERSION}/${p}_${CVMFS_VERSION}+ubuntu${VERSION_ID}_${deb_arch}.deb"
 done
 curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "${cvmfs_tmp}/cvmfs-config-none.deb" \
     "https://ecsft.cern.ch/dist/cvmfs/cvmfs-config/cvmfs-config-none_${CVMFS_CONFIG_VERSION}_all.deb"
@@ -72,5 +72,5 @@ printf '%s\n' '' '# Drop-in snippets from image components.' \
 # This layer's entry in the image's version manifest.
 install -d -m 0755 /opt/scidesktop/manifest.d
 printf '{"id": "%s", "version": "%s", "arch": "%s", "package_snapshot": "%s", "cvmfs": "%s"}\n' \
-    "${ID}" "${VERSION_ID}" "$(uname -m)" "${APT_SNAPSHOT}" "${CVMFS_VERSION}" \
+    "${ID}" "${VERSION_ID}" "$(target-arch uname)" "${APT_SNAPSHOT}" "${CVMFS_VERSION}" \
     > /opt/scidesktop/manifest.d/os-ubuntu.json

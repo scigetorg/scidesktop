@@ -21,6 +21,7 @@ COPY --link --from=apptainer / /
 COPY --link --from=selkies / /
 COPY --link --from=jupyter-env / /
 COPY --link --from=sciget / /
+COPY --link --from=slurm / /
 
 LABEL maintainer="Sciget project <sciget.org>" \
       org.scidesktop.status="experimental" \

@@ -10,19 +10,21 @@ ARG UBUNTU_IMAGE
 FROM ${UBUNTU_IMAGE} AS build
 ARG NB_UID
 ARG NB_GID
+ARG TARGETARCH
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update && apt-get install --no-install-recommends -y ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 # A pin changed without ./lock fails here rather than installing the old lock.
 RUN --mount=type=bind,from=components,source=check-lock,target=/usr/local/bin/check-lock \
     --mount=type=bind,source=.,target=/src \
-    check-lock /src/environment.yml /src/linux-64.lock \
+    check-lock /src/environment.yml /src/linux-*.lock \
     && check-lock /src/requirements.in /src/requirements.lock
 COPY --from=micromamba /usr/local/bin/micromamba /usr/local/bin/micromamba
-COPY linux-64.lock requirements.lock /tmp/
+COPY linux-*.lock requirements.lock /tmp/
 COPY patches/ /tmp/patches/
-RUN micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
-        --file /tmp/linux-64.lock \
+RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
+        --file "/tmp/$(target-arch conda).lock" \
     # Keep users' installs on this Python minor, as docker-stacks does.
     && /opt/conda/bin/python -c 'import sys; print(f"python {sys.version_info[0]}.{sys.version_info[1]}.*")' \
         >> /opt/conda/conda-meta/pinned \
