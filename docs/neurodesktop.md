@@ -15,12 +15,13 @@ reusable: another image copies it with one line.
 | `code-server` | [code-server](https://github.com/coder/code-server) (VS Code in the browser), opened from the **VS Code** launcher tile | `/opt/code-server`, command `code-server` |
 | `coding-agents`, `t3-code` | Codex, Claude Code, OpenCode and the **scigent.ai** tile ([coding-agents.md](coding-agents.md)) | `/opt/coding-agents`, `/opt/t3-code` |
 | `neurodesk-agents` | Neurodesk's defaults for those agents: instructions for working with Neurodesk tools, and the Neurodesk model provider for OpenCode | `/opt/neurodesk-agents` |
-| `neurodesk-vscode` | the eight VS Code extensions neurodesktop gives its users, for every user ([VS Code](#vs-code)) | `/usr/local/share/code-server/extensions` |
-| `neurodesk-cli` | the [`neurodesk` command](#the-neurodesk-command): `cite`, `kernel`, `check`, `info` | `/opt/neurodesk-cli`, command `neurodesk` |
+| `vscode-core`, `vscode-niivue`, `vscode-coding-agents` | the eight VS Code extensions neurodesktop gives its users, split for reuse ([VS Code](#vs-code)) | `/usr/local/share/code-server/extensions` |
+| `scigethelpers-cli` | the [`scigethelpers` command](#the-scigethelpers-command): `cite`, `kernel`, `check`, `info` | `/opt/scigethelpers-cli`, command `scigethelpers` |
 
-`code-server`, `datalad` and the viewers are generic. `sciget-neuroimaging`
-and the four `neurodesk-*` components hold everything that is specific to
-Neurodesk.
+`code-server`, `vscode-core`, `vscode-niivue`, `vscode-coding-agents`,
+`scigethelpers-cli`, `datalad` and the viewers are reusable across domain
+images. `sciget-neuroimaging`, `neurodesk-cvmfs` and `neurodesk-agents` hold
+everything that is specific to Neurodesk.
 
 ## Using the tools
 
@@ -80,17 +81,15 @@ new home gets a `User/settings.json` that turns off self-updates and
 automatic port forwarding. Extensions a user installs come from
 [Open VSX](https://open-vsx.org).
 
-**Preinstalled extensions.** The `neurodesk-vscode` component gives every
-user the extensions neurodesktop installs:
+**Preinstalled extensions.** Three reusable components supply the eight
+extensions neurodesktop installs, so other images (such as `microdesktop`)
+can pick only what they need:
 
-| Extension | For |
-| --- | --- |
-| `anthropic.claude-code`, `openai.chatgpt` | Claude Code and Codex in the editor |
-| `ms-python.python`, `ms-toolsai.jupyter` | Python and notebooks |
-| `github.vscode-pull-request-github` | GitHub sign-in, pull requests and issues |
-| `repreng.csv` | CSV files as tables |
-| `korbinianeckstein.niivue` | NIfTI and other medical images |
-| `xy-sss.slurm--extension` | the session's [Slurm queue](slurm.md) |
+| Component | Extensions | For |
+| --- | --- | --- |
+| `vscode-core` | `ms-python.python`, `ms-toolsai.jupyter`, `github.vscode-pull-request-github`, `repreng.csv`, `xy-sss.slurm--extension` | Python, notebooks, GitHub PRs, CSV tables, Slurm queue |
+| `vscode-niivue` | `korbinianeckstein.niivue` | NIfTI and other medical images |
+| `vscode-coding-agents` | `anthropic.claude-code`, `openai.chatgpt` | Claude Code and Codex in the editor (~1.5 GB together) |
 
 neurodesktop downloads them into each home at every start. Here they are
 installed when the image is built, each at a pinned version and checked
@@ -102,8 +101,8 @@ reads one folder as its system extensions,
 `/usr/local/share/code-server/extensions`. The `code-server` component
 starts it with that folder (`--builtin-extensions-dir`) and fills it with a
 link to each extension of the code-server release. Any component adds its
-own beside them with `components/code-server/install-extension`, so the
-Neurodesk list is in `neurodesk-vscode` and not in `code-server`:
+own beside them with `components/code-server/install-extension`, so extensions
+stay out of `code-server` itself:
 
 ```dockerfile
 RUN --mount=type=bind,from=components,source=code-server/install-extension,target=/usr/local/bin/install-extension \
@@ -119,30 +118,31 @@ it does not show them.
 | --- | --- | --- |
 | `CODE_SERVER_WORKDIR` | the home folder | The folder VS Code opens |
 
-## The neurodesk command
+## The scigethelpers command
 
-`neurodesk` is neurodesktop's helper command, from the `neurodesk-cli`
-component:
+`scigethelpers` is the generalized helper command ported from neurodesktop's
+`neurodesk` CLI, shipped by the `scigethelpers-cli` component (shared with
+`microdesktop` and other domain images):
 
 | Command | What it does |
 | --- | --- |
-| `neurodesk cite` | writes `CITATIONS.md` in the home folder: a methods sentence and the reference for each Neurodesk tool loaded as a module |
-| `neurodesk kernel add <module>` | registers the Python inside a tool's container as a notebook kernel; `list` and `remove` manage them |
-| `neurodesk check [cvmfs\|gpu\|slurm]` | read-only checks, each `PASS`, `FAIL` or `SKIP` |
-| `neurodesk info` | the image's components, the session's CPUs and memory, GPUs and the CVMFS server |
+| `scigethelpers cite` | writes `CITATIONS.md` in the home folder: a methods sentence and the reference for each container tool loaded as a module |
+| `scigethelpers kernel add <module>` | registers the Python inside a tool's container as a notebook kernel; `list` and `remove` manage them |
+| `scigethelpers check [cvmfs\|gpu\|slurm]` | read-only checks, each `PASS`, `FAIL` or `SKIP` |
+| `scigethelpers info` | the image's components, the session's CPUs and memory, GPUs and the CVMFS server |
 
-`neurodesk <command> --help` has each command's options. The older names
-`neurodesk-cite` and `neurodesk-kernel` work too.
+`scigethelpers <command> --help` has each command's options. The standalone
+commands `scigethelpers-cite` and `scigethelpers-kernel` work too.
 
-`neurodesk cite` knows what was loaded because Lmod records it: the
+`scigethelpers cite` knows what was loaded because Lmod records it: the
 component sets `LMOD_PACKAGE_PATH` to a site package that appends one line
-per loaded Neurodesk module to `~/.local/state/neurodesk/module-usage.tsv`.
-Modules from the Neurodesk CVMFS repository and modules `sciget install`
-wrote are recorded; nothing leaves the session. The citations come from the
-Neurodesk catalogue, fetched when the command runs.
+per loaded container module to `~/.local/state/scigethelpers/module-usage.tsv`.
+Modules from `/cvmfs/` and modules `sciget install` wrote are recorded; nothing
+leaves the session. Citations are fetched from the image's configured sciget
+catalogs (`/etc/sciget/catalogs.json` and `~/.config/sciget/catalogs.json`).
 
-`neurodesk kernel add` needs the module's commands to be Neurodesk container
-wrappers, as the modules on CVMFS are, and a container with `ipykernel`.
+`scigethelpers kernel add` needs the module's commands to be container
+wrappers and a container with `ipykernel`.
 
 The commands neurodesktop has and this image does not: `uv`, `jobs`,
 `update`, `test`, `t3`, `agent preflight`, `astra` and `lightcone
@@ -235,10 +235,10 @@ earlier review of what belongs in the base is in
 | neurodesktop | Component |
 | --- | --- |
 | CVMFS configuration and public key for `neurodesk.ardc.edu.au` | `neurodesk-cvmfs` |
-| The VS Code extensions installed into each home at start | `neurodesk-vscode`: the same eight, installed at build time for every user; added after the first port |
-| The `neurodesk` command, the kernel wrapper and the Lmod site package behind `neurodesk cite` | `neurodesk-cli`: `cite`, `kernel`, `check` and `info`, with this image's paths; added after the first port |
+| The VS Code extensions installed into each home at start | `vscode-core`, `vscode-niivue`, `vscode-coding-agents`: the same eight, split for reuse and installed at build time for every user |
+| The `neurodesk` command, the kernel wrapper and the Lmod site package behind `neurodesk cite` | `scigethelpers-cli`: `scigethelpers cite`, `kernel`, `check` and `info`, generalized for any sciget catalog |
 | The NiiVue viewer (`jupyterlab-niivue`) and FreeBrowse, with NiiVue the default for NIfTI files | `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)); generic, added after the first port |
-| `AGENTS.md` for the agents; the Neurodesk LLM provider for OpenCode | `neurodesk-agents`. The instructions are written for this image, not copied: neurodesktop's describe Slurm, ASTRA and wrapper scripts this image does not have |
+| `AGENTS.md` for the agents; the Neurodesk LLM provider for OpenCode | `neurodesk-agents`. The instructions are written for this image, not copied: neurodesktop's describe ASTRA, neurocommand and wrapper scripts this image does not have |
 
 **(d) Deliberately not ported**
 
@@ -296,7 +296,7 @@ VS Code tab holds a code-server process of a few hundred MB.
 | The CVMFS mirrors or key | `components/neurodesk-cvmfs/rootfs/etc/cvmfs` | Edit the file. The manifest entry records the key's fingerprint |
 | The agents' instructions, the provider | `components/neurodesk-agents/rootfs/opt/neurodesk-agents` | Edit the file |
 | A VS Code extension | `VSCODE_*_VERSION` in `docker-bake.hcl` | Renovate proposes the version from Open VSX. Update its `VSCODE_*_SHA256` variables from the `sha256` file Open VSX publishes beside each download; three extensions have one per architecture |
-| The `neurodesk` command | `components/neurodesk-cli/rootfs/opt/neurodesk-cli` | Edit the file; each names the neurodesktop file it was ported from |
+| The `scigethelpers` command | `components/scigethelpers-cli/rootfs/opt/scigethelpers-cli` | Edit the file; each names the neurodesktop file it was generalized from |
 
 Check the image with:
 
@@ -318,7 +318,7 @@ checks only the configuration.
 | DataLad, datalad-container | MIT | `/opt/datalad/lib/python3.13/site-packages/datalad-*.dist-info/licenses` |
 | jupyterlab-niivue | BSD-2-Clause | `/opt/jupyterlab-niivue/lib/jupyterlab_niivue-*.dist-info/licenses/LICENSE` |
 | FreeBrowse (Neurodesk's fork) | BSD-2-Clause; its Jupyter extension declares MIT | `/opt/jupyterlab-freebrowse/LICENSE` |
-| The `neurodesk` command, its helpers and the Lmod site package | MIT, from neurodesktop (Copyright (c) 2021 NeuroDesk) | `/opt/neurodesk-cli/LICENSE` |
+| The `scigethelpers` command, its helpers and the Lmod site package | MIT, generalized from neurodesktop (Copyright (c) 2021 NeuroDesk) | `/opt/scigethelpers-cli/LICENSE` |
 | `ms-python.python`, `ms-toolsai.jupyter`, `github.vscode-pull-request-github`, `xy-sss.slurm--extension` | MIT | each extension's folder under `/usr/local/share/code-server/extensions` |
 | `korbinianeckstein.niivue` | BSD-2-Clause | its folder, `LICENSE.txt` |
 | `repreng.csv` | no licence declared on Open VSX; its folder carries the publisher's licence file | its folder |

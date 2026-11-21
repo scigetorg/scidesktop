@@ -46,6 +46,9 @@ def _stop_services(pid, seconds=30):
     shutdown API, a signal to it alone), this one is the only signal.
     """
     try:
+        with open(f"/proc/{pid}/cmdline", "rb") as cmdline:
+            if b"ai_ready_services.py" not in cmdline.read():
+                return
         os.kill(pid, signal.SIGTERM)
     except OSError:
         return

@@ -48,5 +48,10 @@ module. Do not install them with pip, conda or apt.
   a Python environment you create) instead of assuming a step worked.
 - Python packages for an analysis go into an environment in the home folder
   (`mamba create -p ~/envs/<name> ...`), not into `/opt/conda`.
-- Long computations belong in a terminal multiplexer (`tmux`) or a script the
-  user can restart, not in a command that dies with this session.
+- A single-node Slurm queue (`sbatch`, `srun`, `squeue`, `sinfo`) runs in every
+  session for batch jobs and parallel workflows. Long interactive work belongs
+  in `tmux` or a script the user can restart.
+- Helper commands via `scigethelpers`: `scigethelpers cite` writes `CITATIONS.md`
+  for loaded modules, `scigethelpers kernel add <module>` registers a tool
+  container's Python as a Jupyter kernel, and `scigethelpers check` /
+  `scigethelpers info` inspect CVMFS, GPU, Slurm and session resources.

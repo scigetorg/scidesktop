@@ -28,7 +28,7 @@ RUN : "${NB_UID:?}" "${NB_GID:?}" \
     # Where Slurm's daemons keep their sockets (the paths are fixed in Slurm)
     # and where this session's configuration, state and logs go: the
     # notebook user's, so nothing needs root at start.
-    && install -d -m 0755 -o "${NB_UID}" -g "${NB_GID}" /out/run/slurm /out/run/slurmctld \
+    && install -d -m 0775 -o "${NB_UID}" -g "${NB_GID}" /out/run/slurm /out/run/slurmctld \
     # The manifest identifies the start logic by content; the Slurm version
     # is the OS layer's.
     && printf '{"session_sha256": "%s", "loopback_bind_sha256": "%s"}\n' \
