@@ -33,20 +33,28 @@ internal)
     # set) and refuses to mount when the container's hard limit is lower,
     # which root here may not raise. Ask for no more than the container has.
     nfiles="${CVMFS_NFILES:-65536}"
+    [[ "${nfiles}" =~ ^[0-9]+$ ]] || nfiles=65536
     hard="$(ulimit -Hn)"
     if [ "${hard}" != unlimited ] && [ "${hard}" -lt "${nfiles}" ]; then
         nfiles="${hard}"
     fi
 
+    quote_sh() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
     mkdir -p /var/lib/cvmfs
-    cat > /etc/cvmfs/default.local <<CONF
-CVMFS_HTTP_PROXY=${CVMFS_HTTP_PROXY:-DIRECT}
-CVMFS_QUOTA_LIMIT=${CVMFS_QUOTA_LIMIT:-5000}
-CVMFS_CACHE_BASE=${CVMFS_CACHE_BASE:-/var/lib/cvmfs}
-CVMFS_REPOSITORIES=${REPOS}
-CVMFS_NFILES=${nfiles}
-CONF
-    for repo in ${REPOS//,/ }; do
+    {
+        printf 'CVMFS_HTTP_PROXY=%s\n' "$(quote_sh "${CVMFS_HTTP_PROXY:-DIRECT}")"
+        printf 'CVMFS_QUOTA_LIMIT=%s\n' "$(quote_sh "${CVMFS_QUOTA_LIMIT:-5000}")"
+        printf 'CVMFS_CACHE_BASE=%s\n' "$(quote_sh "${CVMFS_CACHE_BASE:-/var/lib/cvmfs}")"
+        printf 'CVMFS_REPOSITORIES=%s\n' "$(quote_sh "${REPOS}")"
+        printf 'CVMFS_NFILES=%s\n' "$(quote_sh "${nfiles}")"
+    } > /etc/cvmfs/default.local
+    IFS=, read -ra _repos <<< "${REPOS}"
+    for repo in "${_repos[@]}"; do
+        [ -n "${repo}" ] || continue
+        if [[ ! "${repo}" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "[cvmfs] ignoring invalid repository name: ${repo}"
+            continue
+        fi
         mkdir -p "/cvmfs/${repo}"
         if mountpoint -q "/cvmfs/${repo}"; then
             echo "[cvmfs] ${repo} already mounted"
