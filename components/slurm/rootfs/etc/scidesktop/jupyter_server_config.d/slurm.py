@@ -14,6 +14,9 @@ import time
 
 def _stop_slurm(pid, seconds=45):
     try:
+        with open(f"/proc/{pid}/cmdline", "rb") as cmdline:
+            if b"slurm-session" not in cmdline.read():
+                return
         os.kill(pid, signal.SIGTERM)
     except OSError:
         return

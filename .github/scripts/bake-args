@@ -21,9 +21,11 @@ for dockerfile in components/*/Dockerfile images/*/Dockerfile; do
         echo "--set=${target}.cache-to=type=gha,scope=${target}-${arch},mode=max"
     fi
 done
-echo "--set=os-ubuntu-build.cache-from=type=gha,scope=os-ubuntu-build-${arch}"
-if [ "${3:-}" = write-cache ]; then
-    echo "--set=os-ubuntu-build.cache-to=type=gha,scope=os-ubuntu-build-${arch},mode=max"
+if [ "${3:-}" != no-cache ]; then
+    echo "--set=os-ubuntu-build.cache-from=type=gha,scope=os-ubuntu-build-${arch}"
+    if [ "${3:-}" = write-cache ]; then
+        echo "--set=os-ubuntu-build.cache-to=type=gha,scope=os-ubuntu-build-${arch},mode=max"
+    fi
 fi
 for dockerfile in images/*/Dockerfile; do
     image="$(basename "$(dirname "${dockerfile}")")"

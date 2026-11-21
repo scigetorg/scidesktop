@@ -32,8 +32,10 @@ log() { echo "[slurm] $*"; }
 node_name() { hostname -s 2>/dev/null || hostname; }
 
 cpus() {
-    local n
-    n="$(awk -v c="${CPU_LIMIT:-}" 'BEGIN { n = int(c); if (n < c) n++; print n }' 2>/dev/null)"
+    local n=""
+    if [[ "${CPU_LIMIT:-}" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        n="$(awk -v c="${CPU_LIMIT}" 'BEGIN { n = int(c); if (n < c) n++; print n }' 2>/dev/null)"
+    fi
     [ "${n:-0}" -ge 1 ] 2>/dev/null || n="$(nproc)"
     echo "${n}"
 }
@@ -57,8 +59,19 @@ memory_mb() {
 
 write_configuration() {
     local node user cpus memory partition="${SCIDESKTOP_SLURM_PARTITION:-scidesktop}"
-    local ports="${SCIDESKTOP_SLURM_PORTS:-6817,6818}"
-    [[ "${ports}" =~ ^[0-9]+,[0-9]+$ ]] || ports=6817,6818
+    local ports="${SCIDESKTOP_SLURM_PORTS:-6817,6818}" ctl_port node_port
+    [[ "${partition}" =~ ^[A-Za-z0-9._-]+$ ]] || partition=scidesktop
+    if [[ "${ports}" =~ ^[0-9]+,[0-9]+$ ]]; then
+        ctl_port="${ports%,*}"
+        node_port="${ports#*,}"
+        if [ "${ctl_port}" -lt 1 ] || [ "${ctl_port}" -gt 65535 ] \
+            || [ "${node_port}" -lt 1 ] || [ "${node_port}" -gt 65535 ] \
+            || [ "${ctl_port}" -eq "${node_port}" ]; then
+            ports=6817,6818
+        fi
+    else
+        ports=6817,6818
+    fi
     node="$(node_name)"
     user="$(id -un)"
     cpus="$(cpus)"
@@ -113,14 +126,19 @@ CONF
 
 # stop <pid file>: SIGTERM, then SIGKILL after STOP_SECONDS.
 stop() {
-    local pid
+    local pid expected comm
     pid="$(cat "$1" 2>/dev/null)" || return 0
+    expected="$(basename "$1" .pid)"
+    if [ -n "${pid}" ] && [ -r "/proc/${pid}/comm" ]; then
+        comm="$(cat "/proc/${pid}/comm" 2>/dev/null || true)"
+        [ "${comm}" = "${expected}" ] || return 0
+    fi
     [ -n "${pid}" ] && kill -TERM "${pid}" 2>/dev/null || return 0
     for _ in $(seq $(( STOP_SECONDS * 10 ))); do
         kill -0 "${pid}" 2>/dev/null || return 0
         sleep 0.1
     done
-    log "$(basename "$1" .pid) did not stop in ${STOP_SECONDS} s; killing it"
+    log "${expected} did not stop in ${STOP_SECONDS} s; killing it"
     kill -KILL "${pid}" 2>/dev/null
 }
 
@@ -152,7 +170,7 @@ run() {
         || { log "FAILED: slurmd did not start; see ${LOG}/slurmd.log"; stop "${RUN}/slurmctld.pid"; return 1; }
     if wait_ready; then
         log "started; logs in ${LOG}"
-    else
+    elif [ -z "${stopping}" ]; then
         log "the queue is not ready after 60 s; see ${LOG}"
     fi
     while [ -z "${stopping}" ] && alive "${RUN}/slurmctld.pid" && alive "${RUN}/slurmd.pid"; do
@@ -169,8 +187,10 @@ run() {
 
 wait_ready() {
     for _ in $(seq 60); do
+        [ -z "${stopping:-}" ] || return 1
         if sinfo -h -o '%T' 2>/dev/null | grep -qx 'idle'; then return 0; fi
-        sleep 1
+        sleep 1 &
+        wait $!
     done
     return 1
 }

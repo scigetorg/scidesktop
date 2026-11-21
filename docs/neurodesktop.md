@@ -168,7 +168,7 @@ earlier review of what belongs in the base is in
 | --- | --- |
 | CVMFS configuration and public key for `neurodesk.ardc.edu.au` | `neurodesk-cvmfs` |
 | The NiiVue viewer (`jupyterlab-niivue`) and FreeBrowse, with NiiVue the default for NIfTI files | `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)); generic, added after the first port |
-| `AGENTS.md` for the agents; the Neurodesk LLM provider for OpenCode | `neurodesk-agents`. The instructions are written for this image, not copied: neurodesktop's describe Slurm, ASTRA and wrapper scripts this image does not have |
+| `AGENTS.md` for the agents; the Neurodesk LLM provider for OpenCode | `neurodesk-agents`. The instructions are written for this image, not copied: neurodesktop's describe ASTRA, neurocommand and wrapper scripts this image does not have |
 
 **(d) Deliberately not ported**
 

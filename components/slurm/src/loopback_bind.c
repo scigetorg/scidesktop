@@ -8,18 +8,36 @@
  */
 #define _GNU_SOURCE
 #include <dlfcn.h>
+#include <errno.h>
 #include <netinet/in.h>
+#include <stdatomic.h>
 #include <string.h>
 #include <sys/socket.h>
 
+typedef int (*bind_fn)(int, const struct sockaddr *, socklen_t);
+static _Atomic bind_fn real_bind;
+
+__attribute__((constructor))
+static void resolve_real_bind(void)
+{
+    bind_fn fn = (bind_fn)dlsym(RTLD_NEXT, "bind");
+    atomic_store_explicit(&real_bind, fn, memory_order_release);
+}
+
 int bind(int fd, const struct sockaddr *address, socklen_t length)
 {
-    static int (*next)(int, const struct sockaddr *, socklen_t);
+    bind_fn next = atomic_load_explicit(&real_bind, memory_order_acquire);
     struct sockaddr_in v4;
     struct sockaddr_in6 v6;
 
-    if (!next)
-        next = dlsym(RTLD_NEXT, "bind");
+    if (!next) {
+        next = (bind_fn)dlsym(RTLD_NEXT, "bind");
+        if (!next) {
+            errno = ENOSYS;
+            return -1;
+        }
+        atomic_store_explicit(&real_bind, next, memory_order_release);
+    }
     if (address && address->sa_family == AF_INET && length >= sizeof(v4)) {
         memcpy(&v4, address, sizeof(v4));
         if (v4.sin_addr.s_addr == htonl(INADDR_ANY)) {
