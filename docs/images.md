@@ -10,6 +10,7 @@ that builds on it and adds what its community needs.
 images/
   scidesktop/      the base; its Dockerfile only assembles components
   microdesktop/    FROM scidesktop: microscopy
+  aidesktop/       FROM scidesktop, plus the ai-ready component
 ```
 
 ## How a domain image gets the base
@@ -42,6 +43,36 @@ builds on a stale base by accident. (`FROM scidesktop` would not fail: bake
 loads the base into the local image store as `scidesktop:latest`, and a plain
 build would take whatever version is stored there.)
 
+## Optional components
+
+Some software is a component but does not belong in every image: the AI Ready
+workshop adds 2.6 GB and background services. Such a component lives in
+`components/` like any other, with its own test, and stays out of the base's
+assembly. The domain images that want it copy it the way the assembly does:
+
+```dockerfile
+FROM scidesktop-base
+
+COPY --link --from=ai-ready / /
+```
+
+```hcl
+contexts = {
+  scidesktop-base = "target:scidesktop"
+  ai-ready        = "target:ai-ready"
+}
+```
+
+Several images can copy the same component, and nodes download its layer
+once. Rule S6 checks the
+`COPY` line and the bake context. The layer rules (L1 to L5) cover every
+component an image copies, so an optional component may not overwrite a file
+of the base's components either.
+
+An optional component keeps to its own prefix and the
+[shared places](components.md#shared-places). The image sets the environment
+variables it needs, with a comment naming the component.
+
 ## What a domain image may do
 
 Anything a Dockerfile can, inside its own folder: install packages, add
@@ -57,6 +88,7 @@ The contract test (`python3 test/contract.py static`, rule S6) checks that each
 folder in `images/` has a bake target of the same name in the `default` group,
 built from that folder, and that the stage a domain image builds starts from
 `<image>-base` for another image in `images/`, handed in as a bake target.
+A component it copies must be copied whole and be a bake context of the image.
 
 ## Adding an image
 
@@ -65,10 +97,40 @@ built from that folder, and that the stage a domain image builds starts from
 2. In `docker-bake.hcl`: a variable `<NAME>_IMAGE` for its tag (list it in
    `NOT_RENOVATED` in `test/contract.py`), a target like `microdesktop`'s, and
    the target in group `default`.
-3. In `.github/workflows/image.yml`: add it to the cache loop, set its tag to
-   `<name>:ci` and add a smoke test step.
-4. `python3 test/contract.py static`, `docker buildx bake <name>`,
+3. `python3 test/contract.py static`, `docker buildx bake <name>`,
    `./test/smoke.sh <name>`.
+4. If the image has behaviour of its own to check, add an executable
+   `images/<name>/smoke.sh` that takes the image as its argument. CI runs it
+   after `test/smoke.sh`, which still runs on every image. `aidesktop`'s is one
+   line that calls `test/ai-ready-smoke.sh`.
+5. To publish it, add its name to `PUBLISH` in `.github/workflows/image.yml`.
+
+## CI and publishing
+
+`.github/workflows/image.yml` finds the images by their folders, so a new
+image is built, cached and smoke-tested on amd64 and arm64 without a change
+to the workflow.
+
+- **Pull requests:** one job per architecture, each on a runner of that
+  architecture (no emulation). It runs the contract checks, builds every
+  component, test and image, and smoke-tests every image: `test/smoke.sh`,
+  then the image's own `smoke.sh` when its folder has one. Nothing is pushed.
+- **Pushes to `main`:** the same jobs, then each pushes the images named in
+  `PUBLISH` to `ghcr.io/<owner>/<image>` under a candidate tag,
+  `run-<run id>-<arch>`. When both architectures have passed, the `publish`
+  job joins the candidates into one multi-arch image and tags it
+  `<short sha>`, `<YYYY-MM-DD>` (the commit's date) and `latest`. If either
+  architecture fails, nothing is tagged. Every image gets its `<short sha>`
+  tag before any image's date and `latest` tags move, so a failure part way
+  leaves those where they were. A run whose commit is no longer the head of
+  `main` (a re-run of an older run, or `main` advancing while the run
+  publishes) publishes its `<short sha>` and leaves them too: the head is read
+  again before each image's tags move
+  (`test/publish-manifests-test.sh`). The candidate tags stay in the registry: the multi-arch
+  image points at them.
+
+`PUBLISH` lists `scidesktop` and `aidesktop`. A published
+domain image gets its own package, `ghcr.io/<owner>/<name>`.
 
 ## Forks
 

@@ -12,7 +12,11 @@ check() {
     fi
 }
 has() { command -v "$1"; }
-lib() { ldconfig -p | grep -q "$1"; }
+# The list is read once and searched from memory: under pipefail,
+# `ldconfig -p | grep -q` fails when grep finds its match and exits before
+# ldconfig has written the rest of a long list.
+LIBRARIES="$(ldconfig -p)"
+lib() { grep -q "$1" <<<"${LIBRARIES}"; }
 
 echo "os-contract: $(. /etc/os-release && echo "${PRETTY_NAME}") $(uname -m)"
 

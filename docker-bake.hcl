@@ -19,7 +19,8 @@
 # Renovate updates every variable carrying a "# renovate:" comment. Keep each
 # variable on one line: the comment, then `variable "NAME" { default = "..." }`.
 # Checksums are not updated by Renovate; a version bump fails the build until
-# its checksum is updated too.
+# its checksum is updated too. A file that differs per architecture has one
+# checksum variable per architecture: NAME_SHA256_AMD64, NAME_SHA256_ARM64.
 
 # renovate: datasource=docker depName=ubuntu
 variable "UBUNTU" { default = "26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96" }
@@ -31,7 +32,8 @@ variable "CVMFS_CONFIG_VERSION" { default = "1.1-0" }
 
 # renovate: datasource=github-releases depName=mamba-org/micromamba-releases
 variable "MICROMAMBA_VERSION" { default = "2.10.0-0" }
-variable "MICROMAMBA_SHA256" { default = "701f39c06f8e6a670a0e186c8479b9e5c0502a2f0cda6cef65d83bdd2875e8bd" }
+variable "MICROMAMBA_SHA256_AMD64" { default = "701f39c06f8e6a670a0e186c8479b9e5c0502a2f0cda6cef65d83bdd2875e8bd" }
+variable "MICROMAMBA_SHA256_ARM64" { default = "3bb56786e21b9b24024f599fe9185b4a59dc3f9f59937a42311ee583adbbb23c" }
 
 # renovate: datasource=github-releases depName=apptainer/apptainer extractVersion=^v(?<version>.*)$
 variable "APPTAINER_VERSION" { default = "1.5.5" }
@@ -56,17 +58,28 @@ variable "NB_GID" { default = "100" }
 
 # --- Build settings ---------------------------------------------------------
 
+# The platform to build, for example linux/arm64. Empty builds for the machine
+# the builder runs on, which is what loads into the local image store. One
+# platform per run: CI builds each on its own runner and joins them when it
+# publishes.
+variable "PLATFORM" { default = "" }
 variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
+variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
 # (Renovate tracks its main branch). For local sciget development, build your
 # working copy instead: SCIGET_SRC=../sciget docker buildx bake --allow=fs.read=..
 variable "SCIGET_COMMIT" { default = "56c2f310188ad60f58ded74f811bd3e889c19882" }
 variable "SCIGET_SRC" { default = "https://github.com/scigetorg/sciget.git#${SCIGET_COMMIT}" }
+# Intersect Australia's AI Ready workshop (Apache-2.0): its notebooks, DAGs and
+# requirements are taken from this commit (Renovate tracks its main branch).
+# After changing it, run components/ai-ready/lock.
+variable "AI_READY_COMMIT" { default = "26250b89d323c9981fc1a88c9fe2c0f69993b58d" }
+variable "AI_READY_SRC" { default = "https://github.com/IntersectAustralia/ai-ready-containers.git#${AI_READY_COMMIT}" }
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop"]
+  targets = ["scidesktop", "microdesktop", "aidesktop"]
 }
 
 group "test" {
@@ -79,11 +92,12 @@ group "test" {
     "lmod-test",
     "sciget-test",
     "micromamba-test",
+    "ai-ready-test",
   ]
 }
 
 target "_common" {
-  platforms = ["linux/amd64"]
+  platforms = PLATFORM == "" ? [] : [PLATFORM]
 }
 
 # --- OS layer ---------------------------------------------------------------
@@ -93,7 +107,10 @@ target "os-ubuntu" {
   inherits = ["_common"]
   context  = "components/os-ubuntu"
   target   = "os"
-  contexts = { tests = "test" }
+  contexts = {
+    tests      = "test"
+    components = "components"
+  }
   args = {
     UBUNTU_IMAGE         = "docker.io/library/ubuntu:${UBUNTU}"
     APT_CACHE_ID         = "ubuntu-${regex("^[^@]+", UBUNTU)}"
@@ -142,12 +159,18 @@ target "_component" {
 # A build tool for the conda-based components; not copied into the image.
 target "micromamba" {
   inherits = ["_common"]
-  contexts = { os = "target:os-ubuntu" }
-  context  = "components/micromamba"
-  target   = "component"
+  contexts = {
+    os         = "target:os-ubuntu"
+    components = "components"
+  }
+  context = "components/micromamba"
+  target  = "component"
   args = {
-    MICROMAMBA_VERSION = MICROMAMBA_VERSION
-    MICROMAMBA_SHA256  = MICROMAMBA_SHA256
+    UBUNTU_IMAGE            = "docker.io/library/ubuntu:${UBUNTU}"
+    APT_CACHE_ID            = "ubuntu-${regex("^[^@]+", UBUNTU)}"
+    MICROMAMBA_VERSION      = MICROMAMBA_VERSION
+    MICROMAMBA_SHA256_AMD64 = MICROMAMBA_SHA256_AMD64
+    MICROMAMBA_SHA256_ARM64 = MICROMAMBA_SHA256_ARM64
   }
 }
 
@@ -249,6 +272,23 @@ target "micromamba-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: not in the base. The aidesktop image copies it.
+target "ai-ready" {
+  inherits = ["_component"]
+  context  = "components/ai-ready"
+  target   = "component"
+  contexts = { ai-ready-src = AI_READY_SRC }
+  args = {
+    AI_READY_COMMIT = AI_READY_COMMIT
+  }
+}
+
+target "ai-ready-test" {
+  inherits = ["ai-ready"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # --- Images -----------------------------------------------------------------
 
 # The base: the components assembled on the OS layer.
@@ -277,3 +317,16 @@ target "microdesktop" {
   tags     = [MICRODESKTOP_IMAGE]
   output   = ["type=docker"]
 }
+
+# Domain images may also copy components the base leaves out (docs/images.md).
+target "aidesktop" {
+  inherits = ["_common"]
+  context  = "images/aidesktop"
+  contexts = {
+    scidesktop-base = "target:scidesktop"
+    ai-ready        = "target:ai-ready"
+  }
+  tags   = [AIDESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
