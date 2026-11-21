@@ -1,0 +1,47 @@
+#!/bin/bash
+# The test of a JupyterLab viewer component (jupyterlab-niivue,
+# jupyterlab-freebrowse): runs on the OS layer as the notebook user, with the
+# Jupyter environment mounted at /opt/conda and test/viewer-check.py at
+# /tmp/viewer-check.py.
+#
+#   viewer-test <component>
+set -euo pipefail
+component="${1:?usage: viewer-test <component>}"
+python=/opt/conda/bin/python
+work="$(mktemp -d)"
+server=""
+# The server is waited for before its folder is removed: it writes there
+# until it has exited, and under `set -e` a failed removal would fail the test.
+trap '[ -z "${server}" ] || { kill "${server}" 2>/dev/null; wait "${server}" 2>/dev/null; } || true; rm -rf "${work}" || true' EXIT
+
+# JupyterLab finds the extension where the component put it, with no setting.
+export HOME="${work}/home"
+mkdir -p "${HOME}"
+"${python}" -m jupyter labextension list >"${work}/labextensions" 2>&1
+grep -A 40 '^/usr/local/share/jupyter/labextensions' "${work}/labextensions" | grep -q 'enabled.*OK' \
+    || { cat "${work}/labextensions"; exit 1; }
+
+# A notebook server with this component's configuration, under a nested URL
+# as JupyterHub serves it.
+base=/user/viewer-test/
+# A free port: on some builders the tests of several components run at once
+# and share one network.
+port="$("${python}" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+"${python}" -m jupyter lab --no-browser --ip=127.0.0.1 --port="${port}" --ServerApp.port_retries=0 \
+    --ServerApp.base_url="${base}" --IdentityProvider.token=viewer-test --ServerApp.root_dir="${HOME}" \
+    >"${work}/jupyter.log" 2>&1 &
+server=$!
+for _ in $(seq 60); do
+    if curl -fsS -o /dev/null "http://127.0.0.1:${port}${base}api/status?token=viewer-test" 2>/dev/null; then break; fi
+    sleep 1
+done
+"${python}" /tmp/viewer-check.py "http://127.0.0.1:${port}${base}" viewer-test "${component}" \
+    || { grep -v "Skipped non-installed" "${work}/jupyter.log" | tail -n 60; exit 1; }
+
+# Nothing root-owned is writable by group or others, and the user can read it all.
+if find "/opt/${component}" /usr/local/share/jupyter/labextensions \
+        "/etc/scidesktop/jupyter_server_config.d/${component}.py" \
+        ! -type l \( -perm /022 -o ! -readable \) -print | grep .; then
+    echo "bad permissions on the files above" >&2
+    exit 1
+fi
