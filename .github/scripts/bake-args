@@ -1,19 +1,21 @@
 #!/bin/bash
 # Arguments for `docker buildx bake` in CI, one per line.
 #
-#   bake-args <arch> <tag> [write-cache]
+#   bake-args <arch> <tag> [write-cache|no-cache]
 #
 # Every folder in components/ and images/ gets its own GitHub Actions cache
 # scope per architecture, so an unchanged component is not rebuilt and the two
 # architectures do not evict each other's layers. Every image in images/ is
 # tagged <image>:<tag>. The lists come from the folders: a new component or
-# image needs no change here or in the workflows.
+# image needs no change here or in the workflows. `no-cache` names no cache
+# at all, for a build that must not depend on what the cache still holds.
 set -euo pipefail
-arch="${1:?usage: bake-args <arch> <tag> [write-cache]}"
-tag="${2:?usage: bake-args <arch> <tag> [write-cache]}"
+arch="${1:?usage: bake-args <arch> <tag> [write-cache|no-cache]}"
+tag="${2:?usage: bake-args <arch> <tag> [write-cache|no-cache]}"
 cd "$(dirname "$0")/../.."
 for dockerfile in components/*/Dockerfile images/*/Dockerfile; do
     target="$(basename "$(dirname "${dockerfile}")")"
+    [ "${3:-}" != no-cache ] || continue
     echo "--set=${target}.cache-from=type=gha,scope=${target}-${arch}"
     if [ "${3:-}" = write-cache ]; then
         echo "--set=${target}.cache-to=type=gha,scope=${target}-${arch},mode=max"

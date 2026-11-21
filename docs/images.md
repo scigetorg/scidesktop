@@ -195,6 +195,9 @@ to the workflow.
   architecture (no emulation). It runs the contract checks, builds every
   component, test and image, and runs `test/image-smoke.sh` on every image.
   Nothing is pushed.
+  The Actions cache holds 10 GB for the repository and evicts the rest. A
+  build that fails because a cached layer was evicted while it ran is run
+  once more without the cache; any other failure stands.
 - **Pushes to `main`:** the same jobs, then each pushes the images named in
   `PUBLISH` to `ghcr.io/<owner>/<image>` under a candidate tag,
   `run-<run id>-<arch>`. When both architectures have passed, the `publish`

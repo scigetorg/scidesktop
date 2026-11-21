@@ -101,6 +101,7 @@ container log. The session goes on without a queue.
 | `SCIDESKTOP_SLURM` | `yes` | `no` starts no queue |
 | `SCIDESKTOP_SLURM_PARTITION` | `scidesktop` | the partition's name |
 | `SCIDESKTOP_SLURM_MEMORY_RESERVE_MB` | `512` | memory kept back from jobs |
+| `SCIDESKTOP_SLURM_PORTS` | `6817,6818` | the controller's and the worker's loopback ports |
 | `SLURM_CONF` | unset | set to a cluster's configuration (an HPC login node, with its sockets mounted): that cluster is used and none is started |
 
 The queue is not started when the session runs under a user ID that cannot
