@@ -45,6 +45,49 @@ assert proxy.rewrite_client(preview, "text/html", "/x.html", prefix) is preview
 print(f"adapter fits the client: {len(adapted)} files adapted")
 PYTHON
 
+# The origin guard judges the request Jupyter Server is serving (its call
+# context), whatever else is on the call stack, and without one the proxy's
+# credential is not handed out.
+mkdir -p "${work}/guard-home/.t3"
+echo '{"token": "guard-test"}' > "${work}/guard-home/.t3/jupyter-proxy-session.json"
+HOME="${work}/guard-home" PYTHONPATH="${lib}" "${python}" - <<'PYTHON'
+import contextvars
+from types import SimpleNamespace
+
+from jupyter_server.base.call_context import CallContext
+from tornado.web import HTTPError, RequestHandler
+import t3_code_proxy as proxy
+
+
+class Handler(RequestHandler):
+    def __init__(self, method, origin):
+        self.request = SimpleNamespace(method=method, headers={"Origin": origin} if origin else {})
+        self.token_authenticated = False
+
+    def check_origin(self):
+        return self.request.headers["Origin"] == "https://session.example.org"
+
+    def ask(self, serving):
+        """Asks for the proxy's headers as this handler, while Jupyter Server serves `serving`."""
+        def call():
+            if serving is not None:
+                CallContext.set(CallContext.JUPYTER_HANDLER, serving)
+            return proxy.request_headers()
+        return contextvars.Context().run(call)
+
+
+own = Handler("POST", "https://session.example.org")
+foreign = Handler("POST", "https://elsewhere.example.org")
+assert own.ask(own)["Authorization"] == "Bearer guard-test"
+for asking, serving, expected in ((own, foreign, HTTPError), (own, None, RuntimeError)):
+    try:
+        headers = asking.ask(serving)
+    except expected:
+        continue
+    raise AssertionError(f"the proxy's credential was handed out: {headers}")
+print("the origin guard follows the request being served")
+PYTHON
+
 # Settings defaults fill gaps and never replace what the user set.
 mkdir -p "${work}/defaults" "${work}/t3/userdata"
 echo '{"a": 1, "nested": {"x": 1, "y": 2}}' > "${work}/defaults/10.json"

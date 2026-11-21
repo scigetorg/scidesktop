@@ -159,17 +159,16 @@ def _proxy_handler():
     """The request handler that is asking for these headers.
 
     Jupyter Server Proxy calls the hook from the handler but passes it only
-    the port and base URL, so the handler is found on the call stack.
+    the port and base URL. Jupyter Server records the handler of the request
+    it is serving in its call context when that handler's prepare() runs,
+    which is before the proxy asks for headers.
     """
-    from tornado.web import RequestHandler
+    from jupyter_server.base.call_context import CallContext
 
-    frame = sys._getframe(1)
-    while frame is not None:
-        handler = frame.f_locals.get("self")
-        if isinstance(handler, RequestHandler):
-            return handler
-        frame = frame.f_back
-    raise RuntimeError("t3-code: no request handler is asking for the proxy's headers")
+    handler = CallContext.get(CallContext.JUPYTER_HANDLER)
+    if handler is None:
+        raise RuntimeError("t3-code: no request handler is asking for the proxy's headers")
+    return handler
 
 
 def require_own_origin(handler):
