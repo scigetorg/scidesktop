@@ -86,9 +86,82 @@ with gzip.open("/home/jovyan/smoke_brain.nii.gz", "wb") as f:
     f.write(voxels)
 PY
 
+# Seed a 2-slide notebook for RISE presentation rendering check.
+docker exec -i -u jovyan "${NAME}" /opt/conda/bin/python3 - <<'PY' || { echo "  FAIL  could not seed smoke_slides.ipynb"; exit 1; }
+import json
+
+nb = {
+    "cells": [
+        {
+            "cell_type": "markdown",
+            "id": "slide-1",
+            "metadata": {"slideshow": {"slide_type": "slide"}},
+            "source": ["# SciDesktop RISE Slide 1\n", "\n", "Rendered by Reveal.js."],
+        },
+        {
+            "cell_type": "markdown",
+            "id": "slide-2",
+            "metadata": {"slideshow": {"slide_type": "slide"}},
+            "source": ["# SciDesktop RISE Slide 2\n", "\n", "Second slide body."],
+        },
+    ],
+    "metadata": {
+        "kernelspec": {"display_name": "Python 3 (ipykernel)", "language": "python", "name": "python3"},
+        "language_info": {"name": "python"},
+    },
+    "nbformat": 4,
+    "nbformat_minor": 5,
+}
+with open("/home/jovyan/smoke_slides.ipynb", "w") as f:
+    json.dump(nb, f)
+PY
+
 args=("http://127.0.0.1:${PORT}" "${TOKEN}")
 if docker exec "${NAME}" test -f /opt/scidesktop/manifest.d/code-server.json 2>/dev/null; then
     args+=("--has-vscode")
+fi
+if docker exec "${NAME}" test -f /opt/scidesktop/manifest.d/neuroimaging-env.json 2>/dev/null; then
+    # Seed a notebook with two ipyniivue.NiiVue() widgets on the neuroimaging kernel.
+    docker exec -i -u jovyan "${NAME}" /opt/conda/bin/python3 - <<'PY' || { echo "  FAIL  could not seed smoke_ipyniivue.ipynb"; exit 1; }
+import json
+
+nb = {
+    "cells": [
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "id": "nv-1",
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "from ipyniivue import NiiVue\n",
+                "nv1 = NiiVue(height=240)\n",
+                "nv1\n",
+            ],
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "id": "nv-2",
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "nv2 = NiiVue(height=240)\n",
+                "nv2\n",
+            ],
+        },
+    ],
+    "metadata": {
+        "kernelspec": {"display_name": "Neuroimaging (Python 3.13)", "language": "python", "name": "neuroimaging"},
+        "language_info": {"name": "python"},
+    },
+    "nbformat": 4,
+    "nbformat_minor": 5,
+}
+with open("/home/jovyan/smoke_ipyniivue.ipynb", "w") as f:
+    json.dump(nb, f)
+PY
+    args+=("--has-neuroimaging")
 fi
 
 node_flags=()

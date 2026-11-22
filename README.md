@@ -80,7 +80,7 @@ commit's short SHA, the date and `latest`.
 |---|---|
 | Base | Ubuntu 26.04 LTS, digest-pinned, packages from a dated `snapshot.ubuntu.com` snapshot |
 | Startup | docker-stacks `start.sh` and hooks, vendored unchanged (JupyterHub contract) |
-| Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked), with `bash_kernel`, `jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`, `nbgitpuller`, `papermill`, `anywidget`, `ipycanvas` and `uv` |
+| Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked), with `bash_kernel`, `jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`, `nbgitpuller`, `papermill`, `pytest`, `anywidget`, `ipycanvas` and `uv` |
 | Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio, VirtualGL (`vglrun`) and `mesa-utils` |
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget with all domain catalogs (`sciget-all`) by default |

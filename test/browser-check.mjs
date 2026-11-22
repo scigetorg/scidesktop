@@ -14,9 +14,10 @@ import zlib from "node:zlib";
 const BASE_URL = (process.argv[2] || "").replace(/\/+$/, "");
 const TOKEN = process.argv[3] || "";
 const HAS_VSCODE = process.argv.includes("--has-vscode");
+const HAS_NEUROIMAGING = process.argv.includes("--has-neuroimaging");
 
 if (!BASE_URL || !TOKEN) {
-  console.error("usage: browser-check.mjs <base-url> <token> [--has-vscode]");
+  console.error("usage: browser-check.mjs <base-url> <token> [--has-vscode] [--has-neuroimaging]");
   process.exit(2);
 }
 
@@ -531,6 +532,153 @@ async function main() {
       if (vsc.server5xx.length === 0) pass("VS Code had zero HTTP 5xx responses");
       else fail("VS Code had zero HTTP 5xx responses", vsc.server5xx.join("\n"));
       await vsc.close();
+    }
+
+    // 7. RISE standalone presentation app (/rise/smoke_slides.ipynb)
+    const rise = await openTab(cdp);
+    await rise.goto(`${BASE_URL}/rise/smoke_slides.ipynb?token=${encodeURIComponent(TOKEN)}`);
+    const riseOk = await rise.waitFor(`(() => {
+      const txt = (document.body.innerText || '');
+      const hasReveal = Boolean(document.querySelector('.reveal .slides section, .reveal'));
+      if (!hasReveal || !txt.includes('SciDesktop RISE Slide 1')) return null;
+      return { slides: document.querySelectorAll('.reveal .slides section').length };
+    })()`, 45000);
+    if (riseOk) pass(`RISE slideshow rendered (${riseOk.slides} slide section(s))`);
+    else fail("RISE slideshow rendered", await rise.eval("(document.body.innerText || '').slice(0, 300)"));
+    if (rise.server5xx.length === 0 && rise.errors.length === 0) {
+      pass("RISE loaded with zero HTTP 5xx and zero uncaught JS exceptions");
+    } else {
+      fail("RISE loaded cleanly", [...rise.server5xx, ...rise.errors].join("\n"));
+    }
+    await rise.close();
+
+    // 8. ipyniivue multi-widget rendering & close/reopen lifecycle (neurodesktop)
+    if (HAS_NEUROIMAGING) {
+      const nvTab = await openTab(cdp);
+      let sharedAssetStatus = 0;
+      let sharedAssetHits = 0;
+      cdp.on("Network.responseReceived", (params, sid) => {
+        const url = params.response?.url || "";
+        if (sid === nvTab.sessionId && url.includes("/neuroimaging-ipyniivue/scidesktop-ipyniivue.")) {
+          sharedAssetStatus = params.response.status;
+          sharedAssetHits += 1;
+        }
+      });
+      await nvTab.goto(`${BASE_URL}/lab/tree/smoke_ipyniivue.ipynb?token=${encodeURIComponent(TOKEN)}`);
+      const nbReady = await nvTab.waitFor(`(() => {
+        const nb = document.querySelector('.jp-Notebook');
+        const cells = document.querySelectorAll('.jp-Notebook .jp-CodeCell');
+        const kname = (document.querySelector('.jp-Toolbar-kernelName')?.textContent || '').trim();
+        return (nb && cells.length >= 2 && /neuroimaging/i.test(kname)) ? { cells: cells.length, kname } : null;
+      })()`, 60000);
+      if (nbReady) {
+        // Ignore pre-existing JupyterLab shell boot messages (e.g., server-proxy
+        // command re-registration); track all exceptions from widget execution,
+        // tab disposal, reopen, and re-render onward.
+        const widgetErrStart = nvTab.errors.length;
+        const runAllCells = async () => {
+          // Focus the notebook first so Run -> Run All Cells is enabled.
+          const cellPt = await nvTab.waitFor(`(() => {
+            const c = document.querySelector('.jp-Notebook .jp-CodeCell');
+            if (!c) return null;
+            const r = c.getBoundingClientRect();
+            return r.width > 0 ? { x: Math.round(r.x + Math.min(40, r.width / 2)), y: Math.round(r.y + Math.min(16, r.height / 2)) } : null;
+          })()`, 15000);
+          if (cellPt) await nvTab.clickAt(cellPt.x, cellPt.y, 1);
+          const runMenuPt = await nvTab.waitFor(`(() => {
+            const item = [...document.querySelectorAll('.lm-MenuBar-itemLabel')].find(n => n.textContent.trim() === 'Run');
+            if (!item) return null;
+            const r = item.getBoundingClientRect();
+            return r.width > 0 ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null;
+          })()`, 15000);
+          if (!runMenuPt) return false;
+          await nvTab.clickAt(runMenuPt.x, runMenuPt.y, 1);
+          const runAllPt = await nvTab.waitFor(`(() => {
+            const item = [...document.querySelectorAll('.lm-Menu-itemLabel')].find(
+              n => n.textContent.trim() === 'Run All Cells' && !n.closest('.lm-mod-disabled')
+            );
+            if (!item) return null;
+            const r = item.getBoundingClientRect();
+            return r.width > 0 ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null;
+          })()`, 10000);
+          if (!runAllPt) return false;
+          await nvTab.clickAt(runAllPt.x, runAllPt.y, 1);
+          return true;
+        };
+        const waitForTwoWidgets = () => nvTab.waitFor(`(() => {
+          const canvases = [...document.querySelectorAll('.jp-OutputArea canvas')]
+            .map(c => c.getBoundingClientRect())
+            .filter(r => r.width >= 100 && r.height >= 100);
+          return canvases.length >= 2 ? { count: canvases.length, w: Math.round(canvases[0].width), h: Math.round(canvases[0].height) } : null;
+        })()`, 60000, 400);
+
+        await runAllCells();
+        const widgets = await waitForTwoWidgets();
+
+        if (widgets && sharedAssetStatus === 200) {
+          pass(`ipyniivue rendered ${widgets.count} WebGL2 widgets (${widgets.w}x${widgets.h}) via shared bundle (${sharedAssetHits} request(s))`);
+        } else {
+          const hint = await nvTab.eval(`[...document.querySelectorAll('.jp-OutputArea')].map(n => n.textContent.trim().slice(0, 200)).join(' | ')`);
+          fail("ipyniivue rendered 2 WebGL2 widgets via shared bundle", `widgets=${JSON.stringify(widgets)} assetStatus=${sharedAssetStatus} outputs=${hint}`);
+        }
+
+        // Close and reopen the notebook tab in-SPA (no full page reload) to
+        // verify WebGL cleanup on unmount and clean re-render on reopen.
+        const closeBtn = await nvTab.eval(`(() => {
+          const tab = [...document.querySelectorAll('.lm-TabBar-tab')].find(t => (t.textContent || '').includes('smoke_ipyniivue.ipynb'));
+          const icon = tab?.querySelector('.lm-TabBar-tabCloseIcon');
+          if (!icon) return null;
+          const r = icon.getBoundingClientRect();
+          return r.width > 0 ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null;
+        })()`);
+        if (closeBtn) {
+          await nvTab.clickAt(closeBtn.x, closeBtn.y, 1);
+          const discardBtn = await nvTab.waitFor(`(() => {
+            const b = [...document.querySelectorAll('.jp-Dialog-button')].find(n => /discard|don't save/i.test(n.textContent || ''));
+            if (!b) return null;
+            const r = b.getBoundingClientRect();
+            return r.width > 0 ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null;
+          })()`, 4000);
+          if (discardBtn) await nvTab.clickAt(discardBtn.x, discardBtn.y, 1);
+          await nvTab.waitFor(`(() => document.querySelectorAll('.jp-OutputArea canvas').length === 0 ? true : null)()`, 15000);
+
+          const fileItemPt = await nvTab.waitFor(`(() => {
+            const item = [...document.querySelectorAll('.jp-DirListing-item')].find(el => (el.textContent || '').includes('smoke_ipyniivue.ipynb'));
+            if (!item) return null;
+            const r = item.getBoundingClientRect();
+            return r.width > 0 ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null;
+          })()`, 15000);
+          if (fileItemPt) {
+            await nvTab.clickAt(fileItemPt.x, fileItemPt.y, 2);
+            const reopened = await nvTab.waitFor(`(() => {
+              const cells = document.querySelectorAll('.jp-Notebook .jp-CodeCell').length;
+              const kname = (document.querySelector('.jp-Toolbar-kernelName')?.textContent || '').trim();
+              return (cells >= 2 && /neuroimaging/i.test(kname)) ? true : null;
+            })()`, 30000);
+            if (reopened) {
+              await runAllCells();
+              const widgets2 = await waitForTwoWidgets();
+              if (widgets2) pass(`ipyniivue notebook closed, reopened in-SPA, and re-rendered ${widgets2.count} WebGL2 widgets`);
+              else fail("ipyniivue notebook reopened and re-rendered 2 WebGL2 widgets");
+            } else {
+              fail("ipyniivue notebook reopened in-SPA");
+            }
+          } else {
+            fail("smoke_ipyniivue.ipynb visible in FileBrowser for reopen");
+          }
+        } else {
+          fail("smoke_ipyniivue.ipynb tab close button found");
+        }
+        const widgetErrors = nvTab.errors.slice(widgetErrStart);
+        if (nvTab.server5xx.length === 0 && widgetErrors.length === 0) {
+          pass("ipyniivue widget lifecycle had zero HTTP 5xx and zero uncaught JS exceptions");
+        } else {
+          fail("ipyniivue widget lifecycle had zero errors", [...nvTab.server5xx, ...widgetErrors].join("\n"));
+        }
+      } else {
+        fail("smoke_ipyniivue.ipynb opened in JupyterLab");
+      }
+      await nvTab.close();
     }
   } finally {
     cdp.close();

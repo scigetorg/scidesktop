@@ -41,6 +41,7 @@ out=$(docker run --rm \
     echo "nf_neuro=${NF_NEURO_MODULES_DIR:-}"
     echo "bindpath=${APPTAINER_BINDPATH:-unset}"
     test -d /opt/nf-neuro/modules/modules && echo "nf_neuro_dir=ok"
+    [ "$(git -c safe.directory=/opt/nf-neuro/modules -C /opt/nf-neuro/modules rev-parse --is-inside-work-tree)" = "true" ] && echo "nf_neuro_git=ok"
     test -f "${HOME}/getting-started.ipynb" && echo "getting_started=ok"
     module load duptool/1.0 >/dev/null 2>&1
     [ "${DUPTOOL_SRC:-}" = "local" ] && echo "local_precedence=ok"
@@ -71,6 +72,9 @@ has "nf_neuro=/opt/nf-neuro/modules" \
 has "nf_neuro_dir=ok" \
     && pass "pinned nf-neuro modules present" \
     || fail "pinned nf-neuro modules present"
+has "nf_neuro_git=ok" \
+    && pass "/opt/nf-neuro/modules is a usable local git repository" \
+    || fail "/opt/nf-neuro/modules is a usable local git repository"
 has "getting_started=ok" \
     && pass "getting-started.ipynb seeded into a fresh home" \
     || fail "getting-started.ipynb seeded into a fresh home"

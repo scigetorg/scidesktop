@@ -54,7 +54,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
         '@jupyterlab/extensionmanager-extension:plugin' \
         '@jupyterlab/help-extension:about' \
     && install -d -m 0755 /out/manifest \
-    && /opt/conda/bin/python -c 'import importlib.metadata as im, json, glob; v = {m["name"]: m["version"] for m in map(lambda f: json.load(open(f)), glob.glob("/opt/conda/conda-meta/*.json"))}; d = {k: v.get(k) for k in ("python", "jupyterlab", "jupyterhub-singleuser", "jupyter-server-proxy", "ipykernel", "mamba", "ipywidgets", "anywidget", "ipycanvas", "jupyterlab-git", "jupyter-resource-usage", "jupyterlab_rise", "jupyter-scheduler", "nbgitpuller", "papermill", "uv", "jupyter-ai")}; d["bash_kernel"] = im.version("bash_kernel"); json.dump(d, open("/out/manifest/jupyter-env.json", "w"))' \
+    && /opt/conda/bin/python -c 'import importlib.metadata as im, json, glob; v = {m["name"]: m["version"] for m in map(lambda f: json.load(open(f)), glob.glob("/opt/conda/conda-meta/*.json"))}; d = {k: v.get(k) for k in ("python", "jupyterlab", "jupyterhub-singleuser", "jupyter-server-proxy", "ipykernel", "mamba", "ipywidgets", "anywidget", "ipycanvas", "jupyterlab-git", "jupyter-resource-usage", "jupyterlab_rise", "jupyter-scheduler", "nbgitpuller", "papermill", "pytest", "uv", "jupyter-ai")}; d["bash_kernel"] = im.version("bash_kernel"); json.dump(d, open("/out/manifest/jupyter-env.json", "w"))' \
     && chown -R "${NB_UID:?}:${NB_GID:?}" /opt/conda \
     && chmod -R g+rwX /opt/conda \
     && find /opt/conda -type d -exec chmod g+s {} +
@@ -85,6 +85,7 @@ RUN set -e \
     && mamba --version \
     && uv --version \
     && papermill --version \
+    && pytest --version \
     && jupyter kernelspec list 2>&1 | grep -qw bash \
     && ! test -e /opt/conda/bin/bash \
     && ! test -e /opt/conda/share/jupyter/labextensions/@jupyterlab/mathjax3-extension \

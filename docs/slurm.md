@@ -50,7 +50,7 @@ component needs none:
 | neurodesktop | Here | Why |
 | --- | --- | --- |
 | `munged` for authentication | Slurm's own `auth/slurm` with a key generated at each start, private to the user | no daemon, no system user |
-| MariaDB and `slurmdbd` for accounting | no accounting (`accounting_storage/none`) | Slurm 25.11 runs jobs without it; `sacct` has no history. For Snakemake's Slurm executor plugin on the bundled queue, pass `--slurm-status-command squeue` so status polling uses `squeue` instead of `sacct` |
+| MariaDB and `slurmdbd` for accounting | no accounting (`accounting_storage/none`) | Slurm 25.11 runs jobs without it; `sacct` has no history. For Snakemake on this image, pass `--slurm-status-command squeue` with `--executor slurm`, and `--conda-frontend mamba` when using `--sdm conda` |
 | `slurmctld` and `slurmd` as root and `slurm` | both as the notebook user (`SlurmUser`, `SlurmdUser`) | a worker that is not root can only run its own user's jobs, which is the only user there is |
 | cgroup confinement, when the container allows it | none (`CgroupPlugin=disabled`) | cgroups need root. The container's own limits still bound everything |
 | a patched `slurmd` for `--get-user-env` | not offered | reading a login environment needs `su`, which needs root. Jobs inherit the submitting environment |

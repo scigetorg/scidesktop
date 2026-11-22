@@ -21,6 +21,7 @@ dependencies:
   - jupyter-scheduler==2.12.1
   - nbgitpuller==1.3.0
   - papermill==2.7.0
+  - pytest==9.2.0
   - uv==0.13.9
   # Jupyter AI: the chat panel in JupyterLab, for the coding agents an image
   # has (docs/jupyter-ai.md). No model, key or endpoint comes with it.

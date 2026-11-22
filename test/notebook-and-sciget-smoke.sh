@@ -49,6 +49,15 @@ else
     fail "notebook CRUD, kernel WebSocket execution, MODULEPATH and nbconvert failed"
 fi
 
+# 1b. jupyter-scheduler API responds behind authentication and refuses unauthenticated requests.
+sched_auth="$(docker exec "${NAME}" curl -s --max-time 15 -o /dev/null -w '%{http_code}' -H "Authorization: token ${TOKEN}" "http://127.0.0.1:8888/scheduler/jobs" 2>/dev/null || true)"
+sched_unauth="$(docker exec "${NAME}" curl -s --max-time 15 -o /dev/null -w '%{http_code}' "http://127.0.0.1:8888/scheduler/jobs" 2>/dev/null || true)"
+if [ "${sched_auth}" = "200" ] && { [ "${sched_unauth}" = "403" ] || [ "${sched_unauth}" = "401" ] || [ "${sched_unauth}" = "302" ]; }; then
+    pass "jupyter-scheduler /scheduler/jobs answers 200 authenticated and refuses unauthenticated (${sched_unauth})"
+else
+    fail "jupyter-scheduler /scheduler/jobs check failed (auth=${sched_auth}, unauth=${sched_unauth})"
+fi
+
 # 2. Live sciget install + module load + container execution (on images whose
 #    catalog offers niimath / niimath_arm64 — a small, fast multi-arch tool).
 arch="$(docker exec "${NAME}" uname -m)"

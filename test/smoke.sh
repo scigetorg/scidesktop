@@ -240,6 +240,19 @@ sys.exit(0 if need <= names else f"missing: {need - names}")' >/dev/null 2>&1 \
 docker exec "${NAME}" bash -c 'for d in /usr/local/share /usr/local/bin /usr/local/etc /etc/profile.d /opt; do [ -x "$d" ] || exit 1; done' 2>/dev/null \
     && pass "shared folders traversable" || fail "shared folders traversable"
 
+# Image hygiene & security baseline: no leftover apt package lists, and
+# security-sensitive server libraries stay above patched floors.
+docker exec "${NAME}" /opt/conda/bin/python -c '
+import glob, importlib.metadata as im
+assert not glob.glob("/var/lib/apt/lists/*_Packages*"), "leftover apt package lists"
+def ver(pkg): return tuple(int(p) for p in im.version(pkg).split(".")[:2])
+assert ver("PyJWT") >= (2, 10), im.version("PyJWT")
+assert ver("cryptography") >= (44, 0), im.version("cryptography")
+assert ver("tornado") >= (6, 5), im.version("tornado")
+' >/dev/null 2>&1 \
+    && pass "image hygiene (no apt lists) and security-sensitive package floors" \
+    || fail "image hygiene (no apt lists) and security-sensitive package floors"
+
 # 7. Apptainer, and the pieces unprivileged builds fall back to. Whether a
 #    build actually succeeds depends on the runtime granting user namespaces,
 #    so that is checked separately under SMOKE_BUILD=1.

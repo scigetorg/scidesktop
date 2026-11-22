@@ -59,6 +59,100 @@ out="$(terminal '
     && pass "a loaded module is recorded and scigethelpers cite writes its citation" \
     || { fail "a loaded module is recorded and scigethelpers cite writes its citation"; printf '%s\n' "${out}" | sed 's/^/        /'; }
 
+# Full end-to-end scigethelpers uv kernel lifecycle: init (including space in
+# folder name), execute a cell on the registered kernel via jupyter_client,
+# move the folder, offline rebuild, re-execute, and remove.
+uv_out="$(docker exec -i -u jovyan -w /tmp "${NAME}" /opt/conda/bin/python - <<'PY' 2>&1
+import json
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+from jupyter_client import KernelManager
+from jupyter_client.kernelspec import KernelSpecManager
+
+with tempfile.TemporaryDirectory() as td:
+    tmp = Path(td)
+    project = tmp / "analysis uv"
+    project.mkdir()
+    data_dir = tmp / "jupyter"
+    env = dict(
+        os.environ,
+        JUPYTER_DATA_DIR=str(data_dir),
+        UV_CACHE_DIR=str(tmp / "uv-cache"),
+        UV_PYTHON="/opt/conda/bin/python",
+        UV_PYTHON_DOWNLOADS="never",
+    )
+    env.pop("UV_OFFLINE", None)
+
+    def run_uv(action, folder, extra_env=None):
+        e = dict(env, **(extra_env or {}))
+        r = subprocess.run(["scigethelpers", "uv", action, str(folder)], env=e, capture_output=True, text=True, timeout=300)
+        assert r.returncode == 0, f"scigethelpers uv {action} failed:\n{r.stdout}\n{r.stderr}"
+
+    run_uv("init", project)
+    specs = list((data_dir / "kernels").glob("*/kernel.json"))
+    assert len(specs) == 1, specs
+    kernel_name = specs[0].parent.name
+
+    def exec_on_kernel(kname, folder):
+        km = KernelManager(
+            kernel_name=kname,
+            kernel_spec_manager=KernelSpecManager(kernel_dirs=[str(data_dir / "kernels")]),
+        )
+        km.start_kernel(cwd=str(folder), env=dict(os.environ, CONDA_PREFIX="/other-env", PYTHONPATH="/missing"))
+        try:
+            kc = km.blocking_client()
+            kc.start_channels()
+            try:
+                kc.wait_for_ready(timeout=60)
+                code = (
+                    "import os, sys\n"
+                    f"assert sys.prefix == {str(folder / '.venv')!r}, sys.prefix\n"
+                    "assert 'CONDA_PREFIX' not in os.environ\n"
+                    "assert 'PYTHONPATH' not in os.environ\n"
+                    "print('UV_KERNEL_OK')\n"
+                )
+                msg_id = kc.execute(code)
+                out = []
+                while True:
+                    msg = kc.get_iopub_msg(timeout=30)
+                    if msg.get("parent_header", {}).get("msg_id") != msg_id:
+                        continue
+                    if msg["msg_type"] == "stream":
+                        out.append(msg["content"]["text"])
+                    elif msg["msg_type"] == "error":
+                        raise AssertionError(msg["content"])
+                    elif msg["msg_type"] == "status" and msg["content"]["execution_state"] == "idle":
+                        break
+                assert "UV_KERNEL_OK" in "".join(out), out
+            finally:
+                kc.stop_channels()
+        finally:
+            km.shutdown_kernel(now=True)
+
+    exec_on_kernel(kernel_name, project)
+
+    # Move the project, rebuild offline, re-execute, and cleanly remove.
+    moved = tmp / "renamed analysis"
+    project.rename(moved)
+    run_uv("rebuild", moved, {"UV_OFFLINE": "1"})
+    specs2 = list((data_dir / "kernels").glob("*/kernel.json"))
+    moved_spec = [s for s in specs2 if json.loads(s.read_text())["metadata"]["scigethelpers_uv"]["project"] == str(moved)]
+    assert len(moved_spec) == 1, specs2
+    exec_on_kernel(moved_spec[0].parent.name, moved)
+    run_uv("remove", moved)
+    assert not moved_spec[0].parent.exists()
+    print("UV_LIFECYCLE_OK")
+PY
+)"
+if grep -qx 'UV_LIFECYCLE_OK' <<<"${uv_out}"; then
+    pass "scigethelpers uv init, kernel execution, move+offline rebuild, and remove passed"
+else
+    fail "scigethelpers uv init, kernel execution, move+offline rebuild, and remove passed"
+    printf '%s\n' "${uv_out}" | tail -n 15 | sed 's/^/        /'
+fi
+
 echo
 echo "  NOT TESTED: scigethelpers kernel add WITH A REAL TOOL CONTAINER. THAT NEEDS A"
 echo "  CONTAINER WITH ipykernel. The command's refusal of a module that is not a"

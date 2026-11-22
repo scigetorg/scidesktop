@@ -80,7 +80,7 @@ jobs:
           if docker buildx bake "${args[@]}" default test 2>&1 | tee /tmp/bake.log; then
               exit 0
           fi
-          if ! grep -qE 'BlobNotFound|failed to copy: GET https://[^ ]*actions-cache' /tmp/bake.log; then
+          if ! grep -qE 'BlobNotFound|cache entry no longer exists|failed to copy: GET https://[^ ]*actions-cache' /tmp/bake.log; then
               exit 1
           fi
           echo "::warning::The Actions cache lost a layer during the build; building once more without it."
@@ -114,13 +114,13 @@ jobs:
           exit "${failed}"
 
       # Real headless Chrome + SwiftShader WebGL2 check of JupyterLab, NiiVue,
-      # FreeBrowse, Jupyter AI Chat personas, T3 Code, and VS Code (amd64
-      # runner has Google Chrome preinstalled).
+      # FreeBrowse, RISE slides, Jupyter AI Chat personas, T3 Code, VS Code,
+      # and (on neurodesktop) ipyniivue widgets.
       - name: Browser & WebGL2 smoke (amd64)
         if: matrix.arch == 'amd64'
         run: |
           failed=0
-          for image in scidesktop neurodesktop; do
+          for image in scidesktop microdesktop aidesktop neurodesktop; do
               echo "::group::browser-smoke ${image}"
               ./test/browser-smoke.sh "${image}:ci" || failed=1
               echo "::endgroup::"
