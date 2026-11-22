@@ -24,15 +24,3 @@ fi
 if [ -z "${APPTAINER_NV+x}" ] && [ -f /proc/driver/nvidia/version ]; then
     export APPTAINER_NV=1
 fi
-# Auto-bind standard host data and storage mounts that actually exist, so tools
-# see mounted /data, /mnt, /neurodesktop-storage, and /cvmfs without failing on
-# absent directories. An explicit deployment APPTAINER_BINDPATH is kept.
-if [ -z "${APPTAINER_BINDPATH+x}" ]; then
-    _apptainer_binds=""
-    for _apptainer_dir in /data /mnt /neurodesktop-storage /cvmfs; do
-        [ -d "${_apptainer_dir}" ] || continue
-        _apptainer_binds="${_apptainer_binds:+${_apptainer_binds},}${_apptainer_dir}"
-    done
-    [ -n "${_apptainer_binds}" ] && export APPTAINER_BINDPATH="${_apptainer_binds}"
-    unset _apptainer_binds _apptainer_dir
-fi

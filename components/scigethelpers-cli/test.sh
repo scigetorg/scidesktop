@@ -77,6 +77,23 @@ if scigethelpers kernel add nosuchtool/1.0 2>"${HOME}/error"; then exit 1; fi
 grep -q "scigethelpers-kernel: error: could not load module 'nosuchtool/1.0'" "${HOME}/error"
 if grep -q Traceback "${HOME}/error"; then exit 1; fi
 
+# uv: offline refusal checks and atomic rebuild rollback on failure.
+if scigethelpers uv init "${HOME}" 2>"${HOME}/error"; then exit 1; fi
+grep -q "Choose an analysis subfolder" "${HOME}/error"
+if scigethelpers uv init "${HOME}/does-not-exist" 2>"${HOME}/error"; then exit 1; fi
+grep -q "Create the analysis folder first" "${HOME}/error"
+uvproj="${HOME}/uv-rollback-proj"
+mkdir -p "${uvproj}/.venv/bin"
+printf 'uv = 0.13.9\n' > "${uvproj}/.venv/pyvenv.cfg"
+printf 'sentinel\n' > "${uvproj}/.venv/sentinel.txt"
+printf '{"project": "%s"}\n' "${uvproj}" > "${uvproj}/.scigethelpers_uv.json"
+printf '[project]\nname = "demo"\nversion = "0.1.0"\n' > "${uvproj}/pyproject.toml"
+printf 'not-a-valid-lock\n' > "${uvproj}/uv.lock"
+if scigethelpers uv rebuild "${uvproj}" 2>"${HOME}/error"; then exit 1; fi
+[ "$(cat "${uvproj}/.venv/sentinel.txt")" = "sentinel" ]
+if scigethelpers uv remove "${uvproj}" 2>"${HOME}/error"; then exit 1; fi
+grep -q "No uv kernel registration" "${HOME}/error"
+
 # Nothing root-owned is writable by group or others, and the user can read it all.
 if find /opt/scigethelpers-cli /usr/local/bin/before-notebook.d/46-scigethelpers-cli.sh /etc/profile.d/scigethelpers-cli.sh /etc/bash.bashrc.d/scigethelpers-cli.sh \
         ! -type l \( -perm /022 -o ! -readable \) -print | grep .; then

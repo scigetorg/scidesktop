@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1
 # DataLad and git-annex in their own interpreter at /opt/datalad, with the
 # commands on PATH. Nothing is installed into the system Python or the
-# Jupyter environment. Not part of the base image; domain images copy it
-# (docs/images.md).
+# Jupyter environment. Included in scidesktop (docs/images.md).
 
 # Built from the plain Ubuntu image, not the OS layer: the output depends only
 # on the lockfiles, so OS updates do not rebuild it or change its layer.
@@ -43,7 +42,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && chmod -R go-w /opt/datalad \
     && rm -rf /tmp/mamba-root /opt/datalad/conda-meta/history \
     && install -d -m 0755 /out/manifest \
-    && /opt/datalad/bin/python -c 'import json, importlib.metadata as m; json.dump({p: m.version(p) for p in ("datalad", "datalad-container", "git-annex")}, open("/out/manifest/datalad.json", "w"))' \
+    && /opt/datalad/bin/python -c 'import json, importlib.metadata as m; json.dump({p: m.version(p) for p in ("datalad", "datalad-container", "datalad-osf", "osfclient", "git-annex")}, open("/out/manifest/datalad.json", "w"))' \
     && cat /out/manifest/datalad.json
 
 # Integration files from rootfs/ (the command links) at their image paths,

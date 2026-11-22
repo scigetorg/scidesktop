@@ -14,8 +14,6 @@ BASE_PATH="/user/code-server-smoke/"
 TOKEN="code-server-smoke"
 URL="http://127.0.0.1:8888${BASE_PATH}"
 RUNNING='pgrep -u jovyan -f "^/opt/code-server/lib/node /opt/code-server"'
-# Prints the TCP ports with a listener, in hex.
-LISTENING="cat /proc/net/tcp /proc/net/tcp6 | awk 'NR > 1 && \$4 == \"0A\" { print \$2 }' | sed 's/.*://' | sort -u | tr '\n' ' '"
 FAILED=0
 
 pass() { printf '  ok    %s\n' "$1"; }
@@ -51,11 +49,6 @@ done
 in_session "${RUNNING}" >/dev/null \
     && fail "code-server does not run before the tile is opened" \
     || pass "code-server does not run before the tile is opened"
-# What listens before code-server starts: the notebook server, and the
-# session's own services on loopback. The Slurm queue comes up a few seconds
-# after the server; it must be there before the ports are counted.
-docker exec -u jovyan "${NAME}" bash -c '[ ! -x /opt/slurm/bin/slurm-session ] || /opt/slurm/bin/slurm-session wait' >/dev/null 2>&1
-tcp_before="$(in_session "${LISTENING}")"
 
 # The first request starts code-server; it must answer with the editor, not
 # with an error from a server that is still starting.
@@ -68,15 +61,45 @@ in_session "${RUNNING}" >/dev/null \
     && pass "code-server runs as the notebook user" || fail "code-server runs as the notebook user"
 
 # The notebook server's login is the only way in: no login, no editor, and
-# code-server listens on no TCP port.
+# code-server itself listens on no TCP port (checked by socket inode against
+# code-server's own PIDs so unrelated background session services such as
+# ai-ready's PostgreSQL/Airflow/MLflow cannot race the check).
 code="$(in_session "curl -s -o /dev/null -w '%{http_code}' '${URL}vscode/'")"
 case "${code}" in
     302 | 401 | 403) pass "a request without the login is refused (HTTP ${code})" ;;
     *) fail "a request without the login is refused (HTTP ${code})" ;;
 esac
-tcp="$(in_session "${LISTENING}")"
-[ -n "${tcp_before}" ] && [ "${tcp}" = "${tcp_before}" ] \
-    && pass "code-server opens no TCP port" || fail "code-server opens no TCP port (ports, hex: before ${tcp_before}, now ${tcp})"
+cs_ports="$(docker exec "${NAME}" /opt/conda/bin/python -c '
+import glob, os
+listen_inodes = {}
+for path in ("/proc/net/tcp", "/proc/net/tcp6"):
+    with open(path) as f:
+        for line in f.readlines()[1:]:
+            parts = line.split()
+            if parts[3] == "0A":
+                listen_inodes[parts[9]] = int(parts[1].split(":")[1], 16)
+found = []
+for pid_dir in glob.glob("/proc/[0-9]*"):
+    try:
+        cmd = open(os.path.join(pid_dir, "cmdline"), "rb").read()
+    except OSError:
+        continue
+    if b"/opt/code-server" not in cmd:
+        continue
+    for fd in glob.glob(os.path.join(pid_dir, "fd", "*")):
+        try:
+            target = os.readlink(fd)
+        except OSError:
+            continue
+        if target.startswith("socket:[") and target.endswith("]"):
+            inode = target[8:-1]
+            if inode in listen_inodes:
+                found.append(str(listen_inodes[inode]))
+print(" ".join(sorted(set(found))))
+' 2>/dev/null)"
+[ -z "${cs_ports}" ] \
+    && pass "code-server opens no TCP port" \
+    || fail "code-server opens no TCP port (listening TCP ports: ${cs_ports})"
 
 in_session '[ -s "${HOME}/.local/share/code-server/User/settings.json" ]' \
     && pass "a new home gets code-server's settings" || fail "a new home gets code-server's settings"

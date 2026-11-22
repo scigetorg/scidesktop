@@ -5,13 +5,14 @@
 them, built from scidesktop components. `scidesktop` already ships all
 generic capabilities shared across every desktop (`microdesktop`, `aidesktop`,
 `neurodesktop`): Slurm + `jupyterlab-slurm`, VS Code (`code-server`,
-`vscode-core`, `vscode-niivue`), DataLad, workflow engines (Nextflow, nf-test,
-Snakemake), VirtualGL, `scigethelpers`, expanded Jupyter extensions (`bash_kernel`,
+`vscode-core`, `vscode-niivue`), DataLad (+ `datalad-osf`), workflow engines
+(Nextflow, nf-test, Snakemake + Slurm executor plugin), VirtualGL,
+`scigethelpers`, expanded Jupyter extensions (`bash_kernel`,
 `jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`,
-`nb_conda_kernels`, `nbgitpuller`, `papermill`, `anywidget`, `ipycanvas`, `uv`),
-remote mount/transfer tools (`rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`,
-`aria2`, `gh`), the NiiVue/FreeBrowse viewers, coding agents, ACP adapters,
-T3 Code and T3 Connect.
+`nbgitpuller`, `papermill`, `anywidget`, `ipycanvas`, `uv`), remote
+mount/transfer tools (`rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`,
+`gh`), the NiiVue/FreeBrowse viewers, coding agents, ACP adapters, T3 Code and
+T3 Connect.
 
 `neurodesktop` adds six neuroimaging-specific components (see
 [images.md](images.md#optional-components)) on top:
@@ -56,16 +57,20 @@ On arm64, use the modules whose name ends in `_arm64` (for example
 some Neurodesk tools have an arm64 container.
 
 A tool sees the home folder, `/tmp`, the working directory and the folders
-named in `APPTAINER_BINDPATH`. To give tools a data volume mounted elsewhere,
-set `APPTAINER_BINDPATH` in the deployment (for example `/data`). The image
-sets none, because Apptainer refuses to start when a folder in it is missing.
+named in `APPTAINER_BINDPATH`. At startup, the image auto-populates
+`APPTAINER_BINDPATH` with whichever of `/data`, mounted `/mnt`, populated
+`/cvmfs`, and (in `neurodesktop`) `/neurodesktop-storage` actually exist and
+are readable by the session user. Any deployment override (`APPTAINER_BIND`,
+`APPTAINER_BINDPATH`, `SINGULARITY_BIND`, `SINGULARITY_BINDPATH`) is kept, and
+setting `APPTAINER_BINDPATH=""` explicitly opts out of auto-binding.
 
 ## Data
 
-`datalad` and `git-annex` are on `PATH` in every terminal. They have their own
-Python at `/opt/datalad`; the notebook kernels do not import `datalad`. To use
-its Python API in a notebook, install it into an environment of your own (see
-the [README](../README.md)).
+`datalad` (with `datalad-container` and `datalad-osf`), `osf`, and `git-annex`
+are on `PATH` in every terminal from `/opt/datalad`. In `neurodesktop`, the
+`neuroimaging` Jupyter kernel also includes `datalad`, `datalad-container`,
+`datalad-osf`, and `osfclient` for notebook Python API usage, while the base
+`python3` kernel stays lean on `/opt/conda`.
 
 ## VS Code
 
@@ -132,7 +137,7 @@ it does not show them.
 | `scigethelpers kernel add <module>` | registers the Python inside a tool's container as a notebook kernel; `list` and `remove` manage them |
 | `scigethelpers check [cvmfs\|gpu\|slurm]` | read-only checks, each `PASS`, `FAIL` or `SKIP` |
 | `scigethelpers info` | the image's components, the session's CPUs and memory, GPUs and the CVMFS server |
-| `scigethelpers uv <init\|add\|list\|remove>` | manages user `uv` virtual environments and registers them as Jupyter kernels |
+| `scigethelpers uv <init\|rebuild\|remove> <dir>` | manages a project-local `uv` virtual environment and registers it as a Jupyter kernel |
 
 `scigethelpers <command> --help` has each command's options. The standalone
 commands `scigethelpers-cite`, `scigethelpers-kernel` and `scigethelpers-uv` work too.

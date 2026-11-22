@@ -13,11 +13,18 @@ local function tracked_roots()
    if data == nil or data == "" then
       data = (os.getenv("HOME") or "") .. "/.local/share"
    end
-   return {
+   local roots = {
       "/cvmfs/",
       -- Modules `sciget install` writes for downloaded containers.
       data .. "/sciget/modules/",
+      -- Legacy Neurodesk local container modules.
+      "/neurodesktop-storage/containers/modules/",
    }
+   local local_dir = os.getenv("NEURODESKTOP_LOCAL_CONTAINERS")
+   if local_dir ~= nil and local_dir ~= "" then
+      roots[#roots + 1] = local_dir:gsub("/+$", "") .. "/modules/"
+   end
+   return roots
 end
 
 local function is_tracked_module(fn)

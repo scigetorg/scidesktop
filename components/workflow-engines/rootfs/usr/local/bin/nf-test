@@ -1,4 +1,15 @@
 #!/bin/bash
 set -euo pipefail
-export NF_TEST_HOME=/opt/workflow-engines/nf-test
-exec java -jar /opt/workflow-engines/nf-test/nf-test.jar "$@"
+export NF_TEST_HOME="${NF_TEST_HOME:-/opt/workflow-engines/nf-test}"
+java_bin="java"
+if [ -n "${NXF_JAVA_HOME:-}" ] && [ -x "${NXF_JAVA_HOME}/bin/java" ]; then
+    java_bin="${NXF_JAVA_HOME}/bin/java"
+elif [ -n "${JAVA_HOME:-}" ] && [ -x "${JAVA_HOME}/bin/java" ]; then
+    java_bin="${JAVA_HOME}/bin/java"
+fi
+java_args=()
+if [ -n "${NFT_JAVA_ARGS:-}" ]; then
+    # shellcheck disable=SC2206
+    java_args=(${NFT_JAVA_ARGS})
+fi
+exec "${java_bin}" "${java_args[@]}" -jar /opt/workflow-engines/nf-test/nf-test.jar "$@"

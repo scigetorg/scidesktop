@@ -846,6 +846,9 @@ target "neuroimaging-env" {
   inherits = ["_component"]
   context  = "components/neuroimaging-env"
   target   = "component"
+  contexts = {
+    jupyter-env = "target:jupyter-env"
+  }
 }
 
 target "neuroimaging-env-test" {

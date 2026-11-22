@@ -3,10 +3,12 @@
 #
 #   ./test/neuroimaging-env-smoke.sh [image]
 #
-# Starts a notebook server and executes a real cell on the `neuroimaging`
-# kernel over Jupyter's WebSocket API, verifying the neuroimaging Python stack
-# and ipyniivue widget instantiation while keeping the default python3 kernel
-# on /opt/conda.
+# Verifies:
+#   - Neuroimaging CLI tools (nf-core, nipoppy, bosh, nipypecli, osf) on PATH
+#   - Patched ipyniivue shared frontend bundle served behind Jupyter's login
+#   - `neuroimaging` kernel executes neuroimaging stack, ipyniivue, and a local
+#     DataLad create/save/get roundtrip using shared git-annex
+#   - Default `python3` kernel remains on /opt/conda
 
 set -uo pipefail
 
@@ -29,14 +31,34 @@ docker run -d --name "${NAME}" --shm-size=2g -e JUPYTER_TOKEN="${TOKEN}" \
     "${IMAGE}" start-notebook.py >/dev/null \
     || { echo "  FAIL  container did not start"; exit 1; }
 
+ready=0
 for _ in $(seq 1 120); do
-    docker exec "${NAME}" curl -fsS -o /dev/null "http://127.0.0.1:8888/api" 2>/dev/null && break
+    if docker exec "${NAME}" curl -fsS --max-time 10 -o /dev/null "http://127.0.0.1:8888/api" 2>/dev/null; then
+        ready=1
+        break
+    fi
     sleep 1
 done
+if [ "${ready}" -ne 1 ]; then
+    fail "notebook server did not become ready within 120s"
+    exit 1
+fi
 
-docker exec -i "${NAME}" /opt/conda/bin/python - "${TOKEN}" <<'PY' && pass "neuroimaging kernel executes neuroimaging stack & ipyniivue" || fail "neuroimaging kernel executes neuroimaging stack & ipyniivue"
+docker exec -u jovyan "${NAME}" bash -lc '
+    set -euo pipefail
+    nf-core --version >/dev/null
+    nipoppy --version >/dev/null
+    bosh version >/dev/null
+    nipypecli --help >/dev/null
+    osf --version >/dev/null
+' 2>/dev/null && pass "neuroimaging CLIs (nf-core, nipoppy, bosh, nipypecli, osf) available on PATH" \
+    || fail "neuroimaging CLIs (nf-core, nipoppy, bosh, nipypecli, osf) available on PATH"
+
+docker exec -i "${NAME}" /opt/conda/bin/python - "${TOKEN}" <<'PY' && pass "neuroimaging kernel, DataLad roundtrip, and patched ipyniivue asset passed" || fail "neuroimaging kernel, DataLad roundtrip, and patched ipyniivue asset passed"
 import json
+import pathlib
 import sys
+import urllib.error
 import urllib.request
 import uuid
 import websocket
@@ -54,6 +76,28 @@ def req(method, path, body=None):
         raw = resp.read()
         return json.loads(raw) if raw else None
 
+# Verify patched ipyniivue shared bundle is served behind auth and refused without it.
+assets = list(pathlib.Path("/opt/neuroimaging-env/static").glob("scidesktop-ipyniivue.*.js"))
+assert len(assets) == 1, assets
+asset_path = f"/neuroimaging-ipyniivue/{assets[0].name}"
+r_auth = urllib.request.Request(base + asset_path, headers=headers)
+with urllib.request.urlopen(r_auth, timeout=15) as resp:
+    assert resp.status == 200
+    assert "javascript" in resp.headers.get("Content-Type", "")
+    body = resp.read().decode("utf-8", errors="replace")
+    assert "createWidgetDefinition" in body and "scidesktop-ipyniivue-model-cleanup" in body
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+no_redirect = urllib.request.build_opener(_NoRedirect)
+try:
+    with no_redirect.open(base + asset_path, timeout=15) as resp:
+        assert resp.status in (302, 401, 403), f"unauthenticated asset returned {resp.status}"
+except urllib.error.HTTPError as exc:
+    assert exc.code in (302, 401, 403), f"unauthenticated asset returned {exc.code}"
+
 specs = req("GET", "/api/kernelspecs")["kernelspecs"]
 assert "neuroimaging" in specs, f"missing neuroimaging kernel: {list(specs)}"
 assert specs["python3"]["spec"]["argv"][0].startswith("/opt/conda/"), specs["python3"]["spec"]["argv"]
@@ -64,7 +108,7 @@ def run_code(kernel_name, code):
     try:
         ws = websocket.create_connection(
             f"ws://127.0.0.1:8888/api/kernels/{kid}/channels?token={token}",
-            timeout=60,
+            timeout=120,
         )
         msg_id = uuid.uuid4().hex
         ws.send(json.dumps({
@@ -107,14 +151,25 @@ def run_code(kernel_name, code):
         req("DELETE", f"/api/kernels/{kid}")
 
 neuro_out = run_code("neuroimaging", """
-import sys, shutil
+import pathlib, shutil, subprocess, sys, tempfile
 import numpy as np
 import nibabel as nib
 import nipype, niwrap, pydra, nipoppy, ipyniivue, datalad, datalad_osf, osfclient, matplotlib, scipy, pandas, watermark, xnat
 img = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.float32), np.eye(4))
 nv = ipyniivue.NiiVue()
+assert "scidesktop-ipyniivue-shared-bundle" in (pathlib.Path(ipyniivue.__file__).parent / "static/widget.js").read_text()
 assert sys.executable.startswith("/opt/neuroimaging-env/"), sys.executable
-assert shutil.which("git") is not None, "PATH lost system binaries"
+assert shutil.which("git-annex") is not None, "PATH lost git-annex"
+work = pathlib.Path(tempfile.mkdtemp())
+subprocess.run(["git", "config", "--global", "user.name", "smoke"], check=True)
+subprocess.run(["git", "config", "--global", "user.email", "smoke@example.invalid"], check=True)
+from datalad import api as dl
+ds = dl.create(str(work / "origin"), result_renderer="disabled")
+(work / "origin" / "data.bin").write_bytes(b"neuro-datalad-ok")
+dl.save(dataset=ds, message="add", result_renderer="disabled")
+clone = dl.clone(source=str(work / "origin"), path=str(work / "clone"), result_renderer="disabled")
+dl.get(dataset=clone, path=str(work / "clone" / "data.bin"), result_renderer="disabled")
+assert (work / "clone" / "data.bin").read_bytes() == b"neuro-datalad-ok"
 print("NEURO_OK", img.shape, type(nv).__name__)
 """)
 assert "NEURO_OK (4, 4, 4) NiiVue" in neuro_out, neuro_out

@@ -313,12 +313,21 @@ done
 #    neurodesk-* component holds that component's /opt/neurodesk-* folder,
 #    which rule I1 accounts for; nothing else of the lineage belongs in any
 #    image.
-if docker exec "${NAME}" bash -c '
+nd_stray=""
+if ! nd_stray=$(docker exec "${NAME}" bash -c '
     for path in /opt/neurodesk* /neurocommand /cvmfs/neurodesk*; do
         [ -e "${path}" ] || continue
         [ -e "/opt/scidesktop/manifest.d/${path#/opt/}.json" ] || echo "${path}"
-    done' 2>/dev/null | grep -q .; then
-    fail "no neurodesk payload outside a neurodesk-* component"
+    done
+    if [ -e /opt/nf-neuro ] && [ ! -e /opt/scidesktop/manifest.d/neurodesk-compat.json ]; then
+        echo /opt/nf-neuro
+    fi
+    if [ -e /opt/neuroimaging-env ] && [ ! -e /opt/scidesktop/manifest.d/neuroimaging-env.json ]; then
+        echo /opt/neuroimaging-env
+    fi' 2>/dev/null); then
+    fail "no neurodesk payload outside a neurodesk-* component (exec failed)"
+elif [ -n "${nd_stray}" ]; then
+    fail "no neurodesk payload outside a neurodesk-* component (${nd_stray})"
 else
     pass "no neurodesk payload outside a neurodesk-* component"
 fi

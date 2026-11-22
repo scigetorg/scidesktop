@@ -25,6 +25,7 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     && labextension=/out/opt/jupyterlab-slurm/lib/share/jupyter/labextensions/jupyterlab-slurm \
     && install -d -m 0755 /out/opt/jupyterlab-slurm/lib "$(dirname "${labextension}")" \
     && cp -r jupyterlab_slurm /out/opt/jupyterlab-slurm/lib/jupyterlab_slurm \
+    && /opt/conda/bin/python -c 'import json; v = json.load(open("/src/package.json"))["version"]; open("/out/opt/jupyterlab-slurm/lib/jupyterlab_slurm/_version.py", "w").write(f"__version__ = {v!r}\n")' \
     && mv /out/opt/jupyterlab-slurm/lib/jupyterlab_slurm/labextension "${labextension}" \
     && find /out/opt/jupyterlab-slurm -name __pycache__ -prune -exec rm -rf {} + \
     && test -f "${labextension}/package.json" \
@@ -50,7 +51,7 @@ COPY --from=component / /
 USER ${NB_UID}
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     --mount=type=bind,from=jupyter-env,source=/usr/local/etc/jupyter,target=/usr/local/etc/jupyter \
-    PATH="/opt/conda/bin:${PATH}" /opt/conda/bin/python -c 'import sys; sys.path.append("/opt/jupyterlab-slurm/lib"); import jupyterlab_slurm, jupyterlab_slurm.handlers as h; assert "scidesktop-slurm-process-identity" in open(h.__file__).read()' \
+    PATH="/opt/conda/bin:${PATH}" /opt/conda/bin/python -W error::UserWarning -c 'import sys; sys.path.append("/opt/jupyterlab-slurm/lib"); import jupyterlab_slurm, jupyterlab_slurm.handlers as h; assert jupyterlab_slurm.__version__ != "dev"; assert "scidesktop-slurm-process-identity" in open(h.__file__).read()' \
     && labs="$(PATH="/opt/conda/bin:${PATH}" jupyter labextension list 2>&1)" \
     && printf '%s\n' "${labs}" \
     && printf '%s\n' "${labs}" | grep -q "jupyterlab-slurm .*enabled.*OK" \

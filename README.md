@@ -80,7 +80,7 @@ commit's short SHA, the date and `latest`.
 |---|---|
 | Base | Ubuntu 26.04 LTS, digest-pinned, packages from a dated `snapshot.ubuntu.com` snapshot |
 | Startup | docker-stacks `start.sh` and hooks, vendored unchanged (JupyterHub contract) |
-| Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked), with `bash_kernel`, `jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`, `nb_conda_kernels`, `nbgitpuller`, `papermill`, `anywidget`, `ipycanvas` and `uv` |
+| Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked), with `bash_kernel`, `jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`, `nbgitpuller`, `papermill`, `anywidget`, `ipycanvas` and `uv` |
 | Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio, VirtualGL (`vglrun`) and `mesa-utils` |
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget with all domain catalogs (`sciget-all`) by default |
@@ -92,7 +92,7 @@ commit's short SHA, the date and `latest`.
 | T3 Connect | [Remote access](docs/t3-connect.md) to T3 Code from the T3 apps, through T3's relay. Off until the user sets it up; at `/opt/t3-connect` |
 | Batch jobs | A [Slurm queue](docs/slurm.md) for the session (`sbatch`, `srun`) plus the `jupyterlab-slurm` Queue Manager extension in JupyterLab |
 | VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile, with `vscode-core` and `vscode-niivue` preinstalled |
-| Data & workflows | DataLad and git-annex at `/opt/datalad`; Nextflow, nf-test and Snakemake at `/opt/workflow-engines`; `rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`, `gh` |
+| Data & workflows | DataLad (`datalad-container`, `datalad-osf`, `osf`) and git-annex at `/opt/datalad`; Nextflow, nf-test and Snakemake (+ Slurm executor plugin) at `/opt/workflow-engines`; `rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`, `gh` |
 | Helper CLI | The `scigethelpers` command (`cite`, `kernel`, `check`, `info`, `uv`) at `/opt/scigethelpers-cli` |
 
 The domain images add domain-specific components the base leaves out (and narrow

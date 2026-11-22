@@ -70,8 +70,8 @@ https://conda.anaconda.org/conda-forge/linux-aarch64/dbus-1.16.2-h5208175_2.cond
 https://conda.anaconda.org/conda-forge/linux-aarch64/libxml2-2.15.4-h92b9305_1.conda#d4dbfadb069b3667818403fa8fb4770e
 https://conda.anaconda.org/conda-forge/linux-aarch64/openjpeg-2.5.4-h504851f_2.conda#0aa78cf1350df254c6b19bee89d6ce2b
 https://conda.anaconda.org/conda-forge/linux-aarch64/lcms2-2.20-h137c43b_0.conda#78ef66b13d4b55a047d2d4d3d9e8954c
-https://conda.anaconda.org/conda-forge/linux-aarch64/libcblas-3.11.0-12_hd72aa62_openblas.conda#ed3fca67505d709caf629a5ed3707e93
 https://conda.anaconda.org/conda-forge/linux-aarch64/liblapack-3.11.0-12_h88aeb00_openblas.conda#f47ba9250e40753a6d782e2320d499c4
+https://conda.anaconda.org/conda-forge/linux-aarch64/libcblas-3.11.0-12_hd72aa62_openblas.conda#ed3fca67505d709caf629a5ed3707e93
 https://conda.anaconda.org/conda-forge/linux-aarch64/xorg-libxmu-1.3.1-he30d5cf_0.conda#366e4028a2251b71a8e584d38d8db1f3
 https://conda.anaconda.org/conda-forge/linux-aarch64/xclip-0.13-h57736b2_4.conda#fc1b218fef5156b081af00d26c0bf343
 https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.11.20-hbd8a1cb_0.conda#05f63e1cbcb57e737619f989a2b8c8b3
@@ -101,8 +101,8 @@ https://conda.anaconda.org/conda-forge/linux-aarch64/wrapt-2.5.2-py313he745173_0
 https://conda.anaconda.org/conda-forge/linux-aarch64/numpy-2.5.5-py313h6bbad23_1.conda#44aabe0438d2a4290930c63bbad6ce07
 https://conda.anaconda.org/conda-forge/linux-aarch64/orjson-3.13.0-py313h222da89_0.conda#d3ac44b3aa49367839b1eaa9f0ebc74a
 https://conda.anaconda.org/conda-forge/linux-aarch64/pillow-13.0.0-py313h8f2a6e6_1.conda#449c6daef1b47d567419affdec3e4d3f
-https://conda.anaconda.org/conda-forge/linux-aarch64/libmamba-2.10.0-py314h7ca9c6b_3.conda#bb87db7b1fdca427717222743252ef63
-https://conda.anaconda.org/conda-forge/linux-aarch64/mamba-2.10.0-ha9f2faf_3.conda#925ab9fe32fe9bed5cf31a4a04b635f4
+https://conda.anaconda.org/conda-forge/linux-aarch64/libmamba-2.10.0-py312h0a71871_3.conda#251d368038099caecc0254f64ba961c0
+https://conda.anaconda.org/conda-forge/linux-aarch64/mamba-2.10.0-h767cdb8_3.conda#01993cfaec1401e68e828b272b464313
 https://conda.anaconda.org/conda-forge/noarch/backports-1.0-pyhd8ed1ab_5.conda#767d508c1a67e02ae8f50e44cacfadb2
 https://conda.anaconda.org/conda-forge/noarch/lark-1.3.1-pyhd8ed1ab_0.conda#9b965c999135d43a3d0f7bd7d024e26a
 https://conda.anaconda.org/conda-forge/noarch/annotated-doc-0.0.7-pyh5ded981_0.conda#dd8f5c3e084aafe50b3a71e94f96a398
@@ -315,7 +315,6 @@ https://conda.anaconda.org/conda-forge/noarch/jupyterhub-singleuser-6.2.0-h5f211
 https://conda.anaconda.org/conda-forge/noarch/jupyterlab_rise-0.43.1-pyhd8ed1ab_0.conda#4ed9d96e7b77b498e40862f2b5156b4b
 https://conda.anaconda.org/conda-forge/noarch/jupyterlab-git-0.55.0-pyh8644b8f_0.conda#c16a800c5e9c1c4793498d4703420874
 https://conda.anaconda.org/conda-forge/noarch/jupyter-ai-persona-manager-0.2.2-pyhb6f2a46_0.conda#f8001b7ba171e176bdde12d49b651fd1
-https://conda.anaconda.org/conda-forge/noarch/nb_conda_kernels-2.5.1-pyh707e725_2.conda#076e6d822442987779a6622092a8fb6a
 https://conda.anaconda.org/conda-forge/noarch/nbgitpuller-1.3.0-pyhd8ed1ab_0.conda#2c1bca15511e87cc22524979e0868220
 https://conda.anaconda.org/conda-forge/noarch/jupyterlab-diff-0.7.1-pyhcf101f3_0.conda#e82e3036c813846cde15544f6dce9ad9
 https://conda.anaconda.org/conda-forge/noarch/jupyter-ai-acp-client-0.3.4-pyhb6f2a46_0.conda#ac3b93c66d944e5eeb0b5a6ab9944704

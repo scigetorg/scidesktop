@@ -60,6 +60,12 @@ RUN printf '#!/bin/bash\necho hook-ran\n' > /usr/local/bin/before-notebook.d/10-
     && mkdir -p /data && start.sh true >/dev/null 2>&1 \
     && [ "$(readlink "/home/${NB_USER}/data")" = /data ] \
     && rm -f "/home/${NB_USER}/data" && rmdir /data \
+    # Root-started session with renamed NB_USER resolves MPLCONFIGDIR to the renamed home.
+    && useradd -m -u 22222 -g "${NB_GID}" alice \
+    && out=$(env -u MPLCONFIGDIR HOME=/home/jovyan NB_USER=alice bash -ec \
+        '. /usr/local/bin/before-notebook.d/05-resource-limits.sh >/dev/null; echo "$MPLCONFIGDIR"') \
+    && [ "${out}" = "/home/alice/.config/matplotlib-mpldir" ] \
+    && userdel -r alice \
     && [ "$(/opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
     && [ "$(runuser -u "${NB_USER}" -- /opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
     && test -r /opt/scidesktop/stop_supervisor.py \

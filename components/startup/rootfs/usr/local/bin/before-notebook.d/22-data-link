@@ -11,4 +11,4 @@ target="${home_dir}/data"
 if [ -L "${target}" ] || [ -e "${target}" ]; then
     exit 0
 fi
-/opt/scidesktop/run-as-user ln -s /data "${target}" 2>/dev/null || true
+/opt/scidesktop/run-as-user ln -sT /data "${target}" 2>/dev/null || true

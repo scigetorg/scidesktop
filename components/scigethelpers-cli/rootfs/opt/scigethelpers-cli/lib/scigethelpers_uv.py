@@ -83,12 +83,26 @@ def launch(project: Path, arguments: list[str]) -> None:
     )
 
 
+def safe_home() -> Path | None:
+    env_home = os.environ.get("HOME")
+    if env_home:
+        return Path(env_home).resolve()
+    try:
+        return Path.home().resolve()
+    except RuntimeError:
+        return None
+
+
 def prepare(project: Path, command: str) -> None:
     from jupyter_core.paths import jupyter_data_dir
 
     if os.geteuid() == 0:
         raise ValueError("Run as the notebook user, not root.")
-    if project in {Path("/"), Path.home().resolve()} or os.path.ismount(project):
+    forbidden = {Path("/")}
+    home = safe_home()
+    if home is not None:
+        forbidden.add(home)
+    if project in forbidden or os.path.ismount(project):
         raise ValueError("Choose an analysis subfolder, not a home or mount root.")
     if command != "remove" and not project.is_dir():
         raise ValueError("Create the analysis folder first.")
@@ -111,8 +125,7 @@ def prepare(project: Path, command: str) -> None:
                 raise ValueError("Refusing to replace a kernel owned by another tool.")
             registered = True
         if command == "remove":
-            target.unlink()
-            spec_dir.rmdir()
+            shutil.rmtree(spec_dir)
             print("Removed registration; project files and environment retained.")
             return
         for parent in project.parents:
@@ -144,24 +157,41 @@ def prepare(project: Path, command: str) -> None:
             location = "--directory" if arguments[0] == "init" else "--project"
             subprocess.run([uv, *arguments, location, str(project)], cwd=project, env=env, check=True)
 
+        backup_venv: Path | None = None
         if command == "rebuild":
             if not manifest.is_file() or not (project / "uv.lock").is_file():
                 raise ValueError("Rebuild requires pyproject.toml and uv.lock; run init first.")
             if venv.exists():
-                shutil.rmtree(venv)
-        if not manifest.exists():
-            run("init", "--bare", "--no-workspace", "--no-pin-python", "--vcs", "none", "--name", kernel_name(project))
-        if not venv.exists():
-            run("venv", str(venv))
-        atomic_json(project / f".{MARKER}.json", {"project": str(project)})
-        if command == "init":
-            deps = data.get("dependency-groups", {}).get("dev", [])
-            if not any(isinstance(dep, str) and re.match(r"(?i)^ipykernel(?:$|[<>=!~;\[ @])", dep) for dep in deps):
-                run("add", "--dev", "ipykernel", "--no-sync")
-            if not (project / "uv.lock").is_file():
-                run("lock")
-        run("sync", "--locked", "--group", "dev")
-        subprocess.run([str(venv / "bin/python"), "-I", "-c", "import ipykernel"], env=env, check=True)
+                backup_venv = project / f".venv.{MARKER}-backup-{os.getpid()}"
+                if backup_venv.exists():
+                    shutil.rmtree(backup_venv)
+                venv.rename(backup_venv)
+        try:
+            if not manifest.exists():
+                run("init", "--bare", "--no-workspace", "--no-pin-python", "--vcs", "none", "--name", kernel_name(project))
+            if not venv.exists():
+                run("venv", str(venv))
+            if command == "init":
+                deps = data.get("dependency-groups", {}).get("dev", [])
+                if not any(isinstance(dep, str) and re.match(r"(?i)^ipykernel(?:$|[<>=!~;\[ @])", dep) for dep in deps):
+                    run("add", "--dev", "ipykernel", "--no-sync")
+                if not (project / "uv.lock").is_file():
+                    run("lock")
+            current_data = tomllib.loads(manifest.read_text()) if manifest.exists() else {}
+            if "dev" in current_data.get("dependency-groups", {}):
+                run("sync", "--locked", "--group", "dev")
+            else:
+                run("sync", "--locked")
+            subprocess.run([str(venv / "bin/python"), "-I", "-c", "import ipykernel"], env=env, check=True)
+            atomic_json(project / f".{MARKER}.json", {"project": str(project)})
+        except Exception:
+            if backup_venv is not None and backup_venv.exists():
+                if venv.exists():
+                    shutil.rmtree(venv)
+                backup_venv.rename(venv)
+            raise
+        if backup_venv is not None and backup_venv.exists():
+            shutil.rmtree(backup_venv)
         spec_dir.mkdir(exist_ok=True)
         atomic_json(
             target,

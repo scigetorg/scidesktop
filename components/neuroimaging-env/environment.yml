@@ -10,7 +10,13 @@ dependencies:
   - scipy==1.18.1
   - pandas==3.1.1
   - matplotlib-base==3.11.2
-  - ipykernel==7.4.0
+  # Held on 6.31.0 (matching upstream neurodesktop) to keep widget comms off
+  # ipykernel 7's experimental subshell execution path.
+  - ipykernel==6.31.0
   - ipywidgets==8.1.9
   - anywidget==0.11.0
   - ipycanvas==0.14.3
+  # Pinned in conda to satisfy botocore (<3.0.0) and nf-core (<=3.0.52) without
+  # pip overwriting conda-installed packages.
+  - python-dateutil==2.9.0.post0
+  - prompt-toolkit==3.0.52

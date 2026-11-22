@@ -2,7 +2,10 @@
 annexremote==1.6.6 \
     --hash=sha256:5f78d0753c0763d95fc4c52050bd6212bb32457d32f6575dc66a83178e0283a7 \
     --hash=sha256:dee4efa33c3bd9514928af5c57c82599ca9dc0a5535121ee234ed1833a98f93e
-    # via datalad
+    # via
+    #   datalad
+    #   datalad-next
+    #   datalad-osf
 boto3==1.44.7 \
     --hash=sha256:15fac273416d37cd5e3f0c02b33fd8d7f27d3e64c5f64b911f8b953772302609 \
     --hash=sha256:cc19922a2db90ac98f259b5290e08fcf7143a314eb6b2e430afec26a5d1f4e10
@@ -414,10 +417,30 @@ datalad==1.8.0 \
     # via
     #   -r requirements.in
     #   datalad-container
+    #   datalad-next
+    #   datalad-osf
 datalad-container==1.2.6 \
     --hash=sha256:4e6f5cfa3118efa650bcb7ca53de46f73966ea335678266ef22f502debeb72ba \
     --hash=sha256:64ec4a92d1d6ef2889d0f1045c44e1441d887e61a49aa79b01e05d82e733a85f
     # via -r requirements.in
+datalad-core==0.3.0 \
+    --hash=sha256:3a3721cce5b8cb8f516e6ca8ad03a444f2db5d4be628a95d82bdea8d716db639 \
+    --hash=sha256:ddf377c1e568314336221782c5a59273bb0f91f8cf85b24542c62750622e807e
+    # via datalad-next
+datalad-next==1.6.0 \
+    --hash=sha256:6858afb6377efc93514ae2ed980f8e3007aac07e2dd1f120e590429e1e57d265 \
+    --hash=sha256:e8dff3558619f59e474f7ffedd7511f13f3f06a3a049ac3ec8a28f3e97c68903
+    # via datalad-osf
+datalad-osf==0.3.0 \
+    --hash=sha256:2cdc42ac3015d0734ac1f386a2f09fe2bfd2bad56e2035ebcce87a378b0ec209 \
+    --hash=sha256:ce2690a2db78661a3ee5d1f6de30df608ba40f9a35158a436de358c443c0605c
+    # via -r requirements.in
+datasalad==0.9.0 \
+    --hash=sha256:63b58f4039692316ac02c57a6f0a9da0a9157f9578e1e9efc91b38ddd614dd50 \
+    --hash=sha256:7a06eadd643b7d0a4f8eb77ba90598fd2ccd8e4312431d2d7b101dc6d46a646e
+    # via
+    #   datalad-core
+    #   datalad-next
 distro==1.9.0 \
     --hash=sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed \
     --hash=sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2
@@ -440,7 +463,9 @@ giturlparse==0.16.0 \
 humanize==4.17.0 \
     --hash=sha256:02d0899527760efe18011944f882df4970943b4cdff7b5a0ba7fed43a576ef98 \
     --hash=sha256:1d6a36c453dbfbb3f0b34601d2e0b4ce5d48d780305cd45714843f0068fde6ac
-    # via datalad
+    # via
+    #   datalad
+    #   datalad-next
 idna==3.20 \
     --hash=sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44 \
     --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
@@ -488,11 +513,15 @@ keyrings-alt==5.0.2 \
 looseversion==1.3.0 \
     --hash=sha256:781ef477b45946fc03dd4c84ea87734b21137ecda0e1e122bcb3c8d16d2a56e0 \
     --hash=sha256:ebde65f3f6bb9531a81016c6fef3eb95a61181adc47b7f949e9c0ea47911669e
-    # via datalad
+    # via
+    #   datalad
+    #   datalad-core
 more-itertools==11.2.1 \
     --hash=sha256:35a7377edd1dd6608dcb2cdf534ded55ea32d49448875ad042cd3f879fb1ded0 \
     --hash=sha256:cbf08fd0af284dc69718b9b76a8e6203df624d70209ea511e4219d350c856f63
     # via
+    #   datalad-core
+    #   datalad-next
     #   jaraco-classes
     #   jaraco-functools
 msgpack==1.2.4 \
@@ -588,6 +617,12 @@ msgpack==1.2.4 \
     --hash=sha256:fb811ac3d463a75013b234d2aae56b9f0bdb0105caf4dd2ee65305b6a8a6078d \
     --hash=sha256:fb9ddbf23b8c6e89752af399fcf4daed60055e239cda44c6acfaa76d19331e8c
     # via datalad
+osfclient==0.0.5 \
+    --hash=sha256:2351a61785f2ad662f1f4e7775d77dc4c185379473553f46fbfcfb65da819b80 \
+    --hash=sha256:47c92bbdce57ecc0ed87eabe459025cc549080c48b28ebc86bfc5d82545a75c8
+    # via
+    #   -r requirements.in
+    #   datalad-osf
 packaging==26.3 \
     --hash=sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79 \
     --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
@@ -622,6 +657,7 @@ requests==2.34.2 \
     # via
     #   datalad
     #   datalad-container
+    #   osfclient
     #   python-gitlab
     #   requests-toolbelt
 requests-toolbelt==1.0.0 \
@@ -639,11 +675,15 @@ secretstorage==3.5.0 ; sys_platform == 'linux' \
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
-    # via python-dateutil
+    # via
+    #   osfclient
+    #   python-dateutil
 tqdm==4.70.1 \
     --hash=sha256:c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73 \
     --hash=sha256:cefd0eca11b2a37a3aee776544d4f4ae913f02688135b5556b8788dfa474afc4
-    # via datalad
+    # via
+    #   datalad
+    #   osfclient
 urllib3==2.8.0 \
     --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
     --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63

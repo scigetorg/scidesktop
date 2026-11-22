@@ -25,8 +25,13 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && fetch "https://github.com/VirtualGL/virtualgl/releases/download/${VIRTUALGL_VERSION:?}/virtualgl_${VIRTUALGL_VERSION}_${arch}.deb" \
         "${sha}" /tmp/virtualgl.deb \
     && dpkg-deb -x /tmp/virtualgl.deb /tmp/vgl \
-    && install -d -m 0755 /out/opt /out/usr/local/bin /out/opt/scidesktop/manifest.d \
+    && install -d -m 0755 /out/opt /out/usr/lib /out/usr/local/bin /out/opt/scidesktop/manifest.d \
     && cp -a /tmp/vgl/opt/VirtualGL /out/opt/VirtualGL \
+    # VirtualGL's faker preload libraries live in /usr/lib in the upstream .deb
+    # so vglrun's bare LD_PRELOAD=libdlfaker.so:libvglfaker.so resolves via ld.so.
+    && for lib in libdlfaker.so libgefaker.so libvglfaker.so libvglfaker-nodl.so libvglfaker-opencl.so; do \
+         cp -a "/tmp/vgl/usr/lib/${lib}" "/out/usr/lib/${lib}"; \
+       done \
     && ln -s /opt/VirtualGL/bin/vglrun /out/usr/local/bin/vglrun \
     && ln -s /opt/VirtualGL/bin/eglinfo /out/usr/local/bin/vgl-eglinfo \
     && printf '{"virtualgl": "%s"}\n' "${VIRTUALGL_VERSION}" > /out/opt/scidesktop/manifest.d/virtualgl.json \
@@ -39,7 +44,13 @@ COPY --from=build /out/ /
 FROM os AS test
 COPY --from=component / /
 USER ${NB_UID}
-RUN test -x /usr/local/bin/vglrun \
+RUN set -eu \
+    && test -x /usr/local/bin/vglrun \
     && test -x /usr/local/bin/vgl-eglinfo \
-    && /opt/VirtualGL/bin/vglrun -h 2>&1 | grep -qi 'virtualgl\|vglrun' \
+    && for lib in libdlfaker.so libgefaker.so libvglfaker.so libvglfaker-nodl.so libvglfaker-opencl.so; do \
+         test -r "/usr/lib/${lib}"; \
+       done \
+    && ! ldd /usr/lib/libvglfaker.so /usr/lib/libdlfaker.so /opt/VirtualGL/bin/glxspheres64 2>&1 | grep -q 'not found' \
+    && out="$(vglrun /bin/true 2>&1)" \
+    && ! printf '%s\n' "${out}" | grep -qiE 'cannot be preloaded|ERROR' \
     && test -r /opt/scidesktop/manifest.d/virtualgl.json

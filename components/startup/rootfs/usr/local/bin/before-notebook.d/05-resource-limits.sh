@@ -23,7 +23,16 @@ if [ -n "${CPU_LIMIT:-}" ]; then
     fi
     echo "[resources] CPU_LIMIT=${CPU_LIMIT} MEM_LIMIT=${MEM_LIMIT:-unset} threads=${_sd_n:-unset}"
 fi
-if [ -z "${MPLCONFIGDIR:-}" ] && [ -n "${HOME:-}" ]; then
-    export MPLCONFIGDIR="${HOME}/.config/matplotlib-mpldir"
+if [ -z "${MPLCONFIGDIR:-}" ]; then
+    _sd_home="${HOME:-}"
+    if [ "$(id -u)" -eq 0 ]; then
+        _sd_pw_home="$(getent passwd "${NB_USER:-jovyan}" 2>/dev/null | cut -d: -f6 || true)"
+        [ -n "${_sd_pw_home}" ] && _sd_home="${_sd_pw_home}"
+        unset _sd_pw_home
+    fi
+    if [ -n "${_sd_home}" ]; then
+        export MPLCONFIGDIR="${_sd_home}/.config/matplotlib-mpldir"
+    fi
+    unset _sd_home
 fi
 unset _sd_k _sd_v _sd_n

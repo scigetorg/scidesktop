@@ -3,30 +3,48 @@
 #
 #   ./test/neurodesk-compat-smoke.sh [image]
 #
-# Verifies FreeSurfer/nf-neuro defaults, bundled nf-neuro modules,
-# getting-started notebook seeding in a fresh home, and local module discovery.
+# Verifies:
+#   - FreeSurfer/nf-neuro defaults across login, non-login, and root-started
+#     NB_USER-renamed sessions
+#   - Bundled nf-neuro modules and getting-started.ipynb seeding
+#   - Real `module load` precedence (55-neurodesk-local beats 60-neurodesk-cvmfs
+#     even when CVMFS was already in MODULEPATH) and SitePackage.lua logging
+#   - /neurodesktop-storage auto-bind and explicit empty APPTAINER_BINDPATH opt-out
 
 set -uo pipefail
 
 IMAGE="${1:-neurodesktop}"
 FAILED=0
+TMP_HOST="$(mktemp -d)"
 
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 
+cleanup() {
+    rm -rf "${TMP_HOST}"
+}
+trap cleanup EXIT
+
+mkdir -p "${TMP_HOST}/cvmfs/duptool" "${TMP_HOST}/local/modules/duptool"
+printf 'setenv("DUPTOOL_SRC", "cvmfs")\n' > "${TMP_HOST}/cvmfs/duptool/1.0.lua"
+printf 'setenv("DUPTOOL_SRC", "local")\n' > "${TMP_HOST}/local/modules/duptool/1.0.lua"
+chmod -R a+rX "${TMP_HOST}"
+
 echo "neurodesk-compat smoke: ${IMAGE}"
-out=$(docker run --rm "${IMAGE}" bash -lc '
-    set -e
+out=$(docker run --rm \
+    -v "${TMP_HOST}/cvmfs:/cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/demo:ro" \
+    -v "${TMP_HOST}/local:/neurodesktop-storage/containers:ro" \
+    -e "MODULEPATH=/cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/demo" \
+    "${IMAGE}" bash -lc '
+    set -euo pipefail
     echo "subjects_dir=${APPTAINERENV_SUBJECTS_DIR:-}"
     echo "nf_neuro=${NF_NEURO_MODULES_DIR:-}"
+    echo "bindpath=${APPTAINER_BINDPATH:-unset}"
     test -d /opt/nf-neuro/modules/modules && echo "nf_neuro_dir=ok"
     test -f "${HOME}/getting-started.ipynb" && echo "getting_started=ok"
-    tmp="$(mktemp -d)"
-    mkdir -p "${tmp}/modules/demo"
-    printf "#%%Module\n" > "${tmp}/modules/demo/1.0"
-    found="$(NEURODESKTOP_LOCAL_CONTAINERS="${tmp}" /etc/scidesktop/modulepath.d/55-neurodesk-local)"
-    [ "${found}" = "${tmp}/modules" ] && echo "local_modules=ok"
-    rm -rf "${tmp}"
+    module load duptool/1.0 >/dev/null 2>&1
+    [ "${DUPTOOL_SRC:-}" = "local" ] && echo "local_precedence=ok"
+    grep -q "^duptool	1.0	" "${HOME}/.local/state/scigethelpers/module-usage.tsv" && echo "local_citation=ok"
 ' 2>/dev/null)
 
 has() { printf '%s\n' "${out}" | grep -qxF "$1"; }
@@ -43,9 +61,40 @@ has "nf_neuro_dir=ok" \
 has "getting_started=ok" \
     && pass "getting-started.ipynb seeded into a fresh home" \
     || fail "getting-started.ipynb seeded into a fresh home"
-has "local_modules=ok" \
-    && pass "55-neurodesk-local discovers mounted local module directories" \
-    || fail "55-neurodesk-local discovers mounted local module directories"
+has "local_precedence=ok" \
+    && pass "local Neurodesk modules beat CVMFS duplicates in real module load" \
+    || fail "local Neurodesk modules beat CVMFS duplicates in real module load"
+has "local_citation=ok" \
+    && pass "SitePackage.lua logs legacy local module loads for scigethelpers cite" \
+    || fail "SitePackage.lua logs legacy local module loads for scigethelpers cite"
+printf '%s\n' "${out}" | grep -q '^bindpath=.*\/neurodesktop-storage' \
+    && pass "/neurodesktop-storage auto-binds when mounted" \
+    || fail "/neurodesktop-storage auto-binds when mounted"
+
+# Root-started session with renamed NB_USER resolves APPTAINERENV_SUBJECTS_DIR
+# and MPLCONFIGDIR to the renamed user's home, and leaves APPTAINER_BINDPATH
+# unset when no host storage mounts exist.
+root_out="$(docker run --rm --user root -e NB_USER=alice "${IMAGE}" bash -c '
+    echo "subj=${APPTAINERENV_SUBJECTS_DIR:-}"
+    echo "mpl=${MPLCONFIGDIR:-}"
+    echo "bind=${APPTAINER_BINDPATH:-unset}"
+' 2>/dev/null || true)"
+printf '%s\n' "${root_out}" | grep -qxF 'subj=/home/alice/freesurfer-subjects-dir' \
+    && pass "root-started NB_USER=alice gets /home/alice/freesurfer-subjects-dir" \
+    || fail "root-started NB_USER=alice gets /home/alice/freesurfer-subjects-dir"
+printf '%s\n' "${root_out}" | grep -qxF 'mpl=/home/alice/.config/matplotlib-mpldir' \
+    && pass "root-started NB_USER=alice gets /home/alice/.config/matplotlib-mpldir" \
+    || fail "root-started NB_USER=alice gets /home/alice/.config/matplotlib-mpldir"
+printf '%s\n' "${root_out}" | grep -qxF 'bind=unset' \
+    && pass "APPTAINER_BINDPATH stays unset when no host storage dirs are mounted" \
+    || fail "APPTAINER_BINDPATH stays unset when no host storage dirs are mounted"
+
+optout="$(docker run --rm \
+    -v "${TMP_HOST}/local:/neurodesktop-storage/containers:ro" \
+    -e APPTAINER_BINDPATH="" "${IMAGE}" bash -c 'echo "optout=${APPTAINER_BINDPATH+set}:${APPTAINER_BINDPATH}"' 2>/dev/null || true)"
+printf '%s\n' "${optout}" | grep -qxF 'optout=set:' \
+    && pass "empty APPTAINER_BINDPATH=\"\" opt-out is preserved even when storage is mounted" \
+    || fail "empty APPTAINER_BINDPATH=\"\" opt-out is preserved"
 
 echo
 if [ "${FAILED}" -eq 0 ]; then

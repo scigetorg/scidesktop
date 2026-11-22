@@ -45,8 +45,9 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && ln -s /opt/workflow-engines/bin/nextflow /out/usr/local/bin/nextflow \
     && ln -s /opt/workflow-engines/snakemake/bin/snakemake /out/usr/local/bin/snakemake \
     && smk="$(/opt/workflow-engines/snakemake/bin/python -c 'import importlib.metadata as m; print(m.version("snakemake"))')" \
-    && printf '{"nextflow": "%s", "nf-test": "%s", "snakemake": "%s"}\n' \
-        "${NEXTFLOW_VERSION}" "${NF_TEST_VERSION}" "${smk}" \
+    && smk_slurm="$(/opt/workflow-engines/snakemake/bin/python -c 'import importlib.metadata as m; print(m.version("snakemake-executor-plugin-slurm"))')" \
+    && printf '{"nextflow": "%s", "nf-test": "%s", "snakemake": "%s", "snakemake-executor-plugin-slurm": "%s"}\n' \
+        "${NEXTFLOW_VERSION}" "${NF_TEST_VERSION}" "${smk}" "${smk_slurm}" \
         > /out/opt/scidesktop/manifest.d/workflow-engines.json \
     && chmod -R a+rX,go-w /opt/workflow-engines /out
 
@@ -67,6 +68,7 @@ RUN set -eu \
     && nextflow -version | grep -q "version" \
     && nf-test version | grep -qi "nf-test" \
     && snakemake --version \
+    && snakemake --executor slurm --help >/dev/null \
     && printf 'rule all:\n    output: "done.txt"\n    shell: "echo smk-ok > {output}"\n' > "${HOME}/Snakefile" \
     && snakemake --snakefile "${HOME}/Snakefile" --directory "${HOME}" --cores 1 \
     && [ "$(cat "${HOME}/done.txt")" = "smk-ok" ]

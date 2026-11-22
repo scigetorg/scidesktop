@@ -11,8 +11,8 @@ git config --global user.email "test@scidesktop.invalid"
 
 # Each command a terminal, git or git-annex looks up is the component's.
 for command in datalad git-annex git-annex-shell git-annex-remote-datalad \
-    git-annex-remote-datalad-archives git-annex-remote-ora git-annex-remote-ria \
-    git-credential-datalad git-remote-annex; do
+    git-annex-remote-datalad-archives git-annex-remote-ora git-annex-remote-osf \
+    git-annex-remote-ria git-credential-datalad git-remote-annex osf; do
     [ "$(readlink -f "$(command -v "${command}")")" = "/opt/datalad/bin/${command}" ]
 done
 
@@ -22,6 +22,8 @@ version() { sed -n "s/.*\"$1\": \"\([^\"]*\)\".*/\1/p" "${manifest}"; }
 [ "$(datalad --version)" = "datalad $(version datalad)" ]
 git annex version --raw | grep -F "$(version git-annex)"
 datalad containers-list --help >/dev/null
+datalad osf-credentials --help >/dev/null
+osf --version >/dev/null
 
 # A dataset keeps a file in the annex and gets it back from a clone: DataLad,
 # git and git-annex working together.
