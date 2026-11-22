@@ -24,5 +24,9 @@ COPY --from=component / /
 USER ${NB_UID}
 RUN [ "$(sciget catalog list | cut -f 1-3)" = "$(printf 'neuroimaging\t1\tsystem\nmicroscopy\t2\tsystem')" ] \
     && [ "$(stat -c '%a %u' /etc/sciget /etc/sciget/catalogs.json)" = "$(printf '755 0\n644 0')" ] \
+    && paths="$(/etc/scidesktop/modulepath.d/50-sciget)" \
+    && grep -q '/neuroimaging$' <<<"${paths}" \
+    && grep -q '/microscopy$' <<<"${paths}" \
     && test -x /etc/scidesktop/modulepath.d/60-neurodesk-cvmfs \
+    && [ -z "$(SCIDESKTOP_CVMFS_MODE=disabled /etc/scidesktop/modulepath.d/60-neurodesk-cvmfs)" ] \
     && /etc/scidesktop/modulepath.d/60-neurodesk-cvmfs

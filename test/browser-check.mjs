@@ -246,7 +246,7 @@ function pngColorStats(buf) {
   const raw = zlib.inflateSync(Buffer.concat(idat));
   const stride = width * bpp;
   const recon = Buffer.alloc(height * stride);
-  const paeth = (a, b, c) => {
+  const filter4Predictor = (a, b, c) => {
     const p = a + b - c;
     const pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
     return (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
@@ -264,7 +264,7 @@ function pngColorStats(buf) {
       if (filter === 1) val = (v + a) & 0xff;
       else if (filter === 2) val = (v + b) & 0xff;
       else if (filter === 3) val = (v + ((a + b) >> 1)) & 0xff;
-      else if (filter === 4) val = (v + paeth(a, b, c)) & 0xff;
+      else if (filter === 4) val = (v + filter4Predictor(a, b, c)) & 0xff;
       recon[outOff + x] = val;
     }
   }
@@ -364,9 +364,7 @@ async function main() {
     if (filePt) {
       await lab.clickAt(filePt.x, filePt.y, 2);
       const niivueRect = await lab.waitFor(`(() => {
-        const el = document.querySelector('.jp-NiivueWidget iframe')
-          || [...document.querySelectorAll('.jp-MainAreaWidget iframe, .jp-MainAreaWidget canvas')]
-               .find(n => { const r = n.getBoundingClientRect(); return r.width >= 150 && r.height >= 150; });
+        const el = document.querySelector('.jp-NiivueWidget iframe');
         if (!el) return null;
         const r = el.getBoundingClientRect();
         if (r.width < 150 || r.height < 150) return null;
@@ -483,6 +481,10 @@ async function main() {
       const r = c.getBoundingClientRect();
       return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
     })()`, 30000);
+    // Wait for the volume fetch response so a fast canvas mount cannot race a slower download.
+    for (let i = 0; i < 40 && volStatus === 0; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
     if (fbRect && volStatus === 200) {
       await pollRenderedPixels(fb, fbRect, "FreeBrowse downloaded and rendered NIfTI volume pixels");
     } else {

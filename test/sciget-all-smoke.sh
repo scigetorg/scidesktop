@@ -54,6 +54,17 @@ found_micro="$(as_user 'sciget find nextpyp' | awk -F '\t' 'index($1, "nextpyp/"
 [ -n "${found_micro}" ] && pass "sciget offers nextpyp ($(cut -f 1 <<<"${found_micro}"))" \
     || fail "sciget offers nextpyp"
 
+mp="$(as_user 'echo "${MODULEPATH:-}"')"
+case ":${mp}:" in
+    *:/home/jovyan/.local/share/sciget/modules/neuroimaging:*) neuro_mp=1 ;; *) neuro_mp=0 ;;
+esac
+case ":${mp}:" in
+    *:/home/jovyan/.local/share/sciget/modules/microscopy:*) micro_mp=1 ;; *) micro_mp=0 ;;
+esac
+[ "${neuro_mp}" = 1 ] && [ "${micro_mp}" = 1 ] \
+    && pass "Lmod MODULEPATH includes both neuroimaging and microscopy sciget module dirs" \
+    || fail "Lmod MODULEPATH includes both neuroimaging and microscopy sciget module dirs (got: ${mp})"
+
 echo
 if [ "${FAILED}" -eq 0 ]; then
     echo "sciget-all smoke: all checks passed"

@@ -104,9 +104,9 @@ container log. The session goes on without a queue.
 | `SCIDESKTOP_SLURM_PORTS` | `6817,6818` | the controller's and the worker's loopback ports |
 | `SLURM_CONF` | unset | set to a cluster's configuration (an HPC login node, with its sockets mounted): that cluster is used and none is started |
 
-The queue is not started when the session runs under a user ID that cannot
-write `/run/slurm` (an arbitrary UID, or `/run` mounted over). The container
-log says so.
+The queue is not started when the session runs under a user ID that does not
+own and write `/run/slurm` and `/run/slurmctld` (an arbitrary non-root UID, or
+`/run` mounted over). The container log says so.
 
 ## Checks
 

@@ -17,6 +17,7 @@ else
     fi
     if [[ "${q}" =~ ^[0-9]+$ ]] && [[ "${p}" =~ ^[1-9][0-9]*$ ]]; then
         echo "CPU_LIMIT=$(( (q + p - 1) / p ))"
+        awk -v q="${q}" -v p="${p}" 'BEGIN { printf "CPU_QUOTA=%g\n", q / p }'
     fi
 fi
 

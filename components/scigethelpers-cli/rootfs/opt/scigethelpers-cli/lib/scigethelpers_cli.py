@@ -263,7 +263,7 @@ def read_text(path: str) -> str:
 
 
 def read_resource_limits() -> dict[str, str]:
-    """Read CPU_LIMIT and MEM_LIMIT from env or startup's /opt/scidesktop/resource-limits."""
+    """Read CPU_LIMIT, CPU_QUOTA and MEM_LIMIT from env or startup's helper."""
     limits = {k: os.environ[k].strip() for k in ("CPU_LIMIT", "MEM_LIMIT") if os.environ.get(k, "").strip()}
     helper = Path("/opt/scidesktop/resource-limits")
     if len(limits) < 2 and os.access(helper, os.X_OK):
@@ -271,7 +271,7 @@ def read_resource_limits() -> dict[str, str]:
         if result is not None and result.returncode == 0:
             for line in result.stdout.splitlines():
                 key, sep, val = line.partition("=")
-                if sep and key in ("CPU_LIMIT", "MEM_LIMIT") and val.strip():
+                if sep and key in ("CPU_LIMIT", "CPU_QUOTA", "MEM_LIMIT") and val.strip():
                     limits.setdefault(key, val.strip())
     return limits
 
@@ -288,7 +288,8 @@ def memory_limit() -> str:
 
 def cpu_limit() -> str:
     available = len(os.sched_getaffinity(0))
-    raw = read_resource_limits().get("CPU_LIMIT", "")
+    limits = read_resource_limits()
+    raw = os.environ.get("CPU_LIMIT", "").strip() or limits.get("CPU_QUOTA", "") or limits.get("CPU_LIMIT", "")
     try:
         if raw and float(raw) > 0:
             return f"{min(float(available), float(raw)):g}"
