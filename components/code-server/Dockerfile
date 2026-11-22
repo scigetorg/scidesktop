@@ -28,8 +28,12 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && mkdir -p /opt/code-server \
     && tar -xzf /tmp/code-server.tar.gz -C /opt/code-server --strip-components=1 --no-same-owner \
     && rm /tmp/code-server.tar.gz \
-    # Source maps are for debugging code-server itself.
-    && find /opt/code-server -type f \( -name '*.js.map' -o -name '*.css.map' \) -delete \
+    # Remove source maps, TypeScript declaration files, and unused bundled
+    # GitHub Copilot SDK native prebuilds (~259 MB) not used in this stack.
+    && rm -rf \
+        /opt/code-server/lib/vscode/node_modules/@github/copilot-sdk-linux-* \
+        /opt/code-server/lib/vscode/extensions/copilot/node_modules/@github/copilot/sdk/prebuilds \
+    && find /opt/code-server -type f \( -name '*.map' -o -name '*.d.ts' \) -delete \
     && chmod -R a+rX,go-w /opt/code-server \
     && /opt/code-server/bin/code-server --version | grep -F "${CODE_SERVER_VERSION}" \
     && test -s /opt/code-server/LICENSE \

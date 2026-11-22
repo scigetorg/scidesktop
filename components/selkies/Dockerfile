@@ -18,20 +18,21 @@ RUN --mount=type=bind,from=components,source=check-lock,target=/usr/local/bin/ch
 COPY --from=micromamba /usr/local/bin/micromamba /usr/local/bin/micromamba
 COPY linux-*.lock requirements.lock /tmp/
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=trim-python-env,target=/usr/local/bin/trim-python-env \
     micromamba create --yes --root-prefix /tmp/mamba-root --prefix /opt/selkies \
         --file "/tmp/$(target-arch conda).lock" \
     && /opt/selkies/bin/python -m pip install --no-cache-dir --no-deps --require-hashes \
         --no-compile -r /tmp/requirements.lock \
-    && /opt/selkies/bin/python -m compileall -q /opt/selkies/lib \
     && /opt/selkies/bin/python -m pip uninstall --yes pip \
+    && install -d -m 0755 /out/manifest \
+    && /opt/selkies/bin/python -c 'import json, importlib.metadata as m; json.dump({p: m.version(p) for p in ("selkies", "pixelflux", "pcmflux")}, open("/out/manifest/selkies.json", "w"))' \
+    && test -x /opt/selkies/bin/selkies \
+    && test -f "$(/opt/selkies/bin/python -c 'import selkies, os; print(os.path.dirname(selkies.__file__))')/selkies_web/index.html" \
+    && trim-python-env /opt/selkies \
     # conda packages carry group-writable modes; nothing root-owned here should
     # be writable by a group (a user in group 0 could change the desktop).
     && chmod -R go-w /opt/selkies \
-    && rm -rf /tmp/mamba-root /opt/selkies/conda-meta/history \
-    && test -x /opt/selkies/bin/selkies \
-    && test -f "$(/opt/selkies/bin/python -c 'import selkies, os; print(os.path.dirname(selkies.__file__))')/selkies_web/index.html" \
-    && install -d -m 0755 /out/manifest \
-    && /opt/selkies/bin/python -c 'import json, importlib.metadata as m; json.dump({p: m.version(p) for p in ("selkies", "pixelflux", "pcmflux")}, open("/out/manifest/selkies.json", "w"))'
+    && rm -rf /tmp/mamba-root /opt/selkies/conda-meta/history
 
 # Integration files from rootfs/ (hooks, symlinks, config) at their image paths,
 # without group or other write permission whatever the checkout's umask.

@@ -3,7 +3,7 @@
 # all desktops (scidesktop, microdesktop, aidesktop, neurodesktop):
 #   - Nextflow (Apache-2.0): offline fat distribution executable
 #   - nf-test (MIT): test runner JAR for Nextflow pipelines
-#   - Snakemake (MIT): isolated locked Python environment
+#   - Snakemake (MIT): isolated locked venv backed by jupyter-env's Python 3.13
 
 ARG UBUNTU_IMAGE
 FROM ${UBUNTU_IMAGE} AS build
@@ -19,12 +19,11 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
     apt-get update && apt-get install --no-install-recommends -y ca-certificates curl
 RUN --mount=type=bind,from=components,source=check-lock,target=/usr/local/bin/check-lock \
     --mount=type=bind,source=.,target=/src \
-    check-lock /src/environment.yml /src/linux-*.lock \
-    && check-lock /src/requirements.in /src/requirements.lock
-COPY --from=micromamba /usr/local/bin/micromamba /usr/local/bin/micromamba
-COPY linux-*.lock requirements.lock /tmp/
-RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    check-lock /src/requirements.in /src/requirements.lock
+COPY requirements.lock /tmp/
+RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
+    --mount=type=bind,from=components,source=trim-python-env,target=/usr/local/bin/trim-python-env \
     install -d -m 0755 /opt/workflow-engines/bin /opt/workflow-engines/nf-test \
         /out/usr/local/bin /out/opt/scidesktop/manifest.d \
     && fetch "https://github.com/nextflow-io/nextflow/releases/download/v${NEXTFLOW_VERSION:?}/nextflow-${NEXTFLOW_VERSION}-dist" \
@@ -35,13 +34,10 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && tar -xzf /tmp/nf-test.tar.gz -C /opt/workflow-engines/nf-test \
     && test -f /opt/workflow-engines/nf-test/nf-test.jar \
     && rm -f /tmp/nf-test.tar.gz \
-    && micromamba create --yes --root-prefix /tmp/mamba-root --prefix /opt/workflow-engines/snakemake \
-        --file "/tmp/$(target-arch conda).lock" \
-    && /opt/workflow-engines/snakemake/bin/python -m pip install --no-cache-dir --no-deps --require-hashes \
-        --no-compile -r /tmp/requirements.lock \
-    && /opt/workflow-engines/snakemake/bin/python -m compileall -q /opt/workflow-engines/snakemake/lib \
-    && /opt/workflow-engines/snakemake/bin/python -m pip uninstall --yes pip \
-    && rm -rf /tmp/mamba-root /opt/workflow-engines/snakemake/conda-meta/history \
+    && /opt/conda/bin/python -m venv --without-pip /opt/workflow-engines/snakemake \
+    && /opt/conda/bin/python -m pip --python /opt/workflow-engines/snakemake/bin/python install \
+        --no-cache-dir --no-deps --require-hashes --no-compile -r /tmp/requirements.lock \
+    && trim-python-env /opt/workflow-engines/snakemake \
     && ln -s /opt/workflow-engines/bin/nextflow /out/usr/local/bin/nextflow \
     && ln -s /opt/workflow-engines/snakemake/bin/snakemake /out/usr/local/bin/snakemake \
     && smk="$(/opt/workflow-engines/snakemake/bin/python -c 'import importlib.metadata as m; print(m.version("snakemake"))')" \
@@ -63,7 +59,8 @@ COPY --from=build /out/ /
 FROM os AS test
 COPY --from=component / /
 USER ${NB_UID}
-RUN set -eu \
+RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
+    set -eu \
     && HOME="$(mktemp -d)" && export HOME \
     && nextflow -version | grep -q "version" \
     && nf-test version | grep -qi "nf-test" \

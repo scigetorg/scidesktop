@@ -22,13 +22,13 @@ RUN --mount=type=bind,from=components,source=check-lock,target=/usr/local/bin/ch
 COPY --from=micromamba /usr/local/bin/micromamba /usr/local/bin/micromamba
 COPY linux-*.lock requirements.lock patch_ipyniivue.py /tmp/
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=trim-python-env,target=/usr/local/bin/trim-python-env \
     micromamba create --yes --root-prefix /tmp/mamba-root --prefix /opt/neuroimaging-env \
         --file "/tmp/$(target-arch conda).lock" \
     && /opt/neuroimaging-env/bin/python -m pip install --no-cache-dir --no-deps --require-hashes \
         --no-compile -r /tmp/requirements.lock \
     && ipyniivue_dir="$(/opt/neuroimaging-env/bin/python -c 'import ipyniivue, pathlib; print(pathlib.Path(ipyniivue.__file__).parent)')" \
     && /opt/neuroimaging-env/bin/python /tmp/patch_ipyniivue.py "${ipyniivue_dir}" /opt/neuroimaging-env/static \
-    && /opt/neuroimaging-env/bin/python -m compileall -q /opt/neuroimaging-env/lib \
     && /opt/neuroimaging-env/bin/python -m ipykernel install --prefix /opt/neuroimaging-env \
         --name neuroimaging \
         --display-name "Neuroimaging (Python $(/opt/neuroimaging-env/bin/python -c 'import sys; print("%d.%d" % sys.version_info[:2])'))" \
@@ -42,6 +42,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
        done \
     && /opt/neuroimaging-env/bin/python -c 'import importlib.metadata as m, json; pkgs = ("nibabel", "nipype", "niwrap", "pydra", "nipoppy", "ipyniivue", "datalad", "nf-core"); json.dump({p: m.version(p) for p in pkgs}, open("/out/opt/scidesktop/manifest.d/neuroimaging-env.json", "w"))' \
     && cat /out/opt/scidesktop/manifest.d/neuroimaging-env.json \
+    && trim-python-env /opt/neuroimaging-env \
     && rm -rf /tmp/mamba-root /opt/neuroimaging-env/conda-meta/history \
     && chmod -R a+rX,go-w /opt/neuroimaging-env /out
 

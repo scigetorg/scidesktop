@@ -30,6 +30,7 @@ COPY linux-*.lock requirements.lock airflow-requirements.lock /tmp/
 # MLflow) and Airflow, whose dependency set would otherwise fight the
 # notebook libraries.
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=trim-python-env,target=/usr/local/bin/trim-python-env \
     micromamba create --yes --root-prefix /tmp/mamba-root --prefix /opt/ai-ready/env \
         --file "/tmp/$(target-arch conda).lock" \
     && /opt/ai-ready/env/bin/python -m pip install --no-cache-dir --no-deps --require-hashes \
@@ -38,13 +39,13 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && /opt/ai-ready/env/bin/python -m pip --python /opt/ai-ready/airflow/bin/python install \
         --no-cache-dir --no-deps --require-hashes --only-binary :all: --no-compile \
         -r /tmp/airflow-requirements.lock \
-    && /opt/ai-ready/env/bin/python -m compileall -q /opt/ai-ready/env/lib /opt/ai-ready/airflow/lib \
     # The kernelspec, moved to Jupyter's system folder below. Jupyter fills in ${HOME}
     # and ${PATH} when it starts the kernel: the workshop's own modules import
     # from any notebook, and `!pip` and `!mlflow` are this environment's.
     && /opt/ai-ready/env/bin/python -m ipykernel install --prefix /opt/ai-ready --name ai-ready \
         --display-name "AI Ready (Python $(/opt/ai-ready/env/bin/python -c 'import sys; print("%d.%d" % sys.version_info[:2])'))" \
         --env PYTHONPATH '${HOME}/ai-ready/src' --env PATH '/opt/ai-ready/env/bin:${PATH}' \
+    && trim-python-env /opt/ai-ready/env /opt/ai-ready/airflow \
     # conda packages carry group-writable modes; nothing root-owned here should
     # be writable by a group.
     && chmod -R go-w /opt/ai-ready \

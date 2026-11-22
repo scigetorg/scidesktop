@@ -1,0 +1,48 @@
+#!/bin/bash
+# Strips build-only and test-only artifacts from a Python/conda prefix inside
+# a component's build stage before COPY --from=build, preserving runtime
+# libraries (including OpenSSL and pandoc).
+#
+#   trim-python-env <prefix> [<prefix> ...]
+set -euo pipefail
+
+if [ "$#" -eq 0 ]; then
+    echo "usage: trim-python-env <prefix> [...]" >&2
+    exit 2
+fi
+
+for prefix in "$@"; do
+    if [ ! -d "${prefix}" ]; then
+        echo "trim-python-env: missing directory: ${prefix}" >&2
+        exit 1
+    fi
+
+    # Conda build-time test fixtures, C/C++ headers, and Python stdlib test suite.
+    rm -rf "${prefix}/etc/conda/test-files" "${prefix}/include"
+    rm -rf "${prefix}"/lib/python3.*/test
+
+    # Static archives and JavaScript/CSS source maps.
+    find "${prefix}" -type f \( -name '*.a' -o -name '*.map' \) -delete
+
+    # Large pure-test suites in site-packages (never imported at runtime).
+    for sp in "${prefix}"/lib/python3.*/site-packages; do
+        [ -d "${sp}" ] || continue
+        rm -rf \
+            "${sp}/pandas/tests" \
+            "${sp}/matplotlib/tests" \
+            "${sp}/pyarrow/tests" \
+            "${sp}/tornado/test" \
+            "${sp}/jupyterhub/tests" \
+            "${sp}/traits/tests"
+        for pkg in numpy scipy nibabel networkx sklearn sympy skimage; do
+            if [ -d "${sp}/${pkg}" ]; then
+                find "${sp}/${pkg}" -type d -name tests -prune -exec rm -rf {} +
+            fi
+        done
+    done
+
+    # Bytecode caches (Python imports from .py directly; avoids duplicating
+    # every source file in read-only /opt image layers).
+    find "${prefix}" -type d -name '__pycache__' -prune -exec rm -rf {} +
+    find "${prefix}" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
+done

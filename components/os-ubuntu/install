@@ -42,6 +42,12 @@ curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "${cvmfs_tmp}/cvmfs-
     "https://ecsft.cern.ch/dist/cvmfs/cvmfs-config/cvmfs-config-none_${CVMFS_CONFIG_VERSION}_all.deb"
 apt_get install --yes --no-install-recommends "${cvmfs_tmp}"/*.deb
 rm -rf "${cvmfs_tmp}"
+# Debug-instrumented CVMFS libraries (~32 MB) are unused at runtime.
+rm -f /usr/lib/libcvmfs_*_debug.so*
+# vim-tiny installs /usr/bin/vim.tiny and registers vi; provide vim as well.
+if [ -x /usr/bin/vim.tiny ] && [ ! -e /usr/bin/vim ]; then
+    ln -s /usr/bin/vim.tiny /usr/bin/vim
+fi
 cvmfs2 --version
 
 # Locales, as docker-stacks generates them.

@@ -23,6 +23,7 @@ COPY --from=micromamba /usr/local/bin/micromamba /usr/local/bin/micromamba
 COPY linux-*.lock requirements.lock /tmp/
 COPY patches/ /tmp/patches/
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=trim-python-env,target=/usr/local/bin/trim-python-env \
     micromamba create --yes --root-prefix /opt/conda --prefix /opt/conda \
         --file "/tmp/$(target-arch conda).lock" \
     # Keep users' installs on this Python minor, as docker-stacks does.
@@ -33,17 +34,13 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     # Extensions only on PyPI: hashed, without dependencies (they come from the
     # conda lock above).
     && /opt/conda/bin/python -m pip install --no-cache-dir --no-deps --require-hashes \
-        -r /tmp/requirements.lock \
+        --no-compile -r /tmp/requirements.lock \
     # Register the Bash kernel in /opt/conda/share/jupyter/kernels/bash.
     && /opt/conda/bin/python -m bash_kernel.install --sys-prefix \
     # Startup-time patches; see each file.
     && for p in /tmp/patches/*.py; do /opt/conda/bin/python "${p}" || exit 1; done \
     # RISE pulls in the legacy JupyterLab 3 mathjax3-extension; JupyterLab 4 ships MathJax natively.
     && rm -rf /opt/conda/share/jupyter/labextensions/@jupyterlab/mathjax3-extension \
-    && /opt/conda/bin/python -m compileall -q /opt/conda/lib/python3*/site-packages/rfc3987_syntax \
-        /opt/conda/lib/python3*/site-packages/simpervisor \
-        /opt/conda/lib/python3*/site-packages/jupyter_ai_acp_client \
-        /opt/conda/lib/python3*/site-packages/jupyterlab_rise \
     && MAMBA_ROOT_PREFIX=/opt/conda micromamba clean --all --force-pkgs-dirs --yes \
     && /opt/conda/bin/jupyter lab clean \
     # Disabled JupyterLab plugins live in the environment. The server settings
@@ -55,6 +52,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
         '@jupyterlab/help-extension:about' \
     && install -d -m 0755 /out/manifest \
     && /opt/conda/bin/python -c 'import importlib.metadata as im, json, glob; v = {m["name"]: m["version"] for m in map(lambda f: json.load(open(f)), glob.glob("/opt/conda/conda-meta/*.json"))}; d = {k: v.get(k) for k in ("python", "jupyterlab", "jupyterhub-singleuser", "jupyter-server-proxy", "ipykernel", "mamba", "ipywidgets", "anywidget", "ipycanvas", "jupyterlab-git", "jupyter-resource-usage", "jupyterlab_rise", "jupyter-scheduler", "nbgitpuller", "papermill", "pytest", "uv", "jupyter-ai")}; d["bash_kernel"] = im.version("bash_kernel"); json.dump(d, open("/out/manifest/jupyter-env.json", "w"))' \
+    && trim-python-env /opt/conda \
     && chown -R "${NB_UID:?}:${NB_GID:?}" /opt/conda \
     && chmod -R g+rwX /opt/conda \
     && find /opt/conda -type d -exec chmod g+s {} +

@@ -69,8 +69,8 @@ try:
 except Exception as error:  # PersonaRequirementsUnmet, or an import that broke
     check(False, "Jupyter AI's Codex and Claude personas have what they require", error)
 
-node = subprocess.run(["/opt/acp-adapters/node/bin/node", "--version"], capture_output=True, text=True).stdout.strip()
-check(node == "v" + manifest["node"], f"the adapters' Node.js is {manifest['node']}", node)
+node = subprocess.run(["/opt/code-server/lib/node", "--version"], capture_output=True, text=True).stdout.strip()
+check(node.startswith("v2"), f"the adapters share code-server's Node.js ({node})", node)
 check(shutil.which("node") is None and shutil.which("npm") is None, "no node or npm command is added to PATH")
 
 sys.exit(1 if FAILED else 0)

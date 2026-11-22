@@ -1,9 +1,8 @@
 #!/bin/bash
-# Regenerates linux-64.lock, linux-aarch64.lock, and requirements.lock.
+# Regenerates requirements.lock against jupyter-env's Python minor version.
 set -euo pipefail
 cd "$(dirname "$0")"
-../conda-lock .
-python_version=$(grep -o '/python-3\.[0-9]*' linux-64.lock | head -1 | cut -d- -f2)
+python_version=$(grep -o '/python-3\.[0-9]*' ../jupyter-env/linux-64.lock | head -1 | cut -d- -f2)
 uv pip compile requirements.in --quiet --generate-hashes --no-header \
     --python-version "${python_version}" --universal \
     --output-file requirements.lock

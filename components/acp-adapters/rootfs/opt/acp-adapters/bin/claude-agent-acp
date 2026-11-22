@@ -5,4 +5,4 @@
 # unless CLAUDE_CODE_EXECUTABLE names another.
 : "${CLAUDE_CODE_EXECUTABLE:=/opt/coding-agents/bin/claude}"
 export CLAUDE_CODE_EXECUTABLE
-exec /opt/acp-adapters/node/bin/node /opt/acp-adapters/lib/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js "$@"
+exec /opt/code-server/lib/node /opt/acp-adapters/lib/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js "$@"

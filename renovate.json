@@ -465,7 +465,7 @@
       ]
     },
     {
-      "description": "Shared Node.js version (acp-adapters, jupyterlab-freebrowse and jupyterlab-slurm): a bump needs both NODE_SHA256 variables updated.",
+      "description": "Shared Node.js build version (acp-adapters, jupyterlab-freebrowse, jupyterlab-slurm, jupyterlab-neuroglancer).",
       "matchFileNames": [
         "docker-bake.hcl"
       ],

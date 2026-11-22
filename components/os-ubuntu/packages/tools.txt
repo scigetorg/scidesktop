@@ -5,7 +5,7 @@ git
 gh
 openssh-client
 nano
-vim
+vim-tiny
 less
 # tar -J calls xz; zip/unzip for archive interchange
 xz-utils

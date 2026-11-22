@@ -1,8 +1,0 @@
-# Isolated Python interpreter for Snakemake inside /opt/workflow-engines/snakemake.
-# After changing this file, regenerate the lockfile: ./lock
-name: snakemake
-channels:
-  - conda-forge
-dependencies:
-  - python=3.13
-  - pip==26.2.2

@@ -66,14 +66,11 @@ variable "OPENCODE_VERSION" { default = "2.2.5" }
 variable "OPENCODE_SHA256_AMD64" { default = "92690eee07a680d3cb760ca02ba43878de9eab1b4e5d5dfae8795518c53628f4" }
 variable "OPENCODE_SHA256_ARM64" { default = "f8c5a82075fede9b5b044ed6c8a6d13ad807a7e62caea1cd0a878adef49eb053" }
 
-# Node.js for the Agent Client Protocol adapters (components/acp-adapters)
-# and the FreeBrowse build (components/jupyterlab-freebrowse): the release
-# from nodejs.org. The adapters' own versions are in acp-adapters'
-# package.json and package-lock.json.
+# Node.js for build stages (acp-adapters, jupyterlab-freebrowse,
+# jupyterlab-slurm, jupyterlab-neuroglancer). At runtime acp-adapters shares
+# code-server's Node binary (/opt/code-server/lib/node).
 # renovate: datasource=node-version depName=node
 variable "NODE_VERSION" { default = "24.22.3" }
-variable "NODE_SHA256_AMD64" { default = "4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb" }
-variable "NODE_SHA256_ARM64" { default = "6e51a2ada00f0011cc266f65d98922b403d7ad88f809ca2aa615a5fe1ce6e86c" }
 
 # T3 Code (components/t3-code). Its base-path adapter is written against the
 # web client of this release; the component's test says when a bump moves it.
@@ -586,13 +583,12 @@ target "acp-adapters" {
   context  = "components/acp-adapters"
   target   = "component"
   contexts = {
+    code-server   = "target:code-server"
     coding-agents = "target:coding-agents"
     jupyter-env   = "target:jupyter-env"
   }
   args = {
-    NODE_VERSION      = NODE_VERSION
-    NODE_SHA256_AMD64 = NODE_SHA256_AMD64
-    NODE_SHA256_ARM64 = NODE_SHA256_ARM64
+    NODE_VERSION = NODE_VERSION
   }
 }
 
@@ -664,11 +660,12 @@ target "code-server-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: DataLad and git-annex for terminals, in their own interpreter.
+# DataLad and git-annex for terminals, in an isolated venv backed by jupyter-env.
 target "datalad" {
   inherits = ["_component"]
   context  = "components/datalad"
   target   = "component"
+  contexts = { jupyter-env = "target:jupyter-env" }
 }
 
 target "datalad-test" {
@@ -769,8 +766,9 @@ target "vscode-coding-agents" {
   context  = "components/vscode-coding-agents"
   target   = "component"
   contexts = {
-    code-server = "target:code-server"
-    jupyter-env = "target:jupyter-env"
+    code-server   = "target:code-server"
+    coding-agents = "target:coding-agents"
+    jupyter-env   = "target:jupyter-env"
   }
   args = {
     VSCODE_CLAUDE_CODE_VERSION      = VSCODE_CLAUDE_CODE_VERSION
@@ -854,6 +852,7 @@ target "workflow-engines" {
   inherits = ["_component"]
   context  = "components/workflow-engines"
   target   = "component"
+  contexts = { jupyter-env = "target:jupyter-env" }
   args = {
     NEXTFLOW_VERSION = NEXTFLOW_VERSION
     NEXTFLOW_SHA256  = NEXTFLOW_SHA256
