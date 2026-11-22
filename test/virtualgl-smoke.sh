@@ -18,11 +18,16 @@ out=$(docker run --rm "${IMAGE}" bash -lc '
     echo "vgl-eglinfo=$(command -v vgl-eglinfo)"
     echo "glxinfo=$(command -v glxinfo)"
     echo "nvidia_caps=${NVIDIA_DRIVER_CAPABILITIES:-}"
-    for lib in libdlfaker.so libgefaker.so libvglfaker.so libvglfaker-nodl.so libvglfaker-opencl.so; do
+    libs="libdlfaker.so libgefaker.so libvglfaker.so libvglfaker-nodl.so"
+    if [ "$(dpkg --print-architecture)" = "amd64" ]; then
+        libs="${libs} libvglfaker-opencl.so"
+    fi
+    for lib in ${libs}; do
         test -r "/usr/lib/${lib}"
     done
     echo "faker_libs=ok"
-    if ! ldd /usr/lib/libvglfaker.so /usr/lib/libdlfaker.so /opt/VirtualGL/bin/glxspheres64 2>&1 | grep -q "not found"; then
+    ldd_out="$(ldd /usr/lib/libvglfaker.so /usr/lib/libdlfaker.so /opt/VirtualGL/bin/glxspheres64 2>&1)"
+    if ! printf "%s\n" "${ldd_out}" | grep -q "not found"; then
         echo "ldd=ok"
     fi
     preload_out="$(vglrun /bin/true 2>&1)"
@@ -36,7 +41,7 @@ has() { printf '%s\n' "${out}" | grep -qxF "$1"; }
 has "vglrun=/usr/local/bin/vglrun" && pass "vglrun on PATH" || fail "vglrun on PATH"
 has "vgl-eglinfo=/usr/local/bin/vgl-eglinfo" && pass "vgl-eglinfo on PATH" || fail "vgl-eglinfo on PATH"
 has "glxinfo=/usr/bin/glxinfo" && pass "glxinfo (mesa-utils) on PATH" || fail "glxinfo (mesa-utils) on PATH"
-has "faker_libs=ok" && pass "all 5 VirtualGL faker libraries present in /usr/lib" || fail "all 5 VirtualGL faker libraries present in /usr/lib"
+has "faker_libs=ok" && pass "VirtualGL faker libraries present in /usr/lib" || fail "VirtualGL faker libraries present in /usr/lib"
 has "ldd=ok" && pass "VirtualGL libraries and glxspheres64 resolve all shared libs" || fail "VirtualGL libraries and glxspheres64 resolve all shared libs"
 has "preload=ok" && pass "vglrun preloads libdlfaker.so and libvglfaker.so cleanly" || fail "vglrun preloads libdlfaker.so and libvglfaker.so cleanly"
 printf '%s\n' "${out}" | grep -q '^nvidia_caps=.*graphics' \

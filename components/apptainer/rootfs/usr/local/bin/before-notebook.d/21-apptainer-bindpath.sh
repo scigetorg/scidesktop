@@ -1,11 +1,13 @@
 # Sourced by start.sh AFTER 20-cvmfs: auto-populate APPTAINER_BINDPATH with
 # actually-mounted, session-traversable generic host directories so containers
-# see /data, mounted /mnt, and populated /cvmfs without failing on absent dirs
-# or binding stock empty /mnt. Respects explicit APPTAINER_BIND,
+# see /data, mounted /mnt, and mounted/populated /cvmfs without failing on
+# absent dirs or binding stock empty /mnt. Respects explicit APPTAINER_BIND,
 # APPTAINER_BINDPATH (including empty "" opt-out), SINGULARITY_BIND, and
 # SINGULARITY_BINDPATH.
+_SCIDESKTOP_BINDPATH_AUTO=0
 if [ -z "${APPTAINER_BIND+x}" ] && [ -z "${APPTAINER_BINDPATH+x}" ] \
     && [ -z "${SINGULARITY_BIND+x}" ] && [ -z "${SINGULARITY_BINDPATH+x}" ]; then
+    _SCIDESKTOP_BINDPATH_AUTO=1
     _apptainer_binds=""
     _apptainer_can_access() {
         local d="$1"
@@ -22,7 +24,7 @@ if [ -z "${APPTAINER_BIND+x}" ] && [ -z "${APPTAINER_BINDPATH+x}" ] \
     if _apptainer_can_access /mnt && { mountpoint -q /mnt 2>/dev/null || [ -n "$(ls -A /mnt 2>/dev/null)" ]; }; then
         _apptainer_binds="${_apptainer_binds:+${_apptainer_binds},}/mnt"
     fi
-    if _apptainer_can_access /cvmfs && [ -n "$(ls -A /cvmfs 2>/dev/null)" ]; then
+    if _apptainer_can_access /cvmfs && { mountpoint -q /cvmfs 2>/dev/null || [ -n "$(ls -A /cvmfs 2>/dev/null)" ]; }; then
         _apptainer_binds="${_apptainer_binds:+${_apptainer_binds},}/cvmfs"
     fi
     [ -n "${_apptainer_binds}" ] && export APPTAINER_BINDPATH="${_apptainer_binds}"

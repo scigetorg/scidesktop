@@ -47,6 +47,19 @@ out=$(docker run --rm \
     grep -q "^duptool	1.0	" "${HOME}/.local/state/scigethelpers/module-usage.tsv" && echo "local_citation=ok"
 ' 2>/dev/null)
 
+# Also verify Jupyter's startup hook (35-lmod-modulepath.sh) places local
+# modules ahead of CVMFS when CVMFS was already in MODULEPATH (without login shell).
+startup_mp="$(docker run --rm \
+    -v "${TMP_HOST}/cvmfs:/cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/demo:ro" \
+    -v "${TMP_HOST}/local:/neurodesktop-storage/containers:ro" \
+    -e "MODULEPATH=/cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/demo" \
+    "${IMAGE}" bash -c '
+    echo "startup_mp=${MODULEPATH:-}"
+' 2>/dev/null || true)"
+printf '%s\n' "${startup_mp}" | grep -q '^startup_mp=.*\/neurodesktop-storage\/containers\/modules:.*\/cvmfs\/neurodesk\.ardc\.edu\.au\/neurodesk-modules\/demo' \
+    && pass "Jupyter startup hook (35-lmod-modulepath.sh) puts local modules ahead of CVMFS" \
+    || fail "Jupyter startup hook (35-lmod-modulepath.sh) puts local modules ahead of CVMFS"
+
 has() { printf '%s\n' "${out}" | grep -qxF "$1"; }
 
 has "subjects_dir=/home/jovyan/freesurfer-subjects-dir" \
@@ -95,6 +108,13 @@ optout="$(docker run --rm \
 printf '%s\n' "${optout}" | grep -qxF 'optout=set:' \
     && pass "empty APPTAINER_BINDPATH=\"\" opt-out is preserved even when storage is mounted" \
     || fail "empty APPTAINER_BINDPATH=\"\" opt-out is preserved"
+
+override="$(docker run --rm \
+    -v "${TMP_HOST}/local:/neurodesktop-storage/containers:ro" \
+    -e APPTAINER_BINDPATH="/tmp:ro" "${IMAGE}" bash -c 'echo "override=${APPTAINER_BINDPATH:-}"' 2>/dev/null || true)"
+printf '%s\n' "${override}" | grep -qxF 'override=/tmp:ro' \
+    && pass "explicit non-empty APPTAINER_BINDPATH override is preserved verbatim" \
+    || fail "explicit non-empty APPTAINER_BINDPATH override is preserved verbatim"
 
 echo
 if [ "${FAILED}" -eq 0 ]; then

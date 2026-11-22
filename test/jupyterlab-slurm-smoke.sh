@@ -71,24 +71,30 @@ case "${unauth_user}" in
     *) fail "unauthenticated /jupyterlab_slurm/user is refused (HTTP ${unauth_user})" ;;
 esac
 
-# Verify the numeric UID fallback in the patched handler under a foreign UID
-# with no /etc/passwd entry (e.g. strict HPC/K8s).
+# Exercise the actual patched UserFetchHandler under a foreign passwd-less UID
+# (e.g. strict HPC/K8s) to confirm the KeyError -> str(geteuid()) fallback works.
 foreign_user="$(docker run --rm --user 23456:100 --entrypoint /opt/conda/bin/python "${IMAGE}" -c '
-import os, sys
+import json, logging, sys, types
 sys.path.append("/opt/jupyterlab-slurm/lib")
 import jupyterlab_slurm.handlers as h
-# Execute the exact geteuid -> pwd fallback branch from UserFetchHandler.
-import pwd
-try:
-    u = pwd.getpwuid(os.geteuid()).pw_name
-except KeyError:
-    u = str(os.geteuid())
-assert "scidesktop-slurm-process-identity" in open(h.__file__).read()
-print(u)
+
+class DummyHandler(h.UserFetchHandler):
+    def __init__(self):
+        self.current_user = types.SimpleNamespace(username="hub-user-not-in-passwd")
+        self._serverlog = logging.getLogger("smoke")
+        self.payload = None
+    def finish(self, chunk=None):
+        self.payload = chunk
+
+handler = DummyHandler()
+h.UserFetchHandler.get.__wrapped__(handler)
+envelope = json.loads(handler.payload)
+assert envelope.get("success") is True, envelope
+print(envelope["data"]["user"])
 ' 2>/dev/null || true)"
 [ "${foreign_user}" = "23456" ] \
-    && pass "foreign passwd-less UID falls back to numeric UID (23456)" \
-    || fail "foreign passwd-less UID falls back to numeric UID (got: ${foreign_user:-empty})"
+    && pass "patched UserFetchHandler falls back to numeric UID (23456) for foreign UID" \
+    || fail "patched UserFetchHandler falls back to numeric UID (got: ${foreign_user:-empty})"
 
 docker exec -u jovyan "${NAME}" /opt/slurm/bin/slurm-session wait >/dev/null 2>&1 \
     && pass "session Slurm queue is ready" || fail "session Slurm queue is ready"

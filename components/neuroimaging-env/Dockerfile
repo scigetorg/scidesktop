@@ -37,8 +37,8 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && mv /opt/neuroimaging-env/share/jupyter/kernels/neuroimaging /out/usr/local/share/jupyter/kernels/neuroimaging \
     && rm -rf /opt/neuroimaging-env/share/jupyter/kernels/python3 \
     && for cmd in nf-core nipoppy nipoppy-gui bosh nipypecli; do \
-         test -x "/opt/neuroimaging-env/bin/${cmd}"; \
-         ln -s "/opt/neuroimaging-env/bin/${cmd}" "/out/usr/local/bin/${cmd}"; \
+         test -x "/opt/neuroimaging-env/bin/${cmd}" || exit 1; \
+         ln -s "/opt/neuroimaging-env/bin/${cmd}" "/out/usr/local/bin/${cmd}" || exit 1; \
        done \
     && /opt/neuroimaging-env/bin/python -c 'import importlib.metadata as m, json; pkgs = ("nibabel", "nipype", "niwrap", "pydra", "nipoppy", "ipyniivue", "datalad", "nf-core"); json.dump({p: m.version(p) for p in pkgs}, open("/out/opt/scidesktop/manifest.d/neuroimaging-env.json", "w"))' \
     && cat /out/opt/scidesktop/manifest.d/neuroimaging-env.json \

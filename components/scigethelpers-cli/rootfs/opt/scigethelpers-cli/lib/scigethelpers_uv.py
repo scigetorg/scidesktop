@@ -13,6 +13,7 @@ import fcntl
 import hashlib
 import json
 import os
+import pwd
 import re
 import shutil
 import subprocess
@@ -85,12 +86,15 @@ def launch(project: Path, arguments: list[str]) -> None:
 
 def safe_home() -> Path | None:
     env_home = os.environ.get("HOME")
-    if env_home:
+    if env_home and env_home.strip():
         return Path(env_home).resolve()
     try:
-        return Path.home().resolve()
-    except RuntimeError:
-        return None
+        pw_dir = pwd.getpwuid(os.geteuid()).pw_dir
+        if pw_dir:
+            return Path(pw_dir).resolve()
+    except KeyError:
+        pass
+    return None
 
 
 def prepare(project: Path, command: str) -> None:
@@ -158,6 +162,7 @@ def prepare(project: Path, command: str) -> None:
             subprocess.run([uv, *arguments, location, str(project)], cwd=project, env=env, check=True)
 
         backup_venv: Path | None = None
+        created_venv = False
         if command == "rebuild":
             if not manifest.is_file() or not (project / "uv.lock").is_file():
                 raise ValueError("Rebuild requires pyproject.toml and uv.lock; run init first.")
@@ -171,6 +176,7 @@ def prepare(project: Path, command: str) -> None:
                 run("init", "--bare", "--no-workspace", "--no-pin-python", "--vcs", "none", "--name", kernel_name(project))
             if not venv.exists():
                 run("venv", str(venv))
+                created_venv = True
             if command == "init":
                 deps = data.get("dependency-groups", {}).get("dev", [])
                 if not any(isinstance(dep, str) and re.match(r"(?i)^ipykernel(?:$|[<>=!~;\[ @])", dep) for dep in deps):
@@ -184,11 +190,13 @@ def prepare(project: Path, command: str) -> None:
                 run("sync", "--locked")
             subprocess.run([str(venv / "bin/python"), "-I", "-c", "import ipykernel"], env=env, check=True)
             atomic_json(project / f".{MARKER}.json", {"project": str(project)})
-        except Exception:
+        except BaseException:
             if backup_venv is not None and backup_venv.exists():
                 if venv.exists():
                     shutil.rmtree(venv)
                 backup_venv.rename(venv)
+            elif created_venv and venv.exists():
+                shutil.rmtree(venv)
             raise
         if backup_venv is not None and backup_venv.exists():
             shutil.rmtree(backup_venv)

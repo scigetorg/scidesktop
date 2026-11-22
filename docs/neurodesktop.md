@@ -23,7 +23,7 @@ T3 Connect.
 | `neurodesk-cvmfs` | the Neurodesk CVMFS repository for the base's CVMFS client: its mirrors, its public key, and the repository as the one to mount in internal mode | `/etc/cvmfs` |
 | `vscode-coding-agents` | Claude Code and Codex VS Code extensions | `/usr/local/share/code-server/extensions` |
 | `neurodesk-agents` | Neurodesk's defaults for the base's coding agents: instructions for working with Neurodesk tools, and the Neurodesk model provider for OpenCode | `/opt/neurodesk-agents` |
-| `neuroimaging-env` | the `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`, `datalad`, `datalad-osf`, `osfclient`, `xnat`, `watermark`, `nf-core`) | `/opt/neuroimaging-env`, `/usr/local/share/jupyter/kernels/neuroimaging` |
+| `neuroimaging-env` | the `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue` with shared JupyterLab bundle, `datalad`, `datalad-osf`, `osfclient`, `xnat`, `watermark`, `nf-core`) and neuroimaging CLIs (`nf-core`, `nipoppy`, `bosh`, `nipypecli`) | `/opt/neuroimaging-env`, `/usr/local/share/jupyter/kernels/neuroimaging`, `/usr/local/bin` |
 | `neurodesk-compat` | FreeSurfer (`APPTAINERENV_SUBJECTS_DIR`) and `nf-neuro` (`NF_NEURO_MODULES_DIR`) defaults, pinned `/opt/nf-neuro/modules`, local `/neurodesktop-storage/containers/modules` discovery, and `~/getting-started.ipynb` | `/opt/nf-neuro/modules`, `/etc/scidesktop/home-defaults/getting-started.ipynb` |
 
 ## Using the tools

@@ -29,8 +29,11 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && cp -a /tmp/vgl/opt/VirtualGL /out/opt/VirtualGL \
     # VirtualGL's faker preload libraries live in /usr/lib in the upstream .deb
     # so vglrun's bare LD_PRELOAD=libdlfaker.so:libvglfaker.so resolves via ld.so.
-    && for lib in libdlfaker.so libgefaker.so libvglfaker.so libvglfaker-nodl.so libvglfaker-opencl.so; do \
-         cp -a "/tmp/vgl/usr/lib/${lib}" "/out/usr/lib/${lib}"; \
+    # Upstream ships libvglfaker-opencl.so on amd64 only.
+    && libs="libdlfaker.so libgefaker.so libvglfaker.so libvglfaker-nodl.so" \
+    && if [ "${TARGETARCH}" = "amd64" ]; then libs="${libs} libvglfaker-opencl.so"; fi \
+    && for lib in ${libs}; do \
+         cp -a "/tmp/vgl/usr/lib/${lib}" "/out/usr/lib/${lib}" || exit 1; \
        done \
     && ln -s /opt/VirtualGL/bin/vglrun /out/usr/local/bin/vglrun \
     && ln -s /opt/VirtualGL/bin/eglinfo /out/usr/local/bin/vgl-eglinfo \
@@ -42,15 +45,19 @@ FROM scratch AS component
 COPY --from=build /out/ /
 
 FROM os AS test
+ARG TARGETARCH
 COPY --from=component / /
 USER ${NB_UID}
 RUN set -eu \
     && test -x /usr/local/bin/vglrun \
     && test -x /usr/local/bin/vgl-eglinfo \
-    && for lib in libdlfaker.so libgefaker.so libvglfaker.so libvglfaker-nodl.so libvglfaker-opencl.so; do \
-         test -r "/usr/lib/${lib}"; \
+    && libs="libdlfaker.so libgefaker.so libvglfaker.so libvglfaker-nodl.so" \
+    && if [ "${TARGETARCH}" = "amd64" ]; then libs="${libs} libvglfaker-opencl.so"; fi \
+    && for lib in ${libs}; do \
+         test -r "/usr/lib/${lib}" || exit 1; \
        done \
-    && ! ldd /usr/lib/libvglfaker.so /usr/lib/libdlfaker.so /opt/VirtualGL/bin/glxspheres64 2>&1 | grep -q 'not found' \
+    && ldd_out="$(ldd /usr/lib/libvglfaker.so /usr/lib/libdlfaker.so /opt/VirtualGL/bin/glxspheres64 2>&1)" \
+    && ! printf '%s\n' "${ldd_out}" | grep -q 'not found' \
     && out="$(vglrun /bin/true 2>&1)" \
     && ! printf '%s\n' "${out}" | grep -qiE 'cannot be preloaded|ERROR' \
     && test -r /opt/scidesktop/manifest.d/virtualgl.json

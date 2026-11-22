@@ -13,14 +13,11 @@ export NF_NEURO_MODULES_DIR="${NF_NEURO_MODULES_DIR:-/opt/nf-neuro/modules}"
 unset _nd_home
 
 # Append /neurodesktop-storage to APPTAINER_BINDPATH only when mounted/present,
-# traversable by the session user, and bind overrides/empty opt-out were not set.
+# traversable by the session user, and the deployment did not supply an explicit
+# bind override (including empty APPTAINER_BINDPATH="" or non-empty overrides).
 if [ -d /neurodesktop-storage ] \
     && [ -z "${APPTAINER_BIND+x}" ] && [ -z "${SINGULARITY_BIND+x}" ] && [ -z "${SINGULARITY_BINDPATH+x}" ]; then
-    _nd_opt_out=0
-    if [ "${APPTAINER_BINDPATH+x}" = x ] && [ -z "${APPTAINER_BINDPATH}" ]; then
-        _nd_opt_out=1
-    fi
-    if [ "${_nd_opt_out}" -eq 0 ]; then
+    if [ "${_SCIDESKTOP_BINDPATH_AUTO:-0}" = 1 ] || [ -z "${APPTAINER_BINDPATH+x}" ]; then
         _nd_ok=0
         if [ "$(id -u)" -eq 0 ] && [ -x /opt/scidesktop/run-as-user ]; then
             /opt/scidesktop/run-as-user test -r /neurodesktop-storage -a -x /neurodesktop-storage 2>/dev/null && _nd_ok=1
@@ -35,5 +32,4 @@ if [ -d /neurodesktop-storage ] \
         fi
         unset _nd_ok
     fi
-    unset _nd_opt_out
 fi

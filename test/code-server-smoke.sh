@@ -69,7 +69,7 @@ case "${code}" in
     302 | 401 | 403) pass "a request without the login is refused (HTTP ${code})" ;;
     *) fail "a request without the login is refused (HTTP ${code})" ;;
 esac
-cs_ports="$(docker exec "${NAME}" /opt/conda/bin/python -c '
+cs_probe="$(docker exec "${NAME}" /opt/conda/bin/python -c '
 import glob, os
 listen_inodes = {}
 for path in ("/proc/net/tcp", "/proc/net/tcp6"):
@@ -78,6 +78,7 @@ for path in ("/proc/net/tcp", "/proc/net/tcp6"):
             parts = line.split()
             if parts[3] == "0A":
                 listen_inodes[parts[9]] = int(parts[1].split(":")[1], 16)
+pids = 0
 found = []
 for pid_dir in glob.glob("/proc/[0-9]*"):
     try:
@@ -86,6 +87,7 @@ for pid_dir in glob.glob("/proc/[0-9]*"):
         continue
     if b"/opt/code-server" not in cmd:
         continue
+    pids += 1
     for fd in glob.glob(os.path.join(pid_dir, "fd", "*")):
         try:
             target = os.readlink(fd)
@@ -95,11 +97,14 @@ for pid_dir in glob.glob("/proc/[0-9]*"):
             inode = target[8:-1]
             if inode in listen_inodes:
                 found.append(str(listen_inodes[inode]))
-print(" ".join(sorted(set(found))))
-' 2>/dev/null)"
-[ -z "${cs_ports}" ] \
-    && pass "code-server opens no TCP port" \
-    || fail "code-server opens no TCP port (listening TCP ports: ${cs_ports})"
+print(f"OK {pids} " + ",".join(sorted(set(found))))
+' 2>/dev/null || echo "FAIL")"
+read -r cs_status cs_pids cs_ports <<<"${cs_probe}"
+if [ "${cs_status}" = "OK" ] && [ "${cs_pids:-0}" -ge 1 ] && [ -z "${cs_ports:-}" ]; then
+    pass "code-server opens no TCP port (${cs_pids} code-server PID(s) inspected)"
+else
+    fail "code-server opens no TCP port (probe: ${cs_probe})"
+fi
 
 in_session '[ -s "${HOME}/.local/share/code-server/User/settings.json" ]' \
     && pass "a new home gets code-server's settings" || fail "a new home gets code-server's settings"

@@ -91,6 +91,13 @@ printf '[project]\nname = "demo"\nversion = "0.1.0"\n' > "${uvproj}/pyproject.to
 printf 'not-a-valid-lock\n' > "${uvproj}/uv.lock"
 if scigethelpers uv rebuild "${uvproj}" 2>"${HOME}/error"; then exit 1; fi
 [ "$(cat "${uvproj}/.venv/sentinel.txt")" = "sentinel" ]
+# Failed first init must clean up the partial .venv so retrying is not refused as unmanaged.
+uvretry="${HOME}/uv-retry-proj"
+mkdir -p "${uvretry}"
+if UV_OFFLINE=1 scigethelpers uv init "${uvretry}" 2>"${HOME}/error"; then exit 1; fi
+test ! -e "${uvretry}/.venv"
+if UV_OFFLINE=1 scigethelpers uv init "${uvretry}" 2>"${HOME}/error"; then exit 1; fi
+! grep -q "unmanaged" "${HOME}/error"
 if scigethelpers uv remove "${uvproj}" 2>"${HOME}/error"; then exit 1; fi
 grep -q "No uv kernel registration" "${HOME}/error"
 

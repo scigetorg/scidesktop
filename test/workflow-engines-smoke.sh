@@ -16,7 +16,7 @@ pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 
 echo "workflow-engines smoke: ${IMAGE}"
-out=$(docker run --rm --network none "${IMAGE}" bash -lc '
+out=$(docker run --rm --network none -e SCIDESKTOP_SLURM=no "${IMAGE}" bash -lc '
     set -euo pipefail
     work="$(mktemp -d)"
     cd "${work}"
@@ -70,7 +70,26 @@ SMK
     [ "$(cat "${work}/result.txt")" = "workflow-smk-ok" ] && echo "snakemake_run=ok"
 ' 2>/dev/null)
 
-has() { printf '%s\n' "${out}" | grep -qxF "$1"; }
+# Submit a real Snakemake rule to the bundled session Slurm queue using squeue
+# status polling (matching the session queue accounting_storage/none config).
+slurm_out=$(docker run --rm "${IMAGE}" bash -lc '
+    set -euo pipefail
+    work="$(mktemp -d)"
+    /opt/slurm/bin/slurm-session wait >/dev/null 2>&1
+    cat > "${work}/Snakefile.slurm" <<'\''SMK'\''
+rule all:
+    output: "slurm-result.txt"
+    shell: "echo slurm-smk-ok > {output}"
+SMK
+    snakemake --snakefile "${work}/Snakefile.slurm" --directory "${work}" \
+        --executor slurm --slurm-status-command squeue \
+        --slurm-init-seconds-before-status-checks 2 \
+        --default-resources slurm_partition=scidesktop runtime=5 mem_mb=256 \
+        --jobs 1 >/dev/null 2>&1
+    [ "$(cat "${work}/slurm-result.txt")" = "slurm-smk-ok" ] && echo "snakemake_slurm_run=ok"
+' 2>/dev/null)
+
+has() { printf '%s\n%s\n' "${out}" "${slurm_out}" | grep -qxF "$1"; }
 
 has "python=/opt/conda/bin/python" \
     && pass "the session's Python is still the Jupyter environment's" \
@@ -82,6 +101,7 @@ has "nf_test_run=ok" && pass "nf-test executes a pipeline test with --network no
 has "snakemake_ver=ok" && pass "snakemake runs" || fail "snakemake runs"
 has "snakemake_slurm=ok" && pass "snakemake Slurm executor plugin is installed" || fail "snakemake Slurm executor plugin is installed"
 has "snakemake_run=ok" && pass "snakemake executes a workflow rule" || fail "snakemake executes a workflow rule"
+has "snakemake_slurm_run=ok" && pass "snakemake executes a rule on the session Slurm queue (--slurm-status-command squeue)" || fail "snakemake executes a rule on the session Slurm queue (--slurm-status-command squeue)"
 
 echo
 if [ "${FAILED}" -eq 0 ]; then
