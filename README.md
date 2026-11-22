@@ -88,7 +88,7 @@ commit's short SHA, the date and `latest`.
 | Viewers | [FreeBrowse](docs/viewers.md) in base (`/opt/jupyterlab-freebrowse`), plus [Neuroglancer](docs/viewers.md) on `microdesktop` and [NiiVue](docs/viewers.md) on `neurodesktop` |
 | Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
 | AI chat | [Jupyter AI](docs/jupyter-ai.md) in JupyterLab with OpenCode, Codex and Claude personas (`acp-adapters`). No model, key or endpoint comes with it |
-| T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
+| T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code`, with Google Antigravity ACP (`antigravity-acp`) at `/opt/antigravity-acp` for Gemini models |
 | T3 Connect | [Remote access](docs/t3-connect.md) to T3 Code from the T3 apps, through T3's relay. Off until the user sets it up; at `/opt/t3-connect` |
 | Batch jobs | A [Slurm queue](docs/slurm.md) for the session (`sbatch`, `srun`) plus the `jupyterlab-slurm` Queue Manager extension in JupyterLab |
 | VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile, with `vscode-core` preinstalled (plus `vscode-niivue` and `vscode-coding-agents` on `neurodesktop`) |

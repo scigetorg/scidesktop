@@ -29,7 +29,7 @@ images/
 | `code-server`, `vscode-core` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes |
 | `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed |
 | `jupyterlab-freebrowse` ([viewers.md](viewers.md)) | yes | yes | yes | yes |
-| `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes |
+| `coding-agents`, `t3-code`, `antigravity-acp` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes |
 | `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | yes | yes | yes | yes |
 | `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | yes | yes |
 | `sciget-microscopy`, `jupyterlab-neuroglancer` ([tool catalogs](#tool-catalogs), [viewers.md](viewers.md)) | no | yes | no | no |

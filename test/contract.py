@@ -60,6 +60,9 @@ NOT_RENOVATED = {
     "JUPYTERLAB_SLURM_SRC": "built from JUPYTERLAB_SLURM_COMMIT",
     "NF_NEURO_MODULES_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "NF_NEURO_MODULES_SRC": "built from NF_NEURO_MODULES_COMMIT",
+    "ANTIGRAVITY_ACP_VERSION": "pinned to T3 Code's embedded antigravityRelease.ts table (no public feed)",
+    "ANTIGRAVITY_ACP_SHA256_AMD64": "pinned to T3 Code's embedded antigravityRelease.ts table",
+    "ANTIGRAVITY_ACP_SHA256_ARM64": "pinned to T3 Code's embedded antigravityRelease.ts table",
 }
 # Instructions the assembly may use: image metadata a component cannot provide.
 ASSEMBLY_ALLOWED = {"FROM", "COPY", "LABEL", "ENV", "EXPOSE", "HEALTHCHECK",

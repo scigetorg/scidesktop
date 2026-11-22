@@ -79,6 +79,12 @@ variable "T3_CODE_VERSION" { default = "0.1.5" }
 variable "T3_CODE_SHA256_AMD64" { default = "21d50dcc9c634221b11b58d6a94350d2c6ee36905737b054b11fa4eba295a98b" }
 variable "T3_CODE_SHA256_ARM64" { default = "389362e2a349ea62b38d9bc708f4fca2381936cccb2d326b5fc5d074b072aef1" }
 
+# Google Antigravity ACP server for Gemini models in T3 Code (components/antigravity-acp).
+# Version and checksums match T3 Code's embedded antigravityRelease.ts table.
+variable "ANTIGRAVITY_ACP_VERSION" { default = "1.4.1" }
+variable "ANTIGRAVITY_ACP_SHA256_AMD64" { default = "2e37012ceb2a5c7fc7309b6e6596234fb637ee3c62a5199f65d4cbe777871384" }
+variable "ANTIGRAVITY_ACP_SHA256_ARM64" { default = "609336a1c97545487e3ddd55dbd153dc0f40f4e6534486cc1c5f4c0ebb85c2da" }
+
 # The relay client T3 Connect uses (components/t3-connect): cloudflared's
 # release executable. T3 Code checks the version it is given.
 # renovate: datasource=github-releases depName=cloudflare/cloudflared
@@ -217,6 +223,7 @@ group "test" {
     "ai-ready-test",
     "coding-agents-test",
     "acp-adapters-test",
+    "antigravity-acp-test",
     "t3-code-test",
     "t3-connect-test",
     "code-server-test",
@@ -598,6 +605,26 @@ target "acp-adapters-test" {
   output   = ["type=cacheonly"]
 }
 
+# Google Antigravity ACP server for Gemini models in T3 Code (included in
+# scidesktop). Its test runs an ACP initialize handshake using jupyter-env's Python.
+target "antigravity-acp" {
+  inherits = ["_component"]
+  context  = "components/antigravity-acp"
+  target   = "component"
+  contexts = { jupyter-env = "target:jupyter-env" }
+  args = {
+    ANTIGRAVITY_ACP_VERSION      = ANTIGRAVITY_ACP_VERSION
+    ANTIGRAVITY_ACP_SHA256_AMD64 = ANTIGRAVITY_ACP_SHA256_AMD64
+    ANTIGRAVITY_ACP_SHA256_ARM64 = ANTIGRAVITY_ACP_SHA256_ARM64
+  }
+}
+
+target "antigravity-acp-test" {
+  inherits = ["antigravity-acp"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # T3 Code behind the notebook server, as the scigent.ai tile (included in
 # scidesktop). Its test runs it through a notebook server, so it borrows the
 # Jupyter environment.
@@ -931,6 +958,7 @@ target "scidesktop" {
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
     coding-agents         = "target:coding-agents"
     acp-adapters          = "target:acp-adapters"
+    antigravity-acp       = "target:antigravity-acp"
     t3-code               = "target:t3-code"
     t3-connect            = "target:t3-connect"
   }

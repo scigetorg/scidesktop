@@ -142,6 +142,12 @@ def server_environment(base, environ=os.environ, defaults_dir=ENVIRONMENT_DEFAUL
     # The command line below decides where T3 listens.
     for name in ("T3CODE_HOST", "T3CODE_PORT", "T3CODE_LAN"):
         env.pop(name, None)
+    # T3 Code's Antigravity sign-in helper expects a `node` binary on T3's PATH;
+    # reuse code-server's Node without adding node/npm to user shells.
+    if os.access("/opt/code-server/lib/node", os.X_OK):
+        path_entries = [entry for entry in env.get("PATH", "").split(":") if entry]
+        if "/opt/code-server/lib" not in path_entries:
+            env["PATH"] = ":".join([*path_entries, "/opt/code-server/lib"])
     return env
 
 

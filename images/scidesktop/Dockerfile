@@ -35,6 +35,7 @@ COPY --link --from=sciget-all / /
 COPY --link --from=jupyterlab-freebrowse / /
 COPY --link --from=coding-agents / /
 COPY --link --from=acp-adapters / /
+COPY --link --from=antigravity-acp / /
 COPY --link --from=t3-code / /
 COPY --link --from=t3-connect / /
 
