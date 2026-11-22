@@ -12,12 +12,10 @@ if [ -x /opt/scidesktop/module-dirs ]; then
     fi
     # Keep component-provided directories in provider order (e.g. local modules
     # ahead of CVMFS) matching z01_lmod_modulepath.sh, while preserving any
-    # non-provider directories ahead of them.
-    _modulepath_ifs=$IFS
+    # non-provider directories ahead of them without shell glob expansion.
     _modulepath_base=""
     _modulepath_existing="${MODULEPATH:-}"
-    IFS=':'
-    for _modulepath_cur in ${_modulepath_existing}; do
+    while IFS= read -r -d ':' _modulepath_cur; do
         [ -n "${_modulepath_cur}" ] || continue
         case "
 ${_modulepath_dirs}
@@ -27,18 +25,15 @@ ${_modulepath_cur}
 "*) continue ;;
         esac
         _modulepath_base="${_modulepath_base:+${_modulepath_base}:}${_modulepath_cur}"
-    done
-    IFS='
-'
-    for _modulepath_dir in ${_modulepath_dirs}; do
+    done <<<"${_modulepath_existing}:"
+    while IFS= read -r _modulepath_dir; do
         [ -n "${_modulepath_dir}" ] || continue
         case ":${_modulepath_base}:" in
         *":${_modulepath_dir}:"*) ;;
         *) _modulepath_base="${_modulepath_base:+${_modulepath_base}:}${_modulepath_dir}" ;;
         esac
-    done
-    IFS=$_modulepath_ifs
+    done <<<"${_modulepath_dirs}"
     MODULEPATH="${_modulepath_base}"
     export MODULEPATH
-    unset _modulepath_home _modulepath_dirs _modulepath_dir _modulepath_ifs _modulepath_base _modulepath_existing _modulepath_cur
+    unset _modulepath_home _modulepath_dirs _modulepath_dir _modulepath_base _modulepath_existing _modulepath_cur
 fi

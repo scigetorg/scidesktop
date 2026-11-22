@@ -116,6 +116,11 @@ printf '%s\n' "${override}" | grep -qxF 'override=/tmp:ro' \
     && pass "explicit non-empty APPTAINER_BINDPATH override is preserved verbatim" \
     || fail "explicit non-empty APPTAINER_BINDPATH override is preserved verbatim"
 
+cvmfs_mnt="$(docker run --rm --tmpfs /cvmfs "${IMAGE}" bash -c 'echo "cvmfs_bind=${APPTAINER_BINDPATH:-unset}"' 2>/dev/null || true)"
+printf '%s\n' "${cvmfs_mnt}" | grep -q '^cvmfs_bind=.*\/cvmfs' \
+    && pass "on-demand empty /cvmfs mountpoint is auto-bound" \
+    || fail "on-demand empty /cvmfs mountpoint is auto-bound"
+
 echo
 if [ "${FAILED}" -eq 0 ]; then
     echo "neurodesk-compat smoke: all checks passed"

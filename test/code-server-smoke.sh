@@ -80,17 +80,24 @@ for path in ("/proc/net/tcp", "/proc/net/tcp6"):
                 listen_inodes[parts[9]] = int(parts[1].split(":")[1], 16)
 pids = 0
 found = []
+self_pid = os.getpid()
 for pid_dir in glob.glob("/proc/[0-9]*"):
+    if int(os.path.basename(pid_dir)) == self_pid:
+        continue
     try:
-        cmd = open(os.path.join(pid_dir, "cmdline"), "rb").read()
+        argv = open(os.path.join(pid_dir, "cmdline"), "rb").read().split(b"\x00")
     except OSError:
         continue
-    if b"/opt/code-server" not in cmd:
+    if not any(a.startswith(b"/opt/code-server") for a in argv[:2]):
+        continue
+    try:
+        fd_entries = os.listdir(os.path.join(pid_dir, "fd"))
+    except OSError:
         continue
     pids += 1
-    for fd in glob.glob(os.path.join(pid_dir, "fd", "*")):
+    for fd_name in fd_entries:
         try:
-            target = os.readlink(fd)
+            target = os.readlink(os.path.join(pid_dir, "fd", fd_name))
         except OSError:
             continue
         if target.startswith("socket:[") and target.endswith("]"):

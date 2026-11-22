@@ -57,7 +57,7 @@ RUN set -eu \
          test -r "/usr/lib/${lib}" || exit 1; \
        done \
     && ldd_out="$(ldd /usr/lib/libvglfaker.so /usr/lib/libdlfaker.so /opt/VirtualGL/bin/glxspheres64 2>&1)" \
-    && ! printf '%s\n' "${ldd_out}" | grep -q 'not found' \
+    && case "${ldd_out}" in *"not found"*) echo "${ldd_out}" >&2; exit 1 ;; esac \
     && out="$(vglrun /bin/true 2>&1)" \
-    && ! printf '%s\n' "${out}" | grep -qiE 'cannot be preloaded|ERROR' \
+    && case "${out}" in *"cannot be preloaded"*|*ERROR*) echo "${out}" >&2; exit 1 ;; esac \
     && test -r /opt/scidesktop/manifest.d/virtualgl.json

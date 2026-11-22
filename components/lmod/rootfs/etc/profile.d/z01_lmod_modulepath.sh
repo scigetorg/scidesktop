@@ -12,7 +12,10 @@ if [ -x /opt/scidesktop/module-dirs ]; then
 '
     # Keep component-provided directories in provider order (e.g. local modules
     # ahead of CVMFS) even if a parent shell inherited CVMFS first, while
-    # preserving any user `module use` directories ahead of them.
+    # preserving any user `module use` directories ahead of them without globbing.
+    _scidesktop_noglob=0
+    case $- in *f*) _scidesktop_noglob=1 ;; esac
+    set -f
     _scidesktop_base=""
     _scidesktop_existing="${MODULEPATH:-}"
     IFS=':'
@@ -36,8 +39,9 @@ ${_scidesktop_cur}
         *) _scidesktop_base="${_scidesktop_base:+${_scidesktop_base}:}${_scidesktop_dir}" ;;
         esac
     done
+    [ "${_scidesktop_noglob}" -eq 1 ] || set +f
     IFS=$_scidesktop_ifs
     MODULEPATH="${_scidesktop_base}"
     export MODULEPATH
-    unset _scidesktop_dirs _scidesktop_ifs _scidesktop_dir _scidesktop_base _scidesktop_existing _scidesktop_cur
+    unset _scidesktop_dirs _scidesktop_ifs _scidesktop_dir _scidesktop_base _scidesktop_existing _scidesktop_cur _scidesktop_noglob
 fi

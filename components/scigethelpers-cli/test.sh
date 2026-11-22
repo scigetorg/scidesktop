@@ -97,7 +97,10 @@ mkdir -p "${uvretry}"
 if UV_OFFLINE=1 scigethelpers uv init "${uvretry}" 2>"${HOME}/error"; then exit 1; fi
 test ! -e "${uvretry}/.venv"
 if UV_OFFLINE=1 scigethelpers uv init "${uvretry}" 2>"${HOME}/error"; then exit 1; fi
-! grep -q "unmanaged" "${HOME}/error"
+if grep -q "unmanaged" "${HOME}/error"; then exit 1; fi
+pw_home="$(getent passwd "$(id -un)" | cut -d: -f6)"
+if [ -n "${pw_home}" ] && HOME="" scigethelpers uv init "${pw_home}" 2>"${HOME}/error"; then exit 1; fi
+if [ -n "${pw_home}" ]; then grep -q "Choose an analysis subfolder" "${HOME}/error"; fi
 if scigethelpers uv remove "${uvproj}" 2>"${HOME}/error"; then exit 1; fi
 grep -q "No uv kernel registration" "${HOME}/error"
 

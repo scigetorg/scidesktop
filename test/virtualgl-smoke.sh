@@ -27,13 +27,15 @@ out=$(docker run --rm "${IMAGE}" bash -lc '
     done
     echo "faker_libs=ok"
     ldd_out="$(ldd /usr/lib/libvglfaker.so /usr/lib/libdlfaker.so /opt/VirtualGL/bin/glxspheres64 2>&1)"
-    if ! printf "%s\n" "${ldd_out}" | grep -q "not found"; then
-        echo "ldd=ok"
-    fi
+    case "${ldd_out}" in
+        *"not found"*) ;;
+        *) echo "ldd=ok" ;;
+    esac
     preload_out="$(vglrun /bin/true 2>&1)"
-    if ! printf "%s\n" "${preload_out}" | grep -qiE "cannot be preloaded|ERROR"; then
-        echo "preload=ok"
-    fi
+    case "${preload_out}" in
+        *"cannot be preloaded"*|*ERROR*) ;;
+        *) echo "preload=ok" ;;
+    esac
 ' 2>/dev/null)
 
 has() { printf '%s\n' "${out}" | grep -qxF "$1"; }

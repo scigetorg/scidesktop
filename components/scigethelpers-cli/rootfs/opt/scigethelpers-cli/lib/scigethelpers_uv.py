@@ -175,8 +175,8 @@ def prepare(project: Path, command: str) -> None:
             if not manifest.exists():
                 run("init", "--bare", "--no-workspace", "--no-pin-python", "--vcs", "none", "--name", kernel_name(project))
             if not venv.exists():
-                run("venv", str(venv))
                 created_venv = True
+                run("venv", str(venv))
             if command == "init":
                 deps = data.get("dependency-groups", {}).get("dev", [])
                 if not any(isinstance(dep, str) and re.match(r"(?i)^ipykernel(?:$|[<>=!~;\[ @])", dep) for dep in deps):
