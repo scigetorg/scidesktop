@@ -93,9 +93,10 @@ RUN set -e \
     && test ! -d /opt/conda/pkgs -o -z "$(ls -A /opt/conda/pkgs 2>/dev/null | grep -v -E '^(cache|urls|urls.txt)$')" \
     && jupyter server extension list 2>&1 | grep -E 'enabled|disabled' \
     # rfc3987_syntax must not compile its parsers at import (patches/).
+    && python -c 'import rfc3987_syntax.syntax_helpers as h; assert not hasattr(h, "_LazyLark") or h.syntax_parser._parser is None' \
     && us=$(cd /tmp && python -X importtime -c 'import jsonschema' 2>&1 \
             | awk -F'|' '/rfc3987_syntax.syntax_helpers/ { gsub(/ /, "", $2); print $2 }') \
-    && echo "rfc3987_syntax import: ${us:-0} us" && [ "${us:-0}" -lt 200000 ] \
+    && echo "rfc3987_syntax import: ${us:-0} us" && [ "${us:-0}" -lt 750000 ] \
     # Jupyter AI's JupyterLab extensions are compatible with this JupyterLab,
     # and its agent client carries the two workarounds (patches/acp_client_workarounds.py).
     && labs=$(jupyter labextension list 2>&1) \

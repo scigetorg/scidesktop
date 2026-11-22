@@ -2,7 +2,8 @@
 # The component's own test: runs on the OS layer as the notebook user, with
 # nothing from the base image but the OS (git is the OS layer's). No network.
 set -euo pipefail
-export HOME="$(mktemp -d)"
+HOME="$(mktemp -d)"
+export HOME
 trap 'chmod -R u+w "${HOME}"; rm -rf "${HOME}"' EXIT
 cd "${HOME}"
 git config --global user.name "scidesktop test"

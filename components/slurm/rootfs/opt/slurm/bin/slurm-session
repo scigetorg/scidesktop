@@ -73,7 +73,8 @@ write_configuration() {
         ports=6817,6818
     fi
     node="$(node_name)"
-    user="$(id -un)"
+    user="$(id -un 2>/dev/null || true)"
+    [ -n "${user}" ] || user="$(id -u)"
     cpus="$(cpus)"
     memory="$(memory_mb)"
     # A restarted container starts a new queue: jobs did not survive it.
@@ -151,8 +152,11 @@ run() {
     if [ "$(id -u)" -eq 0 ]; then
         log "runs as the notebook user, not as root"; return 1
     fi
-    if ! { [ -w "${RUN}" ] && [ -w /run/slurmctld ]; }; then
-        log "not started: $(id -un) cannot write ${RUN} and /run/slurmctld (another user ID, or /run is mounted over)"
+    if ! { [ -O "${RUN}" ] && [ -w "${RUN}" ] && [ -O /run/slurmctld ] && [ -w /run/slurmctld ]; }; then
+        local who
+        who="$(id -un 2>/dev/null || true)"
+        [ -n "${who}" ] || who="$(id -u)"
+        log "not started: ${who} does not own and write ${RUN} and /run/slurmctld (another user ID, or /run is mounted over)"
         return 1
     fi
     command -v slurmctld >/dev/null && command -v slurmd >/dev/null \

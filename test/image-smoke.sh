@@ -29,6 +29,8 @@ run() {
 
 run python3 "${here}/contract.py" image "${image}" "${ref}"
 run "${here}/smoke.sh" "${ref}"
+run "${here}/notebook-and-sciget-smoke.sh" "${ref}"
+run "${here}/hpc-smoke.sh" "${ref}"
 components="$(docker run --rm --entrypoint ls "${ref}" /opt/scidesktop/manifest.d)" \
     || { echo "  FAIL  cannot list the components of ${ref}"; exit 1; }
 for manifest in ${components}; do

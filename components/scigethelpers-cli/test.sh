@@ -2,7 +2,8 @@
 # The component's own test: runs on the OS layer as the notebook user, with
 # Lmod, the Slurm component and the Jupyter environment's Python.
 set -euo pipefail
-export HOME="$(mktemp -d)"
+HOME="$(mktemp -d)"
+export HOME
 cd "${HOME}"
 supervisor=""
 # Says where a check failed: the checks themselves print nothing.

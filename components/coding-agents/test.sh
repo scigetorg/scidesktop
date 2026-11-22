@@ -2,7 +2,8 @@
 # The component's own test: runs on the OS layer as the notebook user, with
 # nothing from the base image but the OS.
 set -euo pipefail
-export HOME="$(mktemp -d)"
+HOME="$(mktemp -d)"
+export HOME
 trap 'rm -rf "${HOME}"' EXIT
 cd "${HOME}"
 

@@ -12,7 +12,7 @@ _auth = base64.b64encode(f"{_user}:{_password}".encode()).decode()
 
 # update() adds to the entries of other components; nothing here assigns the
 # shared setting.
-c.ServerProxy.servers.update({
+c.ServerProxy.servers.update({  # noqa: F821
     'desktop': {
         # {port} is allocated by the proxy; {base_url} carries the JupyterHub
         # per-user prefix, which selkies applies via --subfolder.
@@ -79,4 +79,4 @@ def _app_entries():
         }
 
 
-c.ServerProxy.servers.update(dict(_app_entries()))
+c.ServerProxy.servers.update(dict(_app_entries()))  # noqa: F821

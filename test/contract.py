@@ -9,7 +9,6 @@
 Exit status is non-zero when any rule is broken; each violation is printed
 with the rule it breaks.
 """
-import io
 import json
 import re
 import subprocess

@@ -3,7 +3,8 @@
 # the coding agents and the home-defaults hook. Nothing here talks to a
 # model provider.
 set -euo pipefail
-export HOME="$(mktemp -d)"
+HOME="$(mktemp -d)"
+export HOME
 trap 'rm -rf "${HOME}"' EXIT
 cd "${HOME}"
 component=/opt/neurodesk-agents
