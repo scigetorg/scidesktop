@@ -23,4 +23,7 @@ if [ -n "${CPU_LIMIT:-}" ]; then
     fi
     echo "[resources] CPU_LIMIT=${CPU_LIMIT} MEM_LIMIT=${MEM_LIMIT:-unset} threads=${_sd_n:-unset}"
 fi
+if [ -z "${MPLCONFIGDIR:-}" ] && [ -n "${HOME:-}" ]; then
+    export MPLCONFIGDIR="${HOME}/.config/matplotlib-mpldir"
+fi
 unset _sd_k _sd_v _sd_n

@@ -18,7 +18,9 @@
       "/^components/selkies/requirements\\.in$/",
       "/^components/ai-ready/requirements\\.in$/",
       "/^components/ai-ready/airflow-requirements\\.in$/",
-      "/^components/datalad/requirements\\.in$/"
+      "/^components/datalad/requirements\\.in$/",
+      "/^components/workflow-engines/requirements\\.in$/",
+      "/^components/neuroimaging-env/requirements\\.in$/"
     ]
   },
   "customDatasources": {
@@ -463,7 +465,7 @@
       ]
     },
     {
-      "description": "Shared Node.js version (acp-adapters and jupyterlab-freebrowse): a bump needs both NODE_SHA256 variables updated.",
+      "description": "Shared Node.js version (acp-adapters, jupyterlab-freebrowse and jupyterlab-slurm): a bump needs both NODE_SHA256 variables updated.",
       "matchFileNames": [
         "docker-bake.hcl"
       ],
@@ -473,7 +475,111 @@
       "groupName": "component acp-adapters",
       "addLabels": [
         "component:acp-adapters",
-        "component:jupyterlab-freebrowse"
+        "component:jupyterlab-freebrowse",
+        "component:jupyterlab-slurm"
+      ]
+    },
+    {
+      "description": "Component virtualgl: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/virtualgl/**"
+      ],
+      "groupName": "component virtualgl",
+      "addLabels": [
+        "component:virtualgl"
+      ]
+    },
+    {
+      "description": "Component virtualgl: a bump needs both VIRTUALGL_SHA256 variables updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "VirtualGL/virtualgl"
+      ],
+      "groupName": "component virtualgl",
+      "addLabels": [
+        "component:virtualgl"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-slurm: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/jupyterlab-slurm/**"
+      ],
+      "groupName": "component jupyterlab-slurm",
+      "addLabels": [
+        "component:jupyterlab-slurm"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-slurm: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "jupyterlab-slurm"
+      ],
+      "groupName": "component jupyterlab-slurm",
+      "addLabels": [
+        "component:jupyterlab-slurm"
+      ]
+    },
+    {
+      "description": "Component workflow-engines: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/workflow-engines/**"
+      ],
+      "groupName": "component workflow-engines",
+      "addLabels": [
+        "component:workflow-engines"
+      ]
+    },
+    {
+      "description": "Component workflow-engines: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "nextflow-io/nextflow",
+        "askimed/nf-test"
+      ],
+      "groupName": "component workflow-engines",
+      "addLabels": [
+        "component:workflow-engines"
+      ]
+    },
+    {
+      "description": "Component neuroimaging-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/neuroimaging-env/**"
+      ],
+      "groupName": "component neuroimaging-env",
+      "addLabels": [
+        "component:neuroimaging-env"
+      ]
+    },
+    {
+      "description": "Component neurodesk-compat: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/neurodesk-compat/**"
+      ],
+      "groupName": "component neurodesk-compat",
+      "addLabels": [
+        "component:neurodesk-compat"
+      ]
+    },
+    {
+      "description": "Component neurodesk-compat: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "nf-neuro-modules"
+      ],
+      "groupName": "component neurodesk-compat",
+      "addLabels": [
+        "component:neurodesk-compat"
       ]
     }
   ],
@@ -527,6 +633,34 @@
       ],
       "depNameTemplate": "freebrowse",
       "packageNameTemplate": "https://github.com/neurodesk/freebrowse",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    },
+    {
+      "description": "NERSC jupyterlab-slurm commit; the build stops if the patched identity lookup moved.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"JUPYTERLAB_SLURM_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "jupyterlab-slurm",
+      "packageNameTemplate": "https://github.com/NERSC/jupyterlab-slurm",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    },
+    {
+      "description": "nf-neuro Nextflow modules commit bundled in neurodesk-compat.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"NF_NEURO_MODULES_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "nf-neuro-modules",
+      "packageNameTemplate": "https://github.com/nf-neuro/modules",
       "datasourceTemplate": "git-refs",
       "currentValueTemplate": "main"
     },

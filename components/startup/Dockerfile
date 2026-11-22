@@ -56,6 +56,10 @@ RUN printf '#!/bin/bash\necho hook-ran\n' > /usr/local/bin/before-notebook.d/10-
     && [ "$(stat -c %U "/home/${NB_USER}/.probe")" = "${NB_USER}" ] \
     && printf 'mine\n' > "/home/${NB_USER}/.probe" && start.sh true >/dev/null 2>&1 \
     && [ "$(cat "/home/${NB_USER}/.probe")" = mine ] \
+    # /data symlink hook: links /data into ~/data when /data exists, without clobbering existing targets.
+    && mkdir -p /data && start.sh true >/dev/null 2>&1 \
+    && [ "$(readlink "/home/${NB_USER}/data")" = /data ] \
+    && rm -f "/home/${NB_USER}/data" && rmdir /data \
     && [ "$(/opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
     && [ "$(runuser -u "${NB_USER}" -- /opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
     && test -r /opt/scidesktop/stop_supervisor.py \

@@ -54,6 +54,10 @@ NOT_RENOVATED = {
     "AI_READY_SRC": "built from AI_READY_COMMIT",
     "FREEBROWSE_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "FREEBROWSE_SRC": "built from FREEBROWSE_COMMIT",
+    "JUPYTERLAB_SLURM_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
+    "JUPYTERLAB_SLURM_SRC": "built from JUPYTERLAB_SLURM_COMMIT",
+    "NF_NEURO_MODULES_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
+    "NF_NEURO_MODULES_SRC": "built from NF_NEURO_MODULES_COMMIT",
 }
 # Instructions the assembly may use: image metadata a component cannot provide.
 ASSEMBLY_ALLOWED = {"FROM", "COPY", "LABEL", "ENV", "EXPOSE", "HEALTHCHECK",

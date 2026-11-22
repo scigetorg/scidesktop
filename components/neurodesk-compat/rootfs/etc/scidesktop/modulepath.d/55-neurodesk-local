@@ -1,0 +1,7 @@
+#!/bin/sh
+# Legacy offline container module store from neurodesk/neurodesktop:
+# if /neurodesktop-storage/containers/modules (or $NEURODESKTOP_LOCAL_CONTAINERS/modules)
+# is mounted, expose it ahead of CVMFS (55 < 60) so existing offline volumes work.
+dir="${NEURODESKTOP_LOCAL_CONTAINERS:-/neurodesktop-storage/containers}/modules"
+[ -d "${dir}" ] && echo "${dir}"
+exit 0

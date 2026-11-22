@@ -40,16 +40,17 @@ Then, in a terminal: `module avail`, `module load niimath/<version>`, `niimath`.
 
 ## What is here
 
-Only the assembly: this image is scidesktop (which already includes the
-NiiVue/FreeBrowse viewers, coding agents, ACP adapters, T3 Code and T3 Connect)
-plus optional components from `components/`. Any other image can copy the same
-ones.
+Only the assembly: this image is `scidesktop` (which already includes Slurm +
+`jupyterlab-slurm`, VS Code with `vscode-core` and `vscode-niivue`, DataLad,
+workflow engines, VirtualGL, `scigethelpers`, the NiiVue/FreeBrowse viewers,
+coding agents, ACP adapters, T3 Code and T3 Connect) plus neuroimaging-specific
+components from `components/`.
 
 | Component | What it adds |
 | --- | --- |
 | `sciget-neuroimaging` | narrows sciget to the neuroimaging catalog |
 | `neurodesk-cvmfs` | the Neurodesk CVMFS repository: its mirrors and public key |
-| `datalad` | DataLad, datalad-container and git-annex |
-| `code-server`, `vscode-core`, `vscode-niivue`, `vscode-coding-agents` | the **VS Code** tile and eight preinstalled extensions, with no download at start |
+| `vscode-coding-agents` | Claude Code and Codex VS Code extensions |
 | `neurodesk-agents` | the agents' instructions for Neurodesk tools, and the Neurodesk model provider for OpenCode |
-| `scigethelpers-cli` | the `scigethelpers` command: `cite`, `kernel`, `check`, `info` |
+| `neuroimaging-env` | the `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`, `datalad`, `xnat`, `nf-core`) |
+| `neurodesk-compat` | FreeSurfer/nf-neuro defaults, bundled `nf-neuro` modules, local module discovery and getting-started notebook |

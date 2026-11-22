@@ -59,10 +59,10 @@ enough for a large virtual screen.
 
 | Image | Folder | What it adds |
 |---|---|---|
-| scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below, including all sciget domains (`sciget-all`), the [NiiVue and FreeBrowse viewers](docs/viewers.md), and the [coding agents, Jupyter AI ACP adapters, T3 Code and T3 Connect](docs/coding-agents.md) |
-| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: narrows sciget to the microscopy tools, and adds VS Code (`code-server`, `vscode-core`, `vscode-niivue`) and `scigethelpers` |
+| scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below, including all sciget domains (`sciget-all`), Slurm + `jupyterlab-slurm`, VS Code (`code-server`, `vscode-core`, `vscode-niivue`), DataLad, workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, `scigethelpers`, the [NiiVue and FreeBrowse viewers](docs/viewers.md), and the [coding agents, Jupyter AI ACP adapters, T3 Code and T3 Connect](docs/coding-agents.md) |
+| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: narrows sciget to the microscopy tools (`sciget-microscopy`); inherits every generic feature (Slurm, VS Code, DataLad, workflow engines, VirtualGL, `scigethelpers`, viewers, coding agents) from `scidesktop` |
 | aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL, with the neuroimaging catalog |
-| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): narrows sciget to neuroimaging, and adds the Neurodesk CVMFS config, DataLad, VS Code with preinstalled extensions, Neurodesk's coding-agent defaults and the `scigethelpers` command |
+| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): narrows sciget to neuroimaging, and adds the Neurodesk CVMFS config, the neuroimaging Python kernel (`neuroimaging-env`), the Neurodesk compatibility layer (`neurodesk-compat`), Claude Code/Codex VS Code extensions (`vscode-coding-agents`) and Neurodesk's coding-agent defaults |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
 [docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
@@ -80,8 +80,8 @@ commit's short SHA, the date and `latest`.
 |---|---|
 | Base | Ubuntu 26.04 LTS, digest-pinned, packages from a dated `snapshot.ubuntu.com` snapshot |
 | Startup | docker-stacks `start.sh` and hooks, vendored unchanged (JupyterHub contract) |
-| Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked) |
-| Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio |
+| Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked), with `bash_kernel`, `jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`, `nb_conda_kernels`, `nbgitpuller`, `papermill`, `anywidget`, `ipycanvas` and `uv` |
+| Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio, VirtualGL (`vglrun`) and `mesa-utils` |
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget with all domain catalogs (`sciget-all`) by default |
 | Modules | Lmod, built from the upstream release |
@@ -90,18 +90,19 @@ commit's short SHA, the date and `latest`.
 | AI chat | [Jupyter AI](docs/jupyter-ai.md) in JupyterLab with OpenCode, Codex and Claude personas (`acp-adapters`). No model, key or endpoint comes with it |
 | T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
 | T3 Connect | [Remote access](docs/t3-connect.md) to T3 Code from the T3 apps, through T3's relay. Off until the user sets it up; at `/opt/t3-connect` |
-| Batch jobs | A [Slurm queue](docs/slurm.md) for the session, run as the notebook user: `sbatch` and `srun` work in every terminal |
+| Batch jobs | A [Slurm queue](docs/slurm.md) for the session (`sbatch`, `srun`) plus the `jupyterlab-slurm` Queue Manager extension in JupyterLab |
+| VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile, with `vscode-core` and `vscode-niivue` preinstalled |
+| Data & workflows | DataLad and git-annex at `/opt/datalad`; Nextflow, nf-test and Snakemake at `/opt/workflow-engines`; `rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`, `gh` |
+| Helper CLI | The `scigethelpers` command (`cite`, `kernel`, `check`, `info`, `uv`) at `/opt/scigethelpers-cli` |
 
-The domain images add components the base leaves out (and narrow the sciget
-catalog to their domain; [which image has which](docs/images.md)):
+The domain images add domain-specific components the base leaves out (and narrow
+the sciget catalog to their domain; [which image has which](docs/images.md)):
 
 | | |
 |---|---|
 | Domain catalogs | Narrow sciget to one domain: `sciget-neuroimaging` or `sciget-microscopy` ([docs/images.md](docs/images.md#tool-catalogs)) |
-| VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile; at `/opt/code-server`, with split extension components (`vscode-core`, `vscode-niivue`, `vscode-coding-agents`) |
-| Helper CLI | The `scigethelpers` command (`cite`, `kernel`, `check`, `info`) at `/opt/scigethelpers-cli` |
-| DataLad | DataLad and git-annex for terminals, in their own locked environment at `/opt/datalad` |
-| Neurodesk | The Neurodesk CVMFS repository's mirrors and key, and Neurodesk's instructions and model provider for the coding agents |
+| Neuroimaging Python | The `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`, `datalad`, `xnat`, `nf-core`) at `/opt/neuroimaging-env` |
+| Neurodesk | The Neurodesk CVMFS repository's mirrors and key (`neurodesk-cvmfs`), Neurodesk's coding-agent defaults (`neurodesk-agents`), Claude Code/Codex VS Code extensions (`vscode-coding-agents`), and FreeSurfer/nf-neuro compatibility (`neurodesk-compat`) |
 | AI Ready | A Python 3.12 kernel with the workshop's libraries and MLflow, Airflow in its own environment, PostgreSQL from conda-forge; all locked, at `/opt/ai-ready` |
 
 `/opt/scidesktop/manifest.d/` holds one JSON file per component with its versions. Design and rationale:

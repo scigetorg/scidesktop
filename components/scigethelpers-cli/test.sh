@@ -12,8 +12,8 @@ trap '[ -z "${supervisor}" ] || kill "${supervisor}" 2>/dev/null || true' EXIT
 
 # The command lists what this image has, and nothing it does not.
 help="$(scigethelpers --help)"
-for command in cite kernel check info; do grep -q "^  ${command} " <<<"${help}"; done
-if grep -E '^  (uv|jobs|update|test|t3|agent|astra|lightcone)' <<<"${help}"; then
+for command in cite kernel uv check info; do grep -q "^  ${command} " <<<"${help}"; done
+if grep -E '^  (jobs|update|test|t3|agent|astra|lightcone)' <<<"${help}"; then
     echo "scigethelpers --help lists a command this image does not have" >&2
     exit 1
 fi

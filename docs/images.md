@@ -9,20 +9,23 @@ that builds on it and adds what its community needs.
 ```
 images/
   scidesktop/      the base; includes all sciget domains (sciget-all),
+                   Slurm + jupyterlab-slurm, VS Code (code-server, vscode-core,
+                   vscode-niivue), DataLad, workflow engines (Nextflow,
+                   nf-test, Snakemake), VirtualGL, scigethelpers-cli,
                    NiiVue/FreeBrowse viewers, coding agents, ACP adapters,
                    T3 Code and T3 Connect
-  microdesktop/    FROM scidesktop, plus sciget-microscopy, code-server,
-                   vscode-core, vscode-niivue and scigethelpers-cli: microscopy
+  microdesktop/    FROM scidesktop, plus sciget-microscopy: microscopy
   aidesktop/       FROM scidesktop, plus sciget-neuroimaging and ai-ready
   neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
-                   datalad, code-server, vscode-core, vscode-niivue,
-                   vscode-coding-agents, neurodesk-agents and
-                   scigethelpers-cli: neuroimaging
+                   vscode-coding-agents, neurodesk-agents, neuroimaging-env
+                   and neurodesk-compat: neuroimaging
 ```
 
 | Component | scidesktop | microdesktop | aidesktop | neurodesktop |
 | --- | --- | --- | --- | --- |
-| core base (`startup`, `lmod`, `apptainer`, `selkies`, `jupyter-env`, `sciget`, `slurm`) | yes | yes | yes | yes |
+| core base (`startup`, `lmod`, `apptainer`, `selkies`, `jupyter-env`, `sciget`, `slurm`, `jupyterlab-slurm`) | yes | yes | yes | yes |
+| `virtualgl`, `datalad`, `workflow-engines`, `scigethelpers-cli` | yes | yes | yes | yes |
+| `code-server`, `vscode-core`, `vscode-niivue` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes |
 | `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed |
 | `jupyterlab-niivue`, `jupyterlab-freebrowse` ([viewers.md](viewers.md)) | yes | yes | yes | yes |
 | `coding-agents`, `t3-code` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes |
@@ -30,9 +33,7 @@ images/
 | `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | yes | yes |
 | `sciget-microscopy` ([tool catalogs](#tool-catalogs)) | no | yes | no | no |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no |
-| `code-server`, `vscode-core`, `vscode-niivue` ([neurodesktop.md](neurodesktop.md#vs-code)) | no | yes | no | yes |
-| `scigethelpers-cli` ([neurodesktop.md](neurodesktop.md#the-scigethelpers-command)) | no | yes | no | yes |
-| `datalad`, `vscode-coding-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
+| `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
 | `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
 
 ## How a domain image gets the base
@@ -104,8 +105,8 @@ through that component's
 community's defaults then stay out of the generic component, and the image
 still only assembles.
 
-Several images can copy the same component, as `microdesktop` and `neurodesktop`
-do with `code-server`, `vscode-core`, `vscode-niivue` and `scigethelpers-cli`,
+Several images can copy the same component, as `aidesktop` and `neurodesktop`
+do with `sciget-neuroimaging`,
 and nodes download its layer once. An image gets the components of the
 image it is `FROM` and must not copy them again. Rule S6 checks the `COPY` line,
 the bake context, and that nothing is copied twice. The layer rules (L1 to L5)

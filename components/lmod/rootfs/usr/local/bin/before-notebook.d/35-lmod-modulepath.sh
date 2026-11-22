@@ -2,6 +2,7 @@
 # (30-sciget): the components' module folders for the Jupyter server, which
 # the Lmod panel and the kernels and terminals it starts inherit. The folders
 # are the notebook user's, so they are listed as that user.
+export LMOD_AVAIL_EXTENSIONS="${LMOD_AVAIL_EXTENSIONS:-no}"
 if [ -x /opt/scidesktop/module-dirs ]; then
     if [ "$(id -u)" -eq 0 ]; then
         _modulepath_home="$(getent passwd "${NB_USER:-jovyan}" | cut -d: -f6)"

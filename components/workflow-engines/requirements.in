@@ -1,0 +1,3 @@
+# Snakemake pinned for /opt/workflow-engines/snakemake.
+# Run ./lock after changing a pin.
+snakemake==9.27.2

@@ -13,27 +13,25 @@
 # from least to most frequently changed.
 #
 #   sciget-neuroimaging  narrows sciget to the neuroimaging catalog only
-#   neurodesk-cvmfs   the Neurodesk CVMFS repository: its mirrors and key
-#   datalad           DataLad and git-annex
-#   code-server       the VS Code tile
-#   vscode-core, vscode-niivue, vscode-coding-agents  preinstalled VS Code extensions
-#   neurodesk-agents  Neurodesk's instructions and model provider for the agents
-#   scigethelpers-cli the `scigethelpers` command (cite, kernel, check, info)
+#   neurodesk-cvmfs      the Neurodesk CVMFS repository: its mirrors and key
+#   vscode-coding-agents Claude Code and Codex VS Code extensions
+#   neurodesk-agents     Neurodesk's instructions and model provider for the agents
+#   neuroimaging-env     neuroimaging Python analysis kernel (nibabel, nipype, niwrap, pydra, nipoppy, ipyniivue, datalad, xnat, nf-core)
+#   neurodesk-compat     FreeSurfer/nf-neuro defaults, local module discovery, getting-started notebook
 #
-# NiiVue/FreeBrowse JupyterLab viewers, coding agents, ACP adapters, T3 Code and
-# T3 Connect are inherited from scidesktop.
+# Slurm (+ jupyterlab-slurm), VS Code (+ core & NiiVue extensions), DataLad,
+# workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, scigethelpers,
+# NiiVue/FreeBrowse JupyterLab viewers, coding agents, ACP adapters, T3 Code
+# and T3 Connect are inherited from scidesktop.
 
 FROM scidesktop-base
 
 COPY --link --from=sciget-neuroimaging / /
 COPY --link --from=neurodesk-cvmfs / /
-COPY --link --from=datalad / /
-COPY --link --from=code-server / /
-COPY --link --from=vscode-core / /
-COPY --link --from=vscode-niivue / /
 COPY --link --from=vscode-coding-agents / /
 COPY --link --from=neurodesk-agents / /
-COPY --link --from=scigethelpers-cli / /
+COPY --link --from=neuroimaging-env / /
+COPY --link --from=neurodesk-compat / /
 
 LABEL org.opencontainers.image.title="neurodesktop" \
       org.opencontainers.image.description="scidesktop for neuroimaging: the Neurodesk tools as modules"

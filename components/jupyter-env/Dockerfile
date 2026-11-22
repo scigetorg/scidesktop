@@ -34,6 +34,8 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     # conda lock above).
     && /opt/conda/bin/python -m pip install --no-cache-dir --no-deps --require-hashes \
         -r /tmp/requirements.lock \
+    # Register the Bash kernel in /opt/conda/share/jupyter/kernels/bash.
+    && /opt/conda/bin/python -m bash_kernel.install --sys-prefix \
     # Startup-time patches; see each file.
     && for p in /tmp/patches/*.py; do /opt/conda/bin/python "${p}" || exit 1; done \
     && /opt/conda/bin/python -m compileall -q /opt/conda/lib/python3*/site-packages/rfc3987_syntax \
@@ -49,7 +51,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
         '@jupyterlab/extensionmanager-extension:plugin' \
         '@jupyterlab/help-extension:about' \
     && install -d -m 0755 /out/manifest \
-    && /opt/conda/bin/python -c 'import json, glob; v = {m["name"]: m["version"] for m in map(lambda f: json.load(open(f)), glob.glob("/opt/conda/conda-meta/*.json"))}; json.dump({k: v.get(k) for k in ("python", "jupyterlab", "jupyterhub-singleuser", "jupyter-server-proxy", "ipykernel", "mamba", "ipywidgets", "jupyterlab-git", "jupyter-ai")}, open("/out/manifest/jupyter-env.json", "w"))' \
+    && /opt/conda/bin/python -c 'import importlib.metadata as im, json, glob; v = {m["name"]: m["version"] for m in map(lambda f: json.load(open(f)), glob.glob("/opt/conda/conda-meta/*.json"))}; d = {k: v.get(k) for k in ("python", "jupyterlab", "jupyterhub-singleuser", "jupyter-server-proxy", "ipykernel", "mamba", "ipywidgets", "anywidget", "ipycanvas", "jupyterlab-git", "jupyter-resource-usage", "jupyterlab_rise", "jupyter-scheduler", "nb_conda_kernels", "nbgitpuller", "papermill", "uv", "jupyter-ai")}; d["bash_kernel"] = im.version("bash_kernel"); json.dump(d, open("/out/manifest/jupyter-env.json", "w"))' \
     && chown -R "${NB_UID:?}:${NB_GID:?}" /opt/conda \
     && chmod -R g+rwX /opt/conda \
     && find /opt/conda -type d -exec chmod g+s {} +
@@ -75,14 +77,18 @@ USER ${NB_UID}
 RUN set -e \
     && jupyter lab --version \
     && jupyterhub-singleuser --version \
-    && python -c 'import jupyter_server_proxy, ipykernel, jupyterlab, ipywidgets, jupyterlab_git, jupyterlmod, jupyter_ai_acp_client, jupyterlab_chat' \
+    && python -c 'import jupyter_server_proxy, ipykernel, jupyterlab, ipywidgets, anywidget, ipycanvas, jupyterlab_git, jupyterlmod, jupyter_resource_usage, jupyter_scheduler, nb_conda_kernels, nbgitpuller, papermill, bash_kernel, jupyter_ai_acp_client, jupyterlab_chat' \
     && pip check \
     && mamba --version \
+    && uv --version \
+    && papermill --version \
+    && jupyter kernelspec list 2>&1 | grep -qw bash \
+    && ! test -e /opt/conda/bin/bash \
     && ! command -v conda \
     && test -r /opt/conda/etc/profile.d/mamba.sh \
     && touch /opt/conda/.write-test && rm /opt/conda/.write-test \
     && exts=$(jupyter server extension list 2>&1) \
-    && for e in jupyter_server_proxy jupyterlab_git jupyterlmod jupyter_ai_acp_client jupyter_ai_persona_manager jupyter_ai_router jupyterlab_chat jupyter_live_content; do \
+    && for e in jupyter_server_proxy jupyterlab_git jupyterlmod jupyter_resource_usage jupyter_scheduler nbgitpuller jupyter_ai_acp_client jupyter_ai_persona_manager jupyter_ai_router jupyterlab_chat jupyter_live_content; do \
          echo "${exts}" | grep -q "${e}.*enabled" || { echo "server extension ${e} not enabled"; exit 1; }; \
        done \
     # The server settings are loaded, not just installed.

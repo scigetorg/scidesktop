@@ -11,20 +11,15 @@
 # other images can copy them too (docs/images.md).
 #
 #   sciget-microscopy  narrows sciget to the microscopy catalog only
-#   code-server        the VS Code tile
-#   vscode-core, vscode-niivue  core and NiiVue VS Code extensions
-#   scigethelpers-cli  the `scigethelpers` command (cite, kernel, check, info)
 #
-# NiiVue/FreeBrowse JupyterLab viewers, coding agents, ACP adapters, T3 Code and
-# T3 Connect are inherited from scidesktop.
+# Slurm (+ jupyterlab-slurm), VS Code (+ core & NiiVue extensions), DataLad,
+# workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, scigethelpers,
+# NiiVue/FreeBrowse JupyterLab viewers, coding agents, ACP adapters, T3 Code
+# and T3 Connect are inherited from scidesktop.
 
 FROM scidesktop-base
 
 COPY --link --from=sciget-microscopy / /
-COPY --link --from=code-server / /
-COPY --link --from=vscode-core / /
-COPY --link --from=vscode-niivue / /
-COPY --link --from=scigethelpers-cli / /
 
 LABEL org.opencontainers.image.title="microdesktop" \
       org.opencontainers.image.description="scidesktop for microscopy: the microscopy tools through sciget"

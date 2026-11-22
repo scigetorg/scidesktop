@@ -2,6 +2,9 @@
 # Lmod's own, so a new shell sees modules installed or mounted since the last.
 # Also sourced for interactive shells that are not login shells
 # (/etc/bash.bashrc.d/lmod.sh).
+# Keep `module avail` focused on loadable modules; users can opt back in with
+# LMOD_AVAIL_EXTENSIONS=yes.
+export LMOD_AVAIL_EXTENSIONS="${LMOD_AVAIL_EXTENSIONS:-no}"
 if [ -x /opt/scidesktop/module-dirs ]; then
     _scidesktop_dirs=$(/opt/scidesktop/module-dirs)
     _scidesktop_ifs=$IFS

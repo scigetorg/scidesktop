@@ -47,6 +47,7 @@ class Command:
 COMMANDS = (
     Command(("cite",), "Analysis", "Write CITATIONS.md for the container tools you loaded", "scigethelpers-cite"),
     Command(("kernel",), "Analysis", "Use a tool container's Python as a notebook kernel", "scigethelpers-kernel"),
+    Command(("uv",), "Analysis", "Manage project-local uv notebook kernels", "scigethelpers-uv"),
     Command(("check",), "Environment", "Check CVMFS, GPU and Slurm"),
     Command(("info",), "Environment", "Show the image's components, resources, GPU and CVMFS"),
 )

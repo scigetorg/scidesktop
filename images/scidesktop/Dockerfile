@@ -24,6 +24,14 @@ COPY --link --from=selkies / /
 COPY --link --from=jupyter-env / /
 COPY --link --from=sciget / /
 COPY --link --from=slurm / /
+COPY --link --from=virtualgl / /
+COPY --link --from=datalad / /
+COPY --link --from=code-server / /
+COPY --link --from=vscode-core / /
+COPY --link --from=vscode-niivue / /
+COPY --link --from=scigethelpers-cli / /
+COPY --link --from=jupyterlab-slurm / /
+COPY --link --from=workflow-engines / /
 COPY --link --from=sciget-all / /
 COPY --link --from=jupyterlab-niivue / /
 COPY --link --from=jupyterlab-freebrowse / /
@@ -39,14 +47,15 @@ LABEL maintainer="Sciget project <sciget.org>" \
 
 # Environment is image configuration, not files, so it cannot come from a
 # component. Owners: CONDA_DIR, MAMBA_ROOT_PREFIX, PATH (jupyter-env); DISPLAY
-# (selkies); XDG_DATA_DIRS (sciget); JUPYTER_* (jupyter-env).
+# (selkies); XDG_DATA_DIRS (sciget); JUPYTER_* (jupyter-env);
+# NVIDIA_DRIVER_CAPABILITIES (virtualgl / GPU runtimes).
 ENV CONDA_DIR=/opt/conda \
     MAMBA_ROOT_PREFIX=/opt/conda \
     PATH=/opt/conda/bin:${PATH} \
     JUPYTER_PORT=8888 \
-    JUPYTER_DISABLE_RESOURCE_USAGE=1 \
     DISPLAY=:20 \
-    XDG_DATA_DIRS=/opt/sciget:/usr/local/share:/usr/share
+    XDG_DATA_DIRS=/opt/sciget:/usr/local/share:/usr/share \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display
 
 EXPOSE 8888
 HEALTHCHECK --interval=3s --timeout=1s --start-period=3s --retries=3 \

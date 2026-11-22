@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euo pipefail
+export NF_TEST_HOME=/opt/workflow-engines/nf-test
+exec java -jar /opt/workflow-engines/nf-test/nf-test.jar "$@"

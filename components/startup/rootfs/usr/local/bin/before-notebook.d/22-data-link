@@ -1,0 +1,14 @@
+#!/bin/bash
+# If a host or cluster mounts /data into the container, expose it at ~/data
+# when ~/data does not already exist (matching neurodesktop's convention).
+set -u
+home_dir="${HOME:-/home/${NB_USER:-jovyan}}"
+if [ "$(id -u)" -eq 0 ]; then
+    home_dir="$(getent passwd "${NB_USER:-jovyan}" | cut -d: -f6 || echo "${home_dir}")"
+fi
+[ -d /data ] && [ -d "${home_dir}" ] || exit 0
+target="${home_dir}/data"
+if [ -L "${target}" ] || [ -e "${target}" ]; then
+    exit 0
+fi
+/opt/scidesktop/run-as-user ln -s /data "${target}" 2>/dev/null || true

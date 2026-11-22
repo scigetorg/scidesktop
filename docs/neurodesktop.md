@@ -2,26 +2,28 @@
 
 `neurodesktop` gives users what
 [neurodesk/neurodesktop](https://github.com/neurodesk/neurodesktop) gives
-them, built from scidesktop components. `scidesktop` already ships the
-NiiVue/FreeBrowse viewers, coding agents, ACP adapters, T3 Code and T3 Connect;
-`neurodesktop` adds nine optional components (see
-[images.md](images.md#optional-components)) on top. Each one is reusable:
-another image copies it with one line.
+them, built from scidesktop components. `scidesktop` already ships all
+generic capabilities shared across every desktop (`microdesktop`, `aidesktop`,
+`neurodesktop`): Slurm + `jupyterlab-slurm`, VS Code (`code-server`,
+`vscode-core`, `vscode-niivue`), DataLad, workflow engines (Nextflow, nf-test,
+Snakemake), VirtualGL, `scigethelpers`, expanded Jupyter extensions (`bash_kernel`,
+`jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`,
+`nb_conda_kernels`, `nbgitpuller`, `papermill`, `anywidget`, `ipycanvas`, `uv`),
+remote mount/transfer tools (`rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`,
+`aria2`, `gh`), the NiiVue/FreeBrowse viewers, coding agents, ACP adapters,
+T3 Code and T3 Connect.
+
+`neurodesktop` adds six neuroimaging-specific components (see
+[images.md](images.md#optional-components)) on top:
 
 | Component | What it adds | Where |
 | --- | --- | --- |
 | `sciget-neuroimaging` | narrows sciget to the `neuroimaging` catalog ([images.md](images.md#tool-catalogs)) | `/etc/sciget/catalogs.json` |
 | `neurodesk-cvmfs` | the Neurodesk CVMFS repository for the base's CVMFS client: its mirrors, its public key, and the repository as the one to mount in internal mode | `/etc/cvmfs` |
-| `datalad` | [DataLad](https://www.datalad.org), datalad-container and git-annex | `/opt/datalad`, commands `datalad`, `git-annex` |
-| `code-server` | [code-server](https://github.com/coder/code-server) (VS Code in the browser), opened from the **VS Code** launcher tile | `/opt/code-server`, command `code-server` |
+| `vscode-coding-agents` | Claude Code and Codex VS Code extensions | `/usr/local/share/code-server/extensions` |
 | `neurodesk-agents` | Neurodesk's defaults for the base's coding agents: instructions for working with Neurodesk tools, and the Neurodesk model provider for OpenCode | `/opt/neurodesk-agents` |
-| `vscode-core`, `vscode-niivue`, `vscode-coding-agents` | the eight VS Code extensions neurodesktop gives its users, split for reuse ([VS Code](#vs-code)) | `/usr/local/share/code-server/extensions` |
-| `scigethelpers-cli` | the [`scigethelpers` command](#the-scigethelpers-command): `cite`, `kernel`, `check`, `info` | `/opt/scigethelpers-cli`, command `scigethelpers` |
-
-`code-server`, `vscode-core`, `vscode-niivue`, `vscode-coding-agents`,
-`scigethelpers-cli` and `datalad` are reusable across domain
-images. `sciget-neuroimaging`, `neurodesk-cvmfs` and `neurodesk-agents` hold
-everything that is specific to Neurodesk.
+| `neuroimaging-env` | the `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`, `datalad`, `datalad-osf`, `osfclient`, `xnat`, `watermark`, `nf-core`) | `/opt/neuroimaging-env`, `/usr/local/share/jupyter/kernels/neuroimaging` |
+| `neurodesk-compat` | FreeSurfer (`APPTAINERENV_SUBJECTS_DIR`) and `nf-neuro` (`NF_NEURO_MODULES_DIR`) defaults, pinned `/opt/nf-neuro/modules`, local `/neurodesktop-storage/containers/modules` discovery, and `~/getting-started.ipynb` | `/opt/nf-neuro/modules`, `/etc/scidesktop/home-defaults/getting-started.ipynb` |
 
 ## Using the tools
 
@@ -130,9 +132,10 @@ it does not show them.
 | `scigethelpers kernel add <module>` | registers the Python inside a tool's container as a notebook kernel; `list` and `remove` manage them |
 | `scigethelpers check [cvmfs\|gpu\|slurm]` | read-only checks, each `PASS`, `FAIL` or `SKIP` |
 | `scigethelpers info` | the image's components, the session's CPUs and memory, GPUs and the CVMFS server |
+| `scigethelpers uv <init\|add\|list\|remove>` | manages user `uv` virtual environments and registers them as Jupyter kernels |
 
 `scigethelpers <command> --help` has each command's options. The standalone
-commands `scigethelpers-cite` and `scigethelpers-kernel` work too.
+commands `scigethelpers-cite`, `scigethelpers-kernel` and `scigethelpers-uv` work too.
 
 `scigethelpers cite` knows what was loaded because Lmod records it: the
 component sets `LMOD_PACKAGE_PATH` to a site package that appends one line
@@ -144,7 +147,7 @@ catalogs (`/etc/sciget/catalogs.json` and `~/.config/sciget/catalogs.json`).
 `scigethelpers kernel add` needs the module's commands to be container
 wrappers and a container with `ipykernel`.
 
-The commands neurodesktop has and this image does not: `uv`, `jobs`,
+The commands neurodesktop has and this image does not: `jobs`,
 `update`, `test`, `t3`, `agent preflight`, `astra` and `lightcone
 materialize`. Each depends on a part of neurodesktop that was not ported
 ([Not in this change](#not-in-this-change)).
@@ -255,20 +258,15 @@ earlier review of what belongs in the base is in
 
 ## Not in this change
 
-Each of these is a follow-up of its own. None blocks using the image.
+Each of these is deliberately left out or deferred:
 
-| neurodesktop | Why it waits |
+| neurodesktop | Why |
 | --- | --- |
-| A neuroimaging Python kernel (`nipype`, `nibabel`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`) | A kernel component with a large lock, like `ai-ready`'s. It needs its own review |
-| Notebook Intelligence | A second chat panel with patches of its own |
-| `jupyterlab-slurm`, the Slurm panel in JupyterLab | A JupyterLab extension neurodesktop builds from source and patches |
-| SSH into the session (`openssh-server`, `jupyter-sshd-proxy`) | A system service and a server extension |
-| `neurodesk uv`, `jobs`, `update`, `test`, `t3`, `agent preflight`, `astra`, `lightcone materialize` | Each needs a part of neurodesktop that is not here: uv environments, remote jobs, the application menu, the installed test suite, Tailscale, ASTRA |
-| Nextflow, nf-test, Snakemake, TinyTeX | Generic, and deliverable as sciget containers |
-| Firefox, rclone, sshfs, davfs2, s3fs, Nextcloud client | apt packages belong to the OS component, which every image shares |
-| ASTRA and Lightcone tools | New in neurodesktop and still changing |
-| The getting-started notebook tile, the launcher's categories and banner | Part of neurodesktop's launcher extension |
-| VirtualGL | Hooks into applications' graphics calls; needs GPU testing |
+| Notebook Intelligence | A second chat panel with patches of its own; Jupyter AI covers chat |
+| SSH into the session (`openssh-server`, `jupyter-sshd-proxy`) | Needs a separate SSH daemon and port/auth surface |
+| `neurodesk jobs`, `update`, `test`, `t3`, `agent preflight`, `astra`, `lightcone materialize` | Tied to remote-job/Tailscale/ASTRA/Lightcone workflows outside scidesktop |
+| TinyTeX, Firefox, Nextcloud GUI client | Deliverable as user installs or sciget containers |
+| ASTRA and Lightcone tools | Neurodesk-hosted preview tooling |
 
 ### Brain Researcher
 

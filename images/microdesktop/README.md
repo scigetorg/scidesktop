@@ -30,15 +30,14 @@ Open <http://localhost:8888/lab?token=microdesktop>. In a terminal:
 
 ## What is here
 
-Only the assembly: this image is scidesktop (which already includes the
-NiiVue/FreeBrowse viewers, coding agents, ACP adapters, T3 Code and T3 Connect)
-plus components from `components/`. Any other image can copy the same ones.
+Only the assembly: this image is `scidesktop` (which already includes Slurm +
+`jupyterlab-slurm`, VS Code with `vscode-core` and `vscode-niivue`, DataLad,
+workflow engines, VirtualGL, `scigethelpers`, the NiiVue/FreeBrowse viewers,
+coding agents, ACP adapters, T3 Code and T3 Connect) plus `sciget-microscopy`.
 
 | Component | What it adds |
 | --- | --- |
 | `sciget-microscopy` | narrows sciget to the microscopy catalog |
-| `code-server`, `vscode-core`, `vscode-niivue` | VS Code in the browser with Python, Jupyter, GitHub PRs, CSV, Slurm and NiiVue extensions |
-| `scigethelpers-cli` | the `scigethelpers` command (`cite`, `kernel`, `check`, `info`) |
 
 The microscopy tools are whatever the catalog publishes; none is listed in
 this repository. See [docs/images.md](../../docs/images.md) for what an image

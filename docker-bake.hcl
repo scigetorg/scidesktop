@@ -132,6 +132,22 @@ variable "VSCODE_NIIVUE_SHA256" { default = "df0a0ed8a644ff07c59cb601dbd726be536
 variable "VSCODE_SLURM_VERSION" { default = "0.17.0" }
 variable "VSCODE_SLURM_SHA256" { default = "7b32d4bb9c4849eaf9a2b8c1807dd7aef32ca7bb5ddee7ae15278d5e788aad4b" }
 
+# VirtualGL for opt-in GPU-accelerated OpenGL rendering via headless EGL
+# (components/virtualgl).
+# renovate: datasource=github-releases depName=VirtualGL/virtualgl
+variable "VIRTUALGL_VERSION" { default = "3.1.5" }
+variable "VIRTUALGL_SHA256_AMD64" { default = "df3f7788ce41b182a47c0d298e5cd6d2d63579522cb41825970b7726e825485e" }
+variable "VIRTUALGL_SHA256_ARM64" { default = "9ac238e8a18c06d84ef65444a591a7a5bb4c4ce9e8cfdd92f8a2aea35edbb5d7" }
+
+# Scientific workflow engines (components/workflow-engines): Nextflow
+# (offline fat executable) and nf-test (JAR). Snakemake is locked via conda/pip.
+# renovate: datasource=github-releases depName=nextflow-io/nextflow extractVersion=^v(?<version>.*)$
+variable "NEXTFLOW_VERSION" { default = "26.10.7" }
+variable "NEXTFLOW_SHA256" { default = "c54cd4b7be058e8954180b378a8efa6d61085bc433d7d9b06ec2cad2ad6580a6" }
+# renovate: datasource=github-releases depName=askimed/nf-test extractVersion=^v(?<version>.*)$
+variable "NF_TEST_VERSION" { default = "0.9.5" }
+variable "NF_TEST_SHA256" { default = "b7679eb90cdc9642bfa89e9634db02ce6e699de53ad35ef0e2f4847634fc1641" }
+
 # The notebook user, set in the OS layer and used by components that own files.
 variable "NB_USER" { default = "jovyan" }
 variable "NB_UID" { default = "1000" }
@@ -163,6 +179,16 @@ variable "AI_READY_SRC" { default = "https://github.com/IntersectAustralia/ai-re
 # release, at this commit (Renovate tracks its main branch).
 variable "FREEBROWSE_COMMIT" { default = "5f64059c81b7b9eb01ca6a0d261aeb17d27053d2" }
 variable "FREEBROWSE_SRC" { default = "https://github.com/neurodesk/freebrowse.git#${FREEBROWSE_COMMIT}" }
+
+# Slurm Queue Manager extension for JupyterLab (NERSC/jupyterlab-slurm,
+# BSD-3-Clause), built from a pinned commit (Renovate tracks its main branch).
+variable "JUPYTERLAB_SLURM_COMMIT" { default = "8dccb39808f8a1b77712a9a5773a7d2601a56683" }
+variable "JUPYTERLAB_SLURM_SRC" { default = "https://github.com/NERSC/jupyterlab-slurm.git#${JUPYTERLAB_SLURM_COMMIT}" }
+
+# nf-neuro Nextflow modules for neuroimaging pipelines (neurodesk-compat),
+# cloned at a pinned commit (Renovate tracks its main branch).
+variable "NF_NEURO_MODULES_COMMIT" { default = "98234c97094e4632b5c910141ae34c779196b2fb" }
+variable "NF_NEURO_MODULES_SRC" { default = "https://github.com/nf-neuro/modules.git#${NF_NEURO_MODULES_COMMIT}" }
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
@@ -198,6 +224,11 @@ group "test" {
     "vscode-core-test",
     "vscode-niivue-test",
     "vscode-coding-agents-test",
+    "virtualgl-test",
+    "jupyterlab-slurm-test",
+    "workflow-engines-test",
+    "neuroimaging-env-test",
+    "neurodesk-compat-test",
   ]
 }
 
@@ -749,6 +780,101 @@ target "scigethelpers-cli-test" {
   output   = ["type=cacheonly"]
 }
 
+# VirtualGL for opt-in GPU-accelerated OpenGL rendering via headless EGL
+# (included in scidesktop).
+target "virtualgl" {
+  inherits = ["_component"]
+  context  = "components/virtualgl"
+  target   = "component"
+  args = {
+    VIRTUALGL_VERSION      = VIRTUALGL_VERSION
+    VIRTUALGL_SHA256_AMD64 = VIRTUALGL_SHA256_AMD64
+    VIRTUALGL_SHA256_ARM64 = VIRTUALGL_SHA256_ARM64
+  }
+}
+
+target "virtualgl-test" {
+  inherits = ["virtualgl"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Slurm Queue Manager extension for JupyterLab (included in scidesktop).
+target "jupyterlab-slurm" {
+  inherits = ["_component"]
+  context  = "components/jupyterlab-slurm"
+  target   = "component"
+  contexts = {
+    jupyter-env          = "target:jupyter-env"
+    jupyterlab-slurm-src = JUPYTERLAB_SLURM_SRC
+  }
+  args = {
+    NODE_VERSION            = NODE_VERSION
+    JUPYTERLAB_SLURM_COMMIT = JUPYTERLAB_SLURM_COMMIT
+  }
+}
+
+target "jupyterlab-slurm-test" {
+  inherits = ["jupyterlab-slurm"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Generic scientific workflow engines: Nextflow, nf-test and Snakemake
+# (included in scidesktop).
+target "workflow-engines" {
+  inherits = ["_component"]
+  context  = "components/workflow-engines"
+  target   = "component"
+  args = {
+    NEXTFLOW_VERSION = NEXTFLOW_VERSION
+    NEXTFLOW_SHA256  = NEXTFLOW_SHA256
+    NF_TEST_VERSION  = NF_TEST_VERSION
+    NF_TEST_SHA256   = NF_TEST_SHA256
+  }
+}
+
+target "workflow-engines-test" {
+  inherits = ["workflow-engines"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: neuroimaging Python analysis kernel (nibabel, nipype, niwrap,
+# pydra, nipoppy, ipyniivue, datalad, xnat, nf-core). Copied by neurodesktop.
+target "neuroimaging-env" {
+  inherits = ["_component"]
+  context  = "components/neuroimaging-env"
+  target   = "component"
+}
+
+target "neuroimaging-env-test" {
+  inherits = ["neuroimaging-env"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: Neurodesk neuroimaging compatibility layer (FreeSurfer env
+# defaults, nf-neuro modules, local container module discovery, getting-started
+# notebook). Copied by neurodesktop.
+target "neurodesk-compat" {
+  inherits = ["_component"]
+  context  = "components/neurodesk-compat"
+  target   = "component"
+  contexts = {
+    nf-neuro-src = NF_NEURO_MODULES_SRC
+  }
+  args = {
+    NF_NEURO_MODULES_COMMIT = NF_NEURO_MODULES_COMMIT
+  }
+}
+
+target "neurodesk-compat-test" {
+  inherits = ["neurodesk-compat"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # --- Images -----------------------------------------------------------------
 
 # The base: the components assembled on the OS layer.
@@ -764,6 +890,14 @@ target "scidesktop" {
     lmod                  = "target:lmod"
     sciget                = "target:sciget"
     slurm                 = "target:slurm"
+    virtualgl             = "target:virtualgl"
+    datalad               = "target:datalad"
+    code-server           = "target:code-server"
+    vscode-core           = "target:vscode-core"
+    vscode-niivue         = "target:vscode-niivue"
+    scigethelpers-cli     = "target:scigethelpers-cli"
+    jupyterlab-slurm      = "target:jupyterlab-slurm"
+    workflow-engines      = "target:workflow-engines"
     sciget-all            = "target:sciget-all"
     jupyterlab-niivue     = "target:jupyterlab-niivue"
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
@@ -785,10 +919,6 @@ target "microdesktop" {
   contexts = {
     scidesktop-base   = "target:scidesktop"
     sciget-microscopy = "target:sciget-microscopy"
-    code-server       = "target:code-server"
-    vscode-core       = "target:vscode-core"
-    vscode-niivue     = "target:vscode-niivue"
-    scigethelpers-cli = "target:scigethelpers-cli"
   }
   tags   = [MICRODESKTOP_IMAGE]
   output = ["type=docker"]
@@ -815,13 +945,10 @@ target "neurodesktop" {
     scidesktop-base      = "target:scidesktop"
     sciget-neuroimaging  = "target:sciget-neuroimaging"
     neurodesk-cvmfs      = "target:neurodesk-cvmfs"
-    datalad              = "target:datalad"
-    code-server          = "target:code-server"
-    vscode-core          = "target:vscode-core"
-    vscode-niivue        = "target:vscode-niivue"
     vscode-coding-agents = "target:vscode-coding-agents"
     neurodesk-agents     = "target:neurodesk-agents"
-    scigethelpers-cli    = "target:scigethelpers-cli"
+    neuroimaging-env     = "target:neuroimaging-env"
+    neurodesk-compat     = "target:neurodesk-compat"
   }
   tags   = [NEURODESKTOP_IMAGE]
   output = ["type=docker"]
