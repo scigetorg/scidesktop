@@ -120,6 +120,65 @@ args=("http://127.0.0.1:${PORT}" "${TOKEN}")
 if docker exec "${NAME}" test -f /opt/scidesktop/manifest.d/code-server.json 2>/dev/null; then
     args+=("--has-vscode")
 fi
+if docker exec "${NAME}" test -f /opt/scidesktop/manifest.d/jupyterlab-niivue.json 2>/dev/null; then
+    args+=("--has-niivue")
+fi
+if docker exec "${NAME}" test -f /opt/scidesktop/manifest.d/jupyterlab-neuroglancer.json 2>/dev/null; then
+    # Seed a synthetic 32x32x32 uint8 OME-Zarr v0.4 volume so Neuroglancer
+    # renders real 3D microscopy slices from /files/ behind Jupyter's login.
+    docker exec -i -u jovyan "${NAME}" /opt/conda/bin/python3 - <<'PY' || { echo "  FAIL  could not seed smoke_micro.ome.zarr"; exit 1; }
+import json, pathlib
+
+root = pathlib.Path("/home/jovyan/smoke_micro.ome.zarr")
+(root / "0").mkdir(parents=True, exist_ok=True)
+(root / ".zgroup").write_text(json.dumps({"zarr_format": 2}))
+(root / ".zattrs").write_text(json.dumps({
+    "multiscales": [{
+        "version": "0.4",
+        "name": "smoke_micro",
+        "axes": [
+            {"name": "z", "type": "space", "unit": "micrometer"},
+            {"name": "y", "type": "space", "unit": "micrometer"},
+            {"name": "x", "type": "space", "unit": "micrometer"},
+        ],
+        "datasets": [{
+            "path": "0",
+            "coordinateTransformations": [{"type": "scale", "scale": [1.0, 1.0, 1.0]}],
+        }],
+    }],
+    "omero": {
+        "channels": [{
+            "active": True,
+            "color": "00FF88",
+            "label": "GFP",
+            "window": {"start": 0, "end": 255, "min": 0, "max": 255},
+        }],
+    },
+}))
+nx, ny, nz = 32, 32, 32
+(root / "0" / ".zarray").write_text(json.dumps({
+    "zarr_format": 2,
+    "shape": [nz, ny, nx],
+    "chunks": [nz, ny, nx],
+    "dtype": "|u1",
+    "compressor": None,
+    "fill_value": 0,
+    "order": "C",
+    "filters": None,
+}))
+cx, cy, cz, r2 = nx / 2.0, ny / 2.0, nz / 2.0, 12.0 ** 2
+buf = bytearray(nx * ny * nz)
+off = 0
+for z in range(nz):
+    for y in range(ny):
+        for x in range(nx):
+            d2 = (x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2
+            buf[off] = int(255.0 * (1.0 - d2 / r2)) if d2 < r2 else 0
+            off += 1
+(root / "0" / "0.0.0").write_bytes(buf)
+PY
+    args+=("--has-neuroglancer")
+fi
 if docker exec "${NAME}" test -f /opt/scidesktop/manifest.d/neuroimaging-env.json 2>/dev/null; then
     # Seed a notebook with two ipyniivue.NiiVue() widgets on the neuroimaging kernel.
     docker exec -i -u jovyan "${NAME}" /opt/conda/bin/python3 - <<'PY' || { echo "  FAIL  could not seed smoke_ipyniivue.ipynb"; exit 1; }

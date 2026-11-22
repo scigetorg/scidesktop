@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # scidesktop: JupyterLab, an IceWM desktop streamed by Selkies, Apptainer, Lmod,
-# sciget (all domain catalogs), Slurm, NiiVue/FreeBrowse viewers, coding agents,
+# sciget (all domain catalogs), Slurm, FreeBrowse viewer, coding agents,
 # ACP adapters, T3 Code and T3 Connect on the OS layer. Built with
 # `docker buildx bake`; every component is a named context (see docker-bake.hcl
 # and docs/components.md). Domain images in images/ build FROM this one
@@ -28,12 +28,10 @@ COPY --link --from=virtualgl / /
 COPY --link --from=datalad / /
 COPY --link --from=code-server / /
 COPY --link --from=vscode-core / /
-COPY --link --from=vscode-niivue / /
 COPY --link --from=scigethelpers-cli / /
 COPY --link --from=jupyterlab-slurm / /
 COPY --link --from=workflow-engines / /
 COPY --link --from=sciget-all / /
-COPY --link --from=jupyterlab-niivue / /
 COPY --link --from=jupyterlab-freebrowse / /
 COPY --link --from=coding-agents / /
 COPY --link --from=acp-adapters / /

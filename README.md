@@ -59,10 +59,10 @@ enough for a large virtual screen.
 
 | Image | Folder | What it adds |
 |---|---|---|
-| scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below, including all sciget domains (`sciget-all`), Slurm + `jupyterlab-slurm`, VS Code (`code-server`, `vscode-core`, `vscode-niivue`), DataLad, workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, `scigethelpers`, the [NiiVue and FreeBrowse viewers](docs/viewers.md), and the [coding agents, Jupyter AI ACP adapters, T3 Code and T3 Connect](docs/coding-agents.md) |
-| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: narrows sciget to the microscopy tools (`sciget-microscopy`); inherits every generic feature (Slurm, VS Code, DataLad, workflow engines, VirtualGL, `scigethelpers`, viewers, coding agents) from `scidesktop` |
+| scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below, including all sciget domains (`sciget-all`), Slurm + `jupyterlab-slurm`, VS Code (`code-server`, `vscode-core`), DataLad, workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, `scigethelpers`, the [FreeBrowse viewer](docs/viewers.md), and the [coding agents, Jupyter AI ACP adapters, T3 Code and T3 Connect](docs/coding-agents.md) |
+| microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: narrows sciget to the microscopy tools (`sciget-microscopy`) and adds [Neuroglancer](docs/viewers.md) (`jupyterlab-neuroglancer`) for OME-Zarr, N5, Precomputed and microscopy volumes; inherits every generic feature from `scidesktop` |
 | aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL, with the neuroimaging catalog |
-| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): narrows sciget to neuroimaging, and adds the Neurodesk CVMFS config, the neuroimaging Python kernel (`neuroimaging-env`), the Neurodesk compatibility layer (`neurodesk-compat`), Claude Code/Codex VS Code extensions (`vscode-coding-agents`) and Neurodesk's coding-agent defaults |
+| neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): narrows sciget to neuroimaging, and adds the Neurodesk CVMFS config, [NiiVue](docs/viewers.md) (`jupyterlab-niivue`, `vscode-niivue`), the neuroimaging Python kernel (`neuroimaging-env`), the Neurodesk compatibility layer (`neurodesk-compat`), Claude Code/Codex VS Code extensions (`vscode-coding-agents`) and Neurodesk's coding-agent defaults |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
 [docker-stacks](https://github.com/jupyter/docker-stacks) images. Bake builds the
@@ -85,13 +85,13 @@ commit's short SHA, the date and `latest`.
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget with all domain catalogs (`sciget-all`) by default |
 | Modules | Lmod, built from the upstream release |
-| Viewers | [NiiVue and FreeBrowse](docs/viewers.md) for NIfTI files in JupyterLab, at `/opt/jupyterlab-niivue` and `/opt/jupyterlab-freebrowse` |
+| Viewers | [FreeBrowse](docs/viewers.md) in base (`/opt/jupyterlab-freebrowse`), plus [Neuroglancer](docs/viewers.md) on `microdesktop` and [NiiVue](docs/viewers.md) on `neurodesktop` |
 | Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
 | AI chat | [Jupyter AI](docs/jupyter-ai.md) in JupyterLab with OpenCode, Codex and Claude personas (`acp-adapters`). No model, key or endpoint comes with it |
 | T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code` |
 | T3 Connect | [Remote access](docs/t3-connect.md) to T3 Code from the T3 apps, through T3's relay. Off until the user sets it up; at `/opt/t3-connect` |
 | Batch jobs | A [Slurm queue](docs/slurm.md) for the session (`sbatch`, `srun`) plus the `jupyterlab-slurm` Queue Manager extension in JupyterLab |
-| VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile, with `vscode-core` and `vscode-niivue` preinstalled |
+| VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile, with `vscode-core` preinstalled (plus `vscode-niivue` and `vscode-coding-agents` on `neurodesktop`) |
 | Data & workflows | DataLad (`datalad-container`, `datalad-osf`, `osf`) and git-annex at `/opt/datalad`; Nextflow, nf-test and Snakemake (+ Slurm executor plugin) at `/opt/workflow-engines`; `rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`, `gh` |
 | Helper CLI | The `scigethelpers` command (`cite`, `kernel`, `check`, `info`, `uv`) at `/opt/scigethelpers-cli` |
 

@@ -637,6 +637,20 @@
       "currentValueTemplate": "main"
     },
     {
+      "description": "Google Neuroglancer standalone web client commit.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"NEUROGLANCER_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "neuroglancer",
+      "packageNameTemplate": "https://github.com/google/neuroglancer",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "master"
+    },
+    {
       "description": "NERSC jupyterlab-slurm commit; the build stops if the patched identity lookup moved.",
       "customType": "regex",
       "managerFilePatterns": [

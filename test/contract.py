@@ -54,6 +54,8 @@ NOT_RENOVATED = {
     "AI_READY_SRC": "built from AI_READY_COMMIT",
     "FREEBROWSE_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "FREEBROWSE_SRC": "built from FREEBROWSE_COMMIT",
+    "NEUROGLANCER_COMMIT": "tracked by its own Renovate rule (git-refs on master)",
+    "NEUROGLANCER_SRC": "built from NEUROGLANCER_COMMIT",
     "JUPYTERLAB_SLURM_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "JUPYTERLAB_SLURM_SRC": "built from JUPYTERLAB_SLURM_COMMIT",
     "NF_NEURO_MODULES_COMMIT": "tracked by its own Renovate rule (git-refs on main)",

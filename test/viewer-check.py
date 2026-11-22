@@ -3,7 +3,7 @@
 notebook server, under a nested URL. Called by viewer-smoke.sh and by the
 viewer components' tests.
 
-    viewer-check.py <base url> <token> <jupyterlab-niivue|jupyterlab-freebrowse>
+    viewer-check.py <base url> <token> <jupyterlab-niivue|jupyterlab-freebrowse|jupyterlab-neuroglancer>
 
 Standard library only. It checks what JupyterLab needs to open a file in the
 viewer: the extension is offered to the page, its code and the viewer's own
@@ -27,7 +27,11 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 BASE, TOKEN, VIEWER = sys.argv[1:4]
 BASE_PATH = urlsplit(BASE).path
 # The JupyterLab extension each component ships.
-EXTENSIONS = {"jupyterlab-niivue": "@niivue/jupyter", "jupyterlab-freebrowse": "jupyterlab-freebrowse"}
+EXTENSIONS = {
+    "jupyterlab-niivue": "@niivue/jupyter",
+    "jupyterlab-freebrowse": "jupyterlab-freebrowse",
+    "jupyterlab-neuroglancer": "jupyterlab-neuroglancer",
+}
 FAILED = 0
 
 
@@ -101,6 +105,60 @@ if VIEWER == "jupyterlab-freebrowse":
     # Only the viewer's packaged files are served there, never the home.
     status, _, _ = fetch("freebrowse/..%2F..%2F..%2F..%2Fetc%2Fpasswd")
     check(status in (403, 404), "FreeBrowse serves nothing outside its own files", status)
+
+if VIEWER == "jupyterlab-neuroglancer":
+    # Neuroglancer is served at <session URL>/neuroglancer/ behind Jupyter's login.
+    status, headers, _ = fetch("neuroglancer")
+    check(status in (301, 302) and headers.get("Location", "").endswith("/neuroglancer/"),
+          "Neuroglancer redirects /neuroglancer to /neuroglancer/", f"{status} {headers.get('Location')}")
+    status, headers, body = fetch("neuroglancer/")
+    page = body.decode(errors="replace")
+    scripts = re.findall(r'src="([^"]+\.js)"', page)
+    check(status == 200 and "text/html" in headers.get("Content-Type", "") and scripts,
+          "Neuroglancer's page is served at neuroglancer/", status)
+    for script in scripts[:2]:
+        status, headers, body = fetch("neuroglancer/" + script.lstrip("./"))
+        check(status == 200 and "javascript" in headers.get("Content-Type", "") and body,
+              f"Neuroglancer loads {script} from the session's path", status)
+    status, _, _ = fetch("neuroglancer/", authenticated=False)
+    check(status in (302, 403), "Neuroglancer needs the notebook server's login", status)
+    status, _, _ = fetch("neuroglancer/..%2F..%2F..%2F..%2Fetc%2Fpasswd")
+    check(status in (403, 404), "Neuroglancer serves nothing outside its own files", status)
+
+    # Verify a minimal OME-Zarr v0.4 store (including hidden .zgroup/.zattrs/.zarray
+    # dotfiles and raw chunk bytes) is served cleanly via /files/ behind auth.
+    zarr_dir = "jupyterlab-neuroglancer-smoke.ome.zarr"
+    fetch("api/contents/" + quote(zarr_dir), method="PUT", data=json.dumps({"type": "directory"}).encode())
+    fetch("api/contents/" + quote(f"{zarr_dir}/0"), method="PUT", data=json.dumps({"type": "directory"}).encode())
+    zattrs = json.dumps({"multiscales": [{"version": "0.4", "datasets": [{"path": "0"}]}]}).encode()
+    zarray = json.dumps({
+        "zarr_format": 2, "shape": [4, 4, 4], "chunks": [4, 4, 4],
+        "dtype": "|u1", "compressor": None, "fill_value": 0, "order": "C", "filters": None,
+    }).encode()
+    chunk = bytes(range(64))
+    files_to_put = [
+        (f"{zarr_dir}/.zgroup", b'{"zarr_format": 2}'),
+        (f"{zarr_dir}/.zattrs", zattrs),
+        (f"{zarr_dir}/0/.zarray", zarray),
+        (f"{zarr_dir}/0/0.0.0", chunk),
+    ]
+    all_saved = True
+    for rel, raw in files_to_put:
+        st, _, _ = fetch("api/contents/" + quote(rel), method="PUT", data=json.dumps(
+            {"type": "file", "format": "base64", "content": base64.b64encode(raw).decode()}).encode())
+        if st not in (200, 201):
+            all_saved = False
+    if check(all_saved, "an OME-Zarr store is saved in the home"):
+        st1, _, b1 = fetch("files/" + quote(f"{zarr_dir}/.zattrs"))
+        st2, _, b2 = fetch("files/" + quote(f"{zarr_dir}/0/0.0.0"))
+        check(st1 == 200 and b1 == zattrs and st2 == 200 and b2 == chunk,
+              "OME-Zarr dotfiles and chunk bytes return unchanged from /files/", f"{st1}/{st2}")
+        st_unauth, _, _ = fetch("files/" + quote(f"{zarr_dir}/.zattrs"), authenticated=False)
+        check(st_unauth in (302, 403), "OME-Zarr files need the notebook server's login", st_unauth)
+        for rel, _ in reversed(files_to_put):
+            fetch("api/contents/" + quote(rel), method="DELETE")
+        fetch("api/contents/" + quote(f"{zarr_dir}/0"), method="DELETE")
+        fetch("api/contents/" + quote(zarr_dir), method="DELETE")
 
 # The viewer opens a file by downloading it from the notebook server.
 name = f"{VIEWER}-smoke.nii.gz"

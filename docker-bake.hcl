@@ -180,6 +180,11 @@ variable "AI_READY_SRC" { default = "https://github.com/IntersectAustralia/ai-re
 variable "FREEBROWSE_COMMIT" { default = "5f64059c81b7b9eb01ca6a0d261aeb17d27053d2" }
 variable "FREEBROWSE_SRC" { default = "https://github.com/neurodesk/freebrowse.git#${FREEBROWSE_COMMIT}" }
 
+# Google Neuroglancer standalone web client (Apache-2.0, v2.41.2) for OME-Zarr,
+# N5, Precomputed, NIfTI and mesh datasets on microdesktop (Renovate tracks master).
+variable "NEUROGLANCER_COMMIT" { default = "e13f1f4c62918f2ea07b12f2116bdcb6767b1499" }
+variable "NEUROGLANCER_SRC" { default = "https://github.com/google/neuroglancer.git#${NEUROGLANCER_COMMIT}" }
+
 # Slurm Queue Manager extension for JupyterLab (NERSC/jupyterlab-slurm,
 # BSD-3-Clause), built from a pinned commit (Renovate tracks its main branch).
 variable "JUPYTERLAB_SLURM_COMMIT" { default = "8dccb39808f8a1b77712a9a5773a7d2601a56683" }
@@ -210,6 +215,7 @@ group "test" {
     "sciget-microscopy-test",
     "jupyterlab-niivue-test",
     "jupyterlab-freebrowse-test",
+    "jupyterlab-neuroglancer-test",
     "micromamba-test",
     "ai-ready-test",
     "coding-agents-test",
@@ -499,6 +505,28 @@ target "jupyterlab-freebrowse" {
 
 target "jupyterlab-freebrowse-test" {
   inherits = ["jupyterlab-freebrowse"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: Neuroglancer viewer for OME-Zarr, N5, Precomputed, NIfTI and mesh
+# datasets. Copied by microdesktop.
+target "jupyterlab-neuroglancer" {
+  inherits = ["_component"]
+  context  = "components/jupyterlab-neuroglancer"
+  target   = "component"
+  contexts = {
+    jupyter-env      = "target:jupyter-env"
+    neuroglancer-src = NEUROGLANCER_SRC
+  }
+  args = {
+    NODE_VERSION        = NODE_VERSION
+    NEUROGLANCER_COMMIT = NEUROGLANCER_COMMIT
+  }
+}
+
+target "jupyterlab-neuroglancer-test" {
+  inherits = ["jupyterlab-neuroglancer"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -897,12 +925,10 @@ target "scidesktop" {
     datalad               = "target:datalad"
     code-server           = "target:code-server"
     vscode-core           = "target:vscode-core"
-    vscode-niivue         = "target:vscode-niivue"
     scigethelpers-cli     = "target:scigethelpers-cli"
     jupyterlab-slurm      = "target:jupyterlab-slurm"
     workflow-engines      = "target:workflow-engines"
     sciget-all            = "target:sciget-all"
-    jupyterlab-niivue     = "target:jupyterlab-niivue"
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
     coding-agents         = "target:coding-agents"
     acp-adapters          = "target:acp-adapters"
@@ -920,8 +946,9 @@ target "microdesktop" {
   inherits = ["_common"]
   context  = "images/microdesktop"
   contexts = {
-    scidesktop-base   = "target:scidesktop"
-    sciget-microscopy = "target:sciget-microscopy"
+    scidesktop-base         = "target:scidesktop"
+    sciget-microscopy       = "target:sciget-microscopy"
+    jupyterlab-neuroglancer = "target:jupyterlab-neuroglancer"
   }
   tags   = [MICRODESKTOP_IMAGE]
   output = ["type=docker"]
@@ -948,7 +975,9 @@ target "neurodesktop" {
     scidesktop-base      = "target:scidesktop"
     sciget-neuroimaging  = "target:sciget-neuroimaging"
     neurodesk-cvmfs      = "target:neurodesk-cvmfs"
+    vscode-niivue        = "target:vscode-niivue"
     vscode-coding-agents = "target:vscode-coding-agents"
+    jupyterlab-niivue    = "target:jupyterlab-niivue"
     neurodesk-agents     = "target:neurodesk-agents"
     neuroimaging-env     = "target:neuroimaging-env"
     neurodesk-compat     = "target:neurodesk-compat"

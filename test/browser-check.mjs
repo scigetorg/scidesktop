@@ -14,10 +14,12 @@ import zlib from "node:zlib";
 const BASE_URL = (process.argv[2] || "").replace(/\/+$/, "");
 const TOKEN = process.argv[3] || "";
 const HAS_VSCODE = process.argv.includes("--has-vscode");
+const HAS_NIIVUE = process.argv.includes("--has-niivue");
+const HAS_NEUROGLANCER = process.argv.includes("--has-neuroglancer");
 const HAS_NEUROIMAGING = process.argv.includes("--has-neuroimaging");
 
 if (!BASE_URL || !TOKEN) {
-  console.error("usage: browser-check.mjs <base-url> <token> [--has-vscode] [--has-neuroimaging]");
+  console.error("usage: browser-check.mjs <base-url> <token> [--has-vscode] [--has-niivue] [--has-neuroglancer] [--has-neuroimaging]");
   process.exit(2);
 }
 
@@ -175,16 +177,16 @@ async function openTab(cdp) {
       }
       return res.result?.value;
     },
-    async clickAt(x, y, clicks = 1) {
+    async clickAt(x, y, clicks = 1, button = "left") {
       for (let i = 1; i <= clicks; i++) {
         await cdp.send("Input.dispatchMouseEvent", {
           type: "mouseMoved", x, y,
         }, sessionId);
         await cdp.send("Input.dispatchMouseEvent", {
-          type: "mousePressed", x, y, button: "left", clickCount: i,
+          type: "mousePressed", x, y, button, clickCount: i,
         }, sessionId);
         await cdp.send("Input.dispatchMouseEvent", {
-          type: "mouseReleased", x, y, button: "left", clickCount: i,
+          type: "mouseReleased", x, y, button, clickCount: i,
         }, sessionId);
         if (i < clicks) await new Promise((r) => setTimeout(r, 60));
       }
@@ -335,6 +337,13 @@ async function main() {
           fail('launcher offers "VS Code" tile', `saw: ${launcher.cards.join(", ")}`);
         }
       }
+      if (HAS_NEUROGLANCER) {
+        if (launcher.cards.some((c) => c.toLowerCase().includes("neuroglancer"))) {
+          pass('launcher offers "Neuroglancer" tile');
+        } else {
+          fail('launcher offers "Neuroglancer" tile', `saw: ${launcher.cards.join(", ")}`);
+        }
+      }
     } else {
       fail("JupyterLab rendered launcher");
     }
@@ -347,38 +356,88 @@ async function main() {
     if (webgl2) pass(`WebGL2 active (${webgl2})`);
     else fail("WebGL2 active in headless Chrome");
 
-    // 2. NiiVue WebGL2 rendering: ensure file browser is visible, double-click smoke_brain.nii.gz
-    await lab.eval(`(() => {
-      const tab = document.querySelector('.jp-SideBar [data-id="filebrowser"]');
-      if (tab && !tab.classList.contains('lm-mod-current')) tab.click();
-    })()`);
-    const filePt = await lab.waitFor(`(() => {
-      const node = [...document.querySelectorAll('.jp-DirListing-itemText')]
-        .find(n => (n.textContent || '').includes('smoke_brain.nii.gz'));
-      if (!node) return null;
-      node.scrollIntoView({ block: 'center' });
-      const r = node.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return null;
-      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
-    })()`, 30000);
-
-    if (filePt) {
-      await lab.clickAt(filePt.x, filePt.y, 2);
-      const niivueRect = await lab.waitFor(`(() => {
-        const el = document.querySelector('.jp-NiivueWidget iframe');
-        if (!el) return null;
-        const r = el.getBoundingClientRect();
-        if (r.width < 150 || r.height < 150) return null;
-        return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+    // 2. Domain viewers inside JupyterLab (NiiVue on neurodesktop; Neuroglancer OME-Zarr on microdesktop)
+    if (HAS_NIIVUE) {
+      await lab.eval(`(() => {
+        const tab = document.querySelector('.jp-SideBar [data-id="filebrowser"]');
+        if (tab && !tab.classList.contains('lm-mod-current')) tab.click();
+      })()`);
+      const filePt = await lab.waitFor(`(() => {
+        const node = [...document.querySelectorAll('.jp-DirListing-itemText')]
+          .find(n => (n.textContent || '').includes('smoke_brain.nii.gz'));
+        if (!node) return null;
+        node.scrollIntoView({ block: 'center' });
+        const r = node.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) return null;
+        return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
       })()`, 30000);
-      if (niivueRect) {
-        await pollRenderedPixels(lab, niivueRect, "NiiVue rendered NIfTI volume pixels");
+
+      if (filePt) {
+        await lab.clickAt(filePt.x, filePt.y, 2);
+        const niivueRect = await lab.waitFor(`(() => {
+          const el = document.querySelector('.jp-NiivueWidget iframe');
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          if (r.width < 150 || r.height < 150) return null;
+          return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+        })()`, 30000);
+        if (niivueRect) {
+          await pollRenderedPixels(lab, niivueRect, "NiiVue rendered NIfTI volume pixels");
+        } else {
+          fail("NiiVue opened smoke_brain.nii.gz on double-click");
+        }
       } else {
-        fail("NiiVue opened smoke_brain.nii.gz on double-click");
+        const items = await lab.eval(`[...document.querySelectorAll('.jp-DirListing-itemText')].map(n => n.textContent.trim())`);
+        fail("smoke_brain.nii.gz appeared in JupyterLab file browser", JSON.stringify(items));
       }
-    } else {
-      const items = await lab.eval(`[...document.querySelectorAll('.jp-DirListing-itemText')].map(n => n.textContent.trim())`);
-      fail("smoke_brain.nii.gz appeared in JupyterLab file browser", JSON.stringify(items));
+    }
+
+    if (HAS_NEUROGLANCER) {
+      await lab.eval(`(() => {
+        const tab = document.querySelector('.jp-SideBar [data-id="filebrowser"]');
+        if (tab && !tab.classList.contains('lm-mod-current')) tab.click();
+      })()`);
+      const zarrPt = await lab.waitFor(`(() => {
+        const node = [...document.querySelectorAll('.jp-DirListing-itemText')]
+          .find(n => (n.textContent || '').trim() === 'smoke_micro.ome.zarr');
+        if (!node) return null;
+        node.scrollIntoView({ block: 'center' });
+        const r = node.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) return null;
+        return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+      })()`, 30000);
+
+      if (zarrPt) {
+        await lab.clickAt(zarrPt.x, zarrPt.y, 1, "right");
+        const menuPt = await lab.waitFor(`(() => {
+          const item = [...document.querySelectorAll('.lm-Menu-itemLabel')]
+            .find(n => n.textContent.trim() === 'Open in Neuroglancer' && !n.closest('.lm-mod-disabled'));
+          if (!item) return null;
+          const r = item.getBoundingClientRect();
+          return r.width > 0 ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null;
+        })()`, 15000);
+        if (menuPt) {
+          await lab.clickAt(menuPt.x, menuPt.y, 1);
+          const ngInfo = await lab.waitFor(`(() => {
+            const el = document.querySelector('.jp-NeuroglancerWidget iframe');
+            if (!el || !el.src.includes('/neuroglancer/')) return null;
+            const r = el.getBoundingClientRect();
+            if (r.width < 150 || r.height < 150) return null;
+            return { src: el.src, rect: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) } };
+          })()`, 30000);
+          if (ngInfo && ngInfo.src.includes("zarr2") && ngInfo.src.includes("smoke_micro.ome.zarr")) {
+            await pollRenderedPixels(lab, ngInfo.rect, "Neuroglancer rendered OME-Zarr volume pixels");
+          } else {
+            fail("Neuroglancer opened smoke_micro.ome.zarr via zarr2://", JSON.stringify(ngInfo));
+          }
+        } else {
+          const menuItems = await lab.eval(`[...document.querySelectorAll('.lm-Menu-itemLabel')].map(n => n.textContent.trim())`);
+          fail('"Open in Neuroglancer" appeared in folder context menu', JSON.stringify(menuItems));
+        }
+      } else {
+        const items = await lab.eval(`[...document.querySelectorAll('.jp-DirListing-itemText')].map(n => n.textContent.trim())`);
+        fail("smoke_micro.ome.zarr appeared in JupyterLab file browser", JSON.stringify(items));
+      }
     }
 
     // 3. Jupyter AI Chat UI + ACP personas (OpenCode, Codex, Claude)
@@ -461,8 +520,8 @@ async function main() {
       fail("Chat launcher card clickable");
     }
 
-    if (lab.server5xx.length === 0) pass("JupyterLab + NiiVue + Chat had zero HTTP 5xx responses");
-    else fail("JupyterLab + NiiVue + Chat had zero HTTP 5xx responses", lab.server5xx.join("\n"));
+    if (lab.server5xx.length === 0) pass("JupyterLab + viewers + Chat had zero HTTP 5xx responses");
+    else fail("JupyterLab + viewers + Chat had zero HTTP 5xx responses", lab.server5xx.join("\n"));
     await lab.close();
 
     // 4. FreeBrowse WebGL2 app loading the real NIfTI volume

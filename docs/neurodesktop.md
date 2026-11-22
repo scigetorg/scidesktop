@@ -5,23 +5,25 @@
 them, built from scidesktop components. `scidesktop` already ships all
 generic capabilities shared across every desktop (`microdesktop`, `aidesktop`,
 `neurodesktop`): Slurm + `jupyterlab-slurm`, VS Code (`code-server`,
-`vscode-core`, `vscode-niivue`), DataLad (+ `datalad-osf`), workflow engines
+`vscode-core`), DataLad (+ `datalad-osf`), workflow engines
 (Nextflow, nf-test, Snakemake + Slurm executor plugin), VirtualGL,
 `scigethelpers`, expanded Jupyter extensions (`bash_kernel`,
 `jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`,
-`nbgitpuller`, `papermill`, `anywidget`, `ipycanvas`, `uv`), remote
+`nbgitpuller`, `papermill`, `pytest`, `anywidget`, `ipycanvas`, `uv`), remote
 mount/transfer tools (`rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`,
-`gh`), the NiiVue/FreeBrowse viewers, coding agents, ACP adapters, T3 Code and
+`gh`), the FreeBrowse viewer, coding agents, ACP adapters, T3 Code and
 T3 Connect.
 
-`neurodesktop` adds six neuroimaging-specific components (see
+`neurodesktop` adds eight neuroimaging-specific components (see
 [images.md](images.md#optional-components)) on top:
 
 | Component | What it adds | Where |
 | --- | --- | --- |
 | `sciget-neuroimaging` | narrows sciget to the `neuroimaging` catalog ([images.md](images.md#tool-catalogs)) | `/etc/sciget/catalogs.json` |
 | `neurodesk-cvmfs` | the Neurodesk CVMFS repository for the base's CVMFS client: its mirrors, its public key, and the repository as the one to mount in internal mode | `/etc/cvmfs` |
+| `vscode-niivue` | `korbinianeckstein.niivue` VS Code extension for NIfTI and medical images | `/usr/local/share/code-server/extensions` |
 | `vscode-coding-agents` | Claude Code and Codex VS Code extensions | `/usr/local/share/code-server/extensions` |
+| `jupyterlab-niivue` | NiiVue JupyterLab viewer (default for `.nii`/`.nii.gz`; [viewers.md](viewers.md)) | `/opt/jupyterlab-niivue` |
 | `neurodesk-agents` | Neurodesk's defaults for the base's coding agents: instructions for working with Neurodesk tools, and the Neurodesk model provider for OpenCode | `/opt/neurodesk-agents` |
 | `neuroimaging-env` | the `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue` with shared JupyterLab bundle — requires JupyterLab, not standalone VS Code notebooks/static HTML, `datalad`, `datalad-osf`, `osfclient`, `xnat`, `watermark`, `nf-core`) and neuroimaging CLIs (`nf-core`, `nipoppy`, `bosh`, `nipypecli`) | `/opt/neuroimaging-env`, `/usr/local/share/jupyter/kernels/neuroimaging`, `/usr/local/bin` |
 | `neurodesk-compat` | FreeSurfer (`APPTAINERENV_SUBJECTS_DIR`) and `nf-neuro` (`NF_NEURO_MODULES_DIR`) defaults, pinned `/opt/nf-neuro/modules` (with local `.git` metadata), local `/neurodesktop-storage/containers/modules` discovery, and `~/getting-started.ipynb` | `/opt/nf-neuro/modules`, `/etc/scidesktop/home-defaults/getting-started.ipynb` |
