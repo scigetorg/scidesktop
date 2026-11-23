@@ -7,8 +7,8 @@ sciget, offering the microscopy tools and no others.
   <tool>/<version>` downloads a tool's container and writes its module; the
   sciget button on the desktop's taskbar browses and launches them. See
   [Tool catalogs](../../docs/images.md#tool-catalogs).
-- **Viewers.** NIfTI files open in the NiiVue viewer from JupyterLab's file
-  browser, or in FreeBrowse through **Open With**. See
+- **Viewers.** OME-Zarr, N5, Precomputed, NIfTI and mesh datasets open in
+  Neuroglancer from JupyterLab's file browser or launcher tile. See
   [docs/viewers.md](../../docs/viewers.md).
 - **Coding agents.** `codex`, `claude` and `opencode` in terminals, and the
   **scigent.ai** launcher tile. See
@@ -31,13 +31,15 @@ Open <http://localhost:8888/lab?token=microdesktop>. In a terminal:
 ## What is here
 
 Only the assembly: this image is `scidesktop` (which already includes Slurm +
-`jupyterlab-slurm`, VS Code with `vscode-core` and `vscode-niivue`, DataLad,
-workflow engines, VirtualGL, `scigethelpers`, the NiiVue/FreeBrowse viewers,
-coding agents, ACP adapters, T3 Code and T3 Connect) plus `sciget-microscopy`.
+`jupyterlab-slurm`, VS Code with `vscode-core`, DataLad,
+workflow engines, VirtualGL, `scigethelpers`,
+coding agents, ACP adapters, T3 Code and T3 Connect) plus `sciget-microscopy`
+and `jupyterlab-neuroglancer`.
 
 | Component | What it adds |
 | --- | --- |
 | `sciget-microscopy` | narrows sciget to the microscopy catalog |
+| `jupyterlab-neuroglancer` | Neuroglancer WebGL2 viewer for OME-Zarr, N5, Precomputed and microscopy volumes |
 
 The microscopy tools are whatever the catalog publishes; none is listed in
 this repository. See [docs/images.md](../../docs/images.md) for what an image

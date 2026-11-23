@@ -86,7 +86,7 @@ commit's short SHA, the date and `latest`.
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget with all domain catalogs (`sciget-all`) by default |
 | Modules | Lmod, built from the upstream release |
-| Viewers | [FreeBrowse](docs/viewers.md) in base (`/opt/jupyterlab-freebrowse`), plus [Neuroglancer](docs/viewers.md) on `microdesktop` and [NiiVue](docs/viewers.md) on `neurodesktop` |
+| Viewers | [Neuroglancer](docs/viewers.md) on `microdesktop`; [NiiVue](docs/viewers.md) and [FreeBrowse](docs/viewers.md) on `neurodesktop` |
 | Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
 | AI chat | [Jupyter AI](docs/jupyter-ai.md) in JupyterLab with OpenCode, Codex and Claude personas (`acp-adapters`). No model, key or endpoint comes with it |
 | T3 Code | The T3 Code server behind the notebook server's login, opened from the **scigent.ai** launcher tile; at `/opt/t3-code`, with Google Antigravity ACP (`antigravity-acp`) at `/opt/antigravity-acp` for Gemini models |

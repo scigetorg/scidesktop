@@ -11,15 +11,15 @@ images/
   scidesktop/      the base; includes all sciget domains (sciget-all),
                    Slurm + jupyterlab-slurm, VS Code (code-server, vscode-core),
                    DataLad, workflow engines (Nextflow, nf-test, Snakemake),
-                   VirtualGL, scigethelpers-cli, FreeBrowse viewer, coding
-                   agents, ACP adapters, T3 Code and T3 Connect
+                   VirtualGL, scigethelpers-cli, coding agents, ACP adapters,
+                   T3 Code and T3 Connect
   microdesktop/    FROM scidesktop, plus sciget-microscopy and
                    jupyterlab-neuroglancer: microscopy
   aidesktop/       FROM scidesktop, plus sciget-neuroimaging and ai-ready
   neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
                    vscode-niivue, vscode-coding-agents, jupyterlab-niivue,
-                   neurodesk-agents, neuroimaging-env and neurodesk-compat:
-                   neuroimaging
+                   jupyterlab-freebrowse, neurodesk-agents, neuroimaging-env
+                   and neurodesk-compat: neuroimaging
 ```
 
 | Component | scidesktop | microdesktop | aidesktop | neurodesktop |
@@ -28,13 +28,12 @@ images/
 | `virtualgl`, `datalad`, `workflow-engines`, `scigethelpers-cli` | yes | yes | yes | yes |
 | `code-server`, `vscode-core` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes |
 | `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed |
-| `jupyterlab-freebrowse` ([viewers.md](viewers.md)) | yes | yes | yes | yes |
 | `coding-agents`, `t3-code`, `antigravity-acp` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes |
 | `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | yes | yes | yes | yes |
 | `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | yes | yes |
 | `sciget-microscopy`, `jupyterlab-neuroglancer` ([tool catalogs](#tool-catalogs), [viewers.md](viewers.md)) | no | yes | no | no |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no |
-| `jupyterlab-niivue`, `vscode-niivue`, `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
+| `jupyterlab-niivue`, `jupyterlab-freebrowse`, `vscode-niivue`, `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
 | `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | yes |
 
 ## How a domain image gets the base

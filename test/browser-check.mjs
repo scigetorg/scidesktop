@@ -15,11 +15,12 @@ const BASE_URL = (process.argv[2] || "").replace(/\/+$/, "");
 const TOKEN = process.argv[3] || "";
 const HAS_VSCODE = process.argv.includes("--has-vscode");
 const HAS_NIIVUE = process.argv.includes("--has-niivue");
+const HAS_FREEBROWSE = process.argv.includes("--has-freebrowse");
 const HAS_NEUROGLANCER = process.argv.includes("--has-neuroglancer");
 const HAS_NEUROIMAGING = process.argv.includes("--has-neuroimaging");
 
 if (!BASE_URL || !TOKEN) {
-  console.error("usage: browser-check.mjs <base-url> <token> [--has-vscode] [--has-niivue] [--has-neuroglancer] [--has-neuroimaging]");
+  console.error("usage: browser-check.mjs <base-url> <token> [--has-vscode] [--has-niivue] [--has-freebrowse] [--has-neuroglancer] [--has-neuroimaging]");
   process.exit(2);
 }
 
@@ -524,38 +525,40 @@ async function main() {
     else fail("JupyterLab + viewers + Chat had zero HTTP 5xx responses", lab.server5xx.join("\n"));
     await lab.close();
 
-    // 4. FreeBrowse WebGL2 app loading the real NIfTI volume
-    const fb = await openTab(cdp);
-    let volStatus = 0;
-    cdp.on("Network.responseReceived", (params, sid) => {
-      if (sid === fb.sessionId && (params.response?.url || "").includes("smoke_brain.nii.gz")) {
-        volStatus = params.response.status;
+    // 4. FreeBrowse WebGL2 app loading the real NIfTI volume (neurodesktop)
+    if (HAS_FREEBROWSE) {
+      const fb = await openTab(cdp);
+      let volStatus = 0;
+      cdp.on("Network.responseReceived", (params, sid) => {
+        if (sid === fb.sessionId && (params.response?.url || "").includes("smoke_brain.nii.gz")) {
+          volStatus = params.response.status;
+        }
+      });
+      const volUrl = `${BASE_URL}/files/smoke_brain.nii.gz`;
+      await fb.goto(`${BASE_URL}/freebrowse/?vol=${encodeURIComponent(volUrl)}`);
+      const fbRect = await fb.waitFor(`(() => {
+        const c = [...document.querySelectorAll('canvas')]
+          .find(n => { const r = n.getBoundingClientRect(); return r.width >= 150 && r.height >= 150; });
+        if (!c) return null;
+        const r = c.getBoundingClientRect();
+        return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+      })()`, 30000);
+      // Wait for the volume fetch response so a fast canvas mount cannot race a slower download.
+      for (let i = 0; i < 40 && volStatus === 0; i++) {
+        await new Promise((r) => setTimeout(r, 250));
       }
-    });
-    const volUrl = `${BASE_URL}/files/smoke_brain.nii.gz`;
-    await fb.goto(`${BASE_URL}/freebrowse/?vol=${encodeURIComponent(volUrl)}`);
-    const fbRect = await fb.waitFor(`(() => {
-      const c = [...document.querySelectorAll('canvas')]
-        .find(n => { const r = n.getBoundingClientRect(); return r.width >= 150 && r.height >= 150; });
-      if (!c) return null;
-      const r = c.getBoundingClientRect();
-      return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
-    })()`, 30000);
-    // Wait for the volume fetch response so a fast canvas mount cannot race a slower download.
-    for (let i = 0; i < 40 && volStatus === 0; i++) {
-      await new Promise((r) => setTimeout(r, 250));
+      if (fbRect && volStatus === 200) {
+        await pollRenderedPixels(fb, fbRect, "FreeBrowse downloaded and rendered NIfTI volume pixels");
+      } else {
+        fail("FreeBrowse downloaded and rendered NIfTI volume pixels", `rect=${JSON.stringify(fbRect)} volStatus=${volStatus}`);
+      }
+      if (fb.server5xx.length === 0 && fb.errors.length === 0) {
+        pass("FreeBrowse loaded with zero HTTP 5xx and zero uncaught exceptions");
+      } else {
+        fail("FreeBrowse loaded cleanly", [...fb.server5xx, ...fb.errors].join("\n"));
+      }
+      await fb.close();
     }
-    if (fbRect && volStatus === 200) {
-      await pollRenderedPixels(fb, fbRect, "FreeBrowse downloaded and rendered NIfTI volume pixels");
-    } else {
-      fail("FreeBrowse downloaded and rendered NIfTI volume pixels", `rect=${JSON.stringify(fbRect)} volStatus=${volStatus}`);
-    }
-    if (fb.server5xx.length === 0 && fb.errors.length === 0) {
-      pass("FreeBrowse loaded with zero HTTP 5xx and zero uncaught exceptions");
-    } else {
-      fail("FreeBrowse loaded cleanly", [...fb.server5xx, ...fb.errors].join("\n"));
-    }
-    await fb.close();
 
     // 5. T3 Code SPA through base-path adapter (/t3-code/)
     // The initial cold-start request to /t3-code/ intentionally returns HTTP 503

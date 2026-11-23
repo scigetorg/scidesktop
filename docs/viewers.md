@@ -5,7 +5,7 @@ outside `/opt/conda`:
 
 | Component | Included in | What it is | Opens |
 | --- | --- | --- | --- |
-| `jupyterlab-freebrowse` | `scidesktop` (all images) | [FreeBrowse](https://github.com/neurodesk/freebrowse), built from Neurodesk's fork at a pinned commit | `.nvd` NiiVue documents on double-click; `.nii` and `.nii.gz` through **Open With** or **Open in FreeBrowse** |
+| `jupyterlab-freebrowse` | `neurodesktop` | [FreeBrowse](https://github.com/neurodesk/freebrowse), built from Neurodesk's fork at a pinned commit | `.nvd` NiiVue documents on double-click; `.nii` and `.nii.gz` through **Open With** or **Open in FreeBrowse** |
 | `jupyterlab-neuroglancer` | `microdesktop` | [Google Neuroglancer](https://github.com/google/neuroglancer) standalone WebGL2 client at a pinned commit | **OME-Zarr** (Zarr v2 & v3), **N5**, and **Precomputed** folders via right-click → **Open in Neuroglancer** (or right-clicking `.zattrs`/`.zgroup`/`.zarray`/`zarr.json`/`attributes.json` → **Open Dataset in Neuroglancer**); `.ngstate` on double-click; `.nii`, `.nii.gz`, `.vtk`, `.obj`, `.swc` via **Open With**; blank viewer via the **Neuroglancer** launcher tile |
 | `jupyterlab-niivue` | `neurodesktop` | [jupyterlab-niivue](https://github.com/niivue/niivue-vscode/tree/main/apps/jupyter), the NiiVue viewer: the wheel from PyPI, unmodified | `.nii` and `.nii.gz` on double-click |
 
@@ -65,7 +65,7 @@ installs exact lock files for Neuroglancer and its JupyterLab extension.
 ```sh
 docker buildx bake jupyterlab-niivue-test jupyterlab-freebrowse-test jupyterlab-neuroglancer-test
 ./test/jupyterlab-niivue-smoke.sh neurodesktop
-./test/jupyterlab-freebrowse-smoke.sh scidesktop
+./test/jupyterlab-freebrowse-smoke.sh neurodesktop
 ./test/jupyterlab-neuroglancer-smoke.sh microdesktop
 ```
 

@@ -123,6 +123,9 @@ fi
 if docker exec "${NAME}" test -f /opt/scidesktop/manifest.d/jupyterlab-niivue.json 2>/dev/null; then
     args+=("--has-niivue")
 fi
+if docker exec "${NAME}" test -f /opt/scidesktop/manifest.d/jupyterlab-freebrowse.json 2>/dev/null; then
+    args+=("--has-freebrowse")
+fi
 if docker exec "${NAME}" test -f /opt/scidesktop/manifest.d/jupyterlab-neuroglancer.json 2>/dev/null; then
     # Seed a synthetic 32x32x32 uint8 OME-Zarr v0.4 volume so Neuroglancer
     # renders real 3D microscopy slices from /files/ behind Jupyter's login.

@@ -8,10 +8,9 @@
 # no image of those names exists outside bake.
 #
 # The workshop itself is the ai-ready component (components/ai-ready).
-# Coding agents, ACP adapters, T3 Code, T3 Connect and the NiiVue/FreeBrowse
-# viewers are inherited from scidesktop; sciget-neuroimaging narrows sciget to
-# neuroimaging tools. Copying a component is all an image does for it; see
-# docs/images.md.
+# Coding agents, ACP adapters, T3 Code and T3 Connect are inherited from
+# scidesktop; sciget-neuroimaging narrows sciget to neuroimaging tools. Copying
+# a component is all an image does for it; see docs/images.md.
 
 FROM scidesktop-base
 

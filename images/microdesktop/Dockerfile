@@ -15,7 +15,7 @@
 #
 # Slurm (+ jupyterlab-slurm), VS Code (+ core extensions), DataLad,
 # workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, scigethelpers,
-# FreeBrowse viewer, coding agents, ACP adapters, T3 Code and T3 Connect are
+# coding agents, ACP adapters, T3 Code and T3 Connect are
 # inherited from scidesktop.
 
 FROM scidesktop-base
