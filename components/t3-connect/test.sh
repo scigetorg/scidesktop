@@ -35,10 +35,10 @@ if [ "$1 $2" = "connect status" ]; then
     echo '{"desired": false, "authenticated": false, "linked": false, "relayClient": {"status": "available"}}'
     exit 0
 fi
+echo $$ > "$(dirname "$0")/t3.pid"
 echo "secret-refresh-token-0123456789"
 echo "Confirm this code when asked: ABCD-2345"
 echo "Waiting for approval (expires in 9 min)"
-echo $$ > "$(dirname "$0")/t3.pid"
 exec sleep 600
 STUB
 chmod +x "${work}/t3"
