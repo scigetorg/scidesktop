@@ -24,7 +24,7 @@
 # renovate: datasource=docker depName=ubuntu
 variable "UBUNTU" { default = "26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96" }
 # Ubuntu archive snapshot; moved weekly by .github/workflows/apt-snapshot.yml.
-variable "APT_SNAPSHOT" { default = "20261115T000000Z" }
+variable "APT_SNAPSHOT" { default = "20261123T000000Z" }
 # renovate: datasource=github-releases depName=cvmfs/cvmfs extractVersion=^cvmfs-(?<version>.*)$
 variable "CVMFS_VERSION" { default = "2.13.3" }
 variable "CVMFS_CONFIG_VERSION" { default = "1.1-0" }
