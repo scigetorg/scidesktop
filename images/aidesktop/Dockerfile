@@ -9,12 +9,12 @@
 #
 # The workshop itself is the ai-ready component (components/ai-ready).
 # Coding agents, ACP adapters, T3 Code and T3 Connect are inherited from
-# scidesktop; sciget-neuroimaging narrows sciget to neuroimaging tools. Copying
+# scidesktop; sciget-datascience narrows sciget to datascience tools. Copying
 # a component is all an image does for it; see docs/images.md.
 
 FROM scidesktop-base
 
-COPY --link --from=sciget-neuroimaging / /
+COPY --link --from=sciget-datascience / /
 COPY --link --from=ai-ready / /
 
 LABEL org.opencontainers.image.title="aidesktop" \

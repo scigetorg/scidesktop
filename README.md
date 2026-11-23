@@ -35,7 +35,7 @@ The desktop session starts on first use, so a session that only ever uses notebo
 pays for it.
 
 **Tools** come from sciget's catalogs. `scidesktop` ships all sciget domains
-(`neuroimaging` and `microscopy`) out of the box; domain images narrow the
+(`neuroimaging`, `microscopy` and `datascience`) out of the box; domain images narrow the
 offered catalog to their own community (and users can add more with
 `sciget catalog add <name> <url>`).
 
@@ -63,7 +63,7 @@ enough for a large virtual screen.
 | scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below, including all sciget domains (`sciget-all`), Slurm + `jupyterlab-slurm`, VS Code (`code-server`, `vscode-core`), DataLad, workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, `scigethelpers`, and the [coding agents, Jupyter AI ACP adapters, T3 Code and T3 Connect](docs/coding-agents.md) |
 | microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: narrows sciget to the microscopy tools (`sciget-microscopy`) and adds [Neuroglancer](docs/viewers.md) (`jupyterlab-neuroglancer`) plus the locked `microscopy` Python kernel (`microscopy-env`: `scikit-image`, `tifffile`, `zarr`, `ome-zarr`, `bioio`, `dask`, `xarray`); inherits every generic feature from `scidesktop` |
 | datadesktop | [images/datadesktop](images/datadesktop) | Data Science: adds the locked `datascience` Python kernel (`datascience-env`: `polars`, `pyarrow`, `duckdb`, `jupysql`, `scikit-learn`, `statsmodels`, `xgboost`, `lightgbm`, `optuna`, `shap`, `plotly`, `altair`, `sqlalchemy`) without the background services of `aidesktop` |
-| aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL, with the neuroimaging catalog |
+| aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL, with the datascience catalog (`sciget-datascience`) |
 | neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): narrows sciget to neuroimaging, and adds the Neurodesk CVMFS config, [NiiVue](docs/viewers.md) (`jupyterlab-niivue`, `vscode-niivue`), [FreeBrowse](docs/viewers.md) (`jupyterlab-freebrowse`), the neuroimaging Python kernel (`neuroimaging-env`), the Neurodesk compatibility layer (`neurodesk-compat`), Claude Code/Codex VS Code extensions (`vscode-coding-agents`) and Neurodesk's coding-agent defaults |
 
 Domain images build `FROM scidesktop` and add only their own files, like the
@@ -102,7 +102,7 @@ the sciget catalog to their domain; [which image has which](docs/images.md)):
 
 | | |
 |---|---|
-| Domain catalogs | Narrow sciget to one domain: `sciget-neuroimaging` or `sciget-microscopy` ([docs/images.md](docs/images.md#tool-catalogs)) |
+| Domain catalogs | Narrow sciget to one domain: `sciget-neuroimaging`, `sciget-microscopy` or `sciget-datascience` ([docs/images.md](docs/images.md#tool-catalogs)) |
 | Microscopy Python | The `microscopy` Jupyter kernel (`scikit-image`, `tifffile`, `imagecodecs`, `zarr`, `ome-zarr`, `bioio`, `dask`, `xarray`) at `/opt/microscopy-env` |
 | Data Science Python | The `datascience` Jupyter kernel (`polars`, `pyarrow`, `duckdb`, `jupysql`, `scikit-learn`, `statsmodels`, `xgboost`, `lightgbm`, `optuna`, `shap`, `plotly`, `altair`, `sqlalchemy`) at `/opt/datascience-env` |
 | Neuroimaging Python | The `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`, `datalad`, `xnat`, `nf-core`) at `/opt/neuroimaging-env` |

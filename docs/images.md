@@ -16,7 +16,8 @@ images/
   microdesktop/    FROM scidesktop, plus sciget-microscopy,
                    jupyterlab-neuroglancer and microscopy-env: microscopy
   datadesktop/     FROM scidesktop, plus datascience-env: general data science
-  aidesktop/       FROM scidesktop, plus sciget-neuroimaging and ai-ready
+  aidesktop/       FROM scidesktop, plus sciget-datascience and ai-ready:
+                   datascience
   neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
                    vscode-niivue, vscode-coding-agents, jupyterlab-niivue,
                    jupyterlab-freebrowse, neurodesk-agents, neuroimaging-env
@@ -31,10 +32,10 @@ images/
 | `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | yes | narrowed | narrowed |
 | `coding-agents`, `t3-code`, `antigravity-acp` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes | yes |
 | `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | yes | yes | yes | yes | yes |
-| `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | no | yes | yes |
+| `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | no | no | yes |
 | `sciget-microscopy`, `jupyterlab-neuroglancer`, `microscopy-env` ([tool catalogs](#tool-catalogs), [viewers.md](viewers.md)) | no | yes | no | no | no |
 | `datascience-env` | no | no | yes | no | no |
-| `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | no | yes | no |
+| `sciget-datascience`, `ai-ready` ([tool catalogs](#tool-catalogs), [ai-ready.md](ai-ready.md)) | no | no | no | yes | no |
 | `jupyterlab-niivue`, `jupyterlab-freebrowse`, `vscode-niivue`, `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | no | yes |
 | `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | no | yes |
 
@@ -82,15 +83,15 @@ domain images that want it copy it the way the assembly does:
 ```dockerfile
 FROM scidesktop-base
 
-COPY --link --from=sciget-neuroimaging / /
+COPY --link --from=sciget-datascience / /
 COPY --link --from=ai-ready / /
 ```
 
 ```hcl
 contexts = {
-  scidesktop-base     = "target:scidesktop"
-  sciget-neuroimaging = "target:sciget-neuroimaging"
-  ai-ready            = "target:ai-ready"
+  scidesktop-base    = "target:scidesktop"
+  sciget-datascience = "target:sciget-datascience"
+  ai-ready           = "target:ai-ready"
 }
 ```
 
@@ -107,8 +108,7 @@ through that component's
 community's defaults then stay out of the generic component, and the image
 still only assembles.
 
-Several images can copy the same component, as `aidesktop` and `neurodesktop`
-do with `sciget-neuroimaging`,
+Several images can copy the same component,
 and nodes download its layer once. An image gets the components of the
 image it is `FROM` and must not copy them again. Rule S6 checks the `COPY` line,
 the bake context, and that nothing is copied twice. The layer rules (L1 to L5)
@@ -132,10 +132,12 @@ over `/etc/sciget/catalogs.json`:
 
 | Component | Catalogs | Also |
 | --- | --- | --- |
-| `sciget-all` (in `scidesktop`) | `neuroimaging`, `microscopy` | the module folders of containers on the Neurodesk CVMFS repository |
+| `sciget-all` (in `scidesktop`) | `neuroimaging`, `microscopy`, `datascience` | the module folders of containers on the Neurodesk CVMFS repository |
 | `sciget-neuroimaging` | `neuroimaging` | |
 | `sciget-microscopy` | `microscopy` | |
+| `sciget-datascience` | `datascience` | |
 
+<<<<<<< HEAD
 `scidesktop` therefore offers both neuroimaging and microscopy tools out of the
 box (`test/sciget-all-smoke.sh`). An image with `sciget-microscopy` overrides
 `/etc/sciget/catalogs.json` so only the `microscopy` catalog is configured and
@@ -143,8 +145,18 @@ every offered tool comes from it (`test/sciget-microscopy-smoke.sh`); an image
 with `sciget-neuroimaging` configures only the `neuroimaging` catalog
 (`test/sciget-neuroimaging-smoke.sh`). Copying two domain catalog components
 into one image still fails rule L1.
+=======
+`scidesktop` therefore offers neuroimaging, microscopy and datascience tools out
+of the box (`test/sciget-all-smoke.sh`). An image with `sciget-microscopy`
+overrides `/etc/sciget/catalogs.json` and offers the microscopy tools and no
+neuroimaging tool (`test/sciget-microscopy-smoke.sh`); `sciget-neuroimaging`
+offers neuroimaging tools only (`test/sciget-neuroimaging-smoke.sh`); and
+`sciget-datascience` offers datascience tools only
+(`test/sciget-datascience-smoke.sh`). Copying two domain catalog components into
+one image still fails rule L1.
+>>>>>>> 2b10686 (feat(aidesktop): wire datascience sciget catalog into aidesktop and sciget-all)
 
-Both catalogs are published by the
+These catalogs are published by the
 [sciget catalog service](https://apps-catalog.scigetorg.workers.dev/domains.json).
 A new domain there becomes an image here with a component like
 `components/sciget-microscopy` (one JSON file) and its two-line smoke test.

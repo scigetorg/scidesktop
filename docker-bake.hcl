@@ -231,6 +231,7 @@ group "test" {
     "sciget-all-test",
     "sciget-neuroimaging-test",
     "sciget-microscopy-test",
+    "sciget-datascience-test",
     "jupyterlab-niivue-test",
     "jupyterlab-freebrowse-test",
     "jupyterlab-neuroglancer-test",
@@ -497,6 +498,19 @@ target "sciget-microscopy" {
 
 target "sciget-microscopy-test" {
   inherits = ["sciget-microscopy"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+target "sciget-datascience" {
+  inherits = ["_component"]
+  context  = "components/sciget-datascience"
+  target   = "component"
+  contexts = { sciget = "target:sciget" }
+}
+
+target "sciget-datascience-test" {
+  inherits = ["sciget-datascience"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1053,9 +1067,9 @@ target "aidesktop" {
   inherits = ["_common"]
   context  = "images/aidesktop"
   contexts = {
-    scidesktop-base     = "target:scidesktop"
-    sciget-neuroimaging = "target:sciget-neuroimaging"
-    ai-ready            = "target:ai-ready"
+    scidesktop-base    = "target:scidesktop"
+    sciget-datascience = "target:sciget-datascience"
+    ai-ready           = "target:ai-ready"
   }
   tags   = [AIDESKTOP_IMAGE]
   output = ["type=docker"]
