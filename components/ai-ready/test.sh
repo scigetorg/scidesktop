@@ -28,6 +28,7 @@ import json, os, pathlib, sys
 spec = json.load(open("/usr/local/share/jupyter/kernels/ai-ready/kernel.json"))
 assert os.access(spec["argv"][0], os.X_OK), spec["argv"]
 assert spec["env"]["PYTHONPATH"] == "${HOME}/ai-ready/src", spec["env"]
+assert spec["env"].get("PYTHONNOUSERSITE") == "1", spec["env"]
 notebooks = sorted(pathlib.Path(sys.argv[1], "notebooks").glob("*.ipynb"))
 assert notebooks
 for notebook in notebooks:

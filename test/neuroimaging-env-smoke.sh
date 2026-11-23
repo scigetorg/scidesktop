@@ -151,7 +151,7 @@ def run_code(kernel_name, code):
         req("DELETE", f"/api/kernels/{kid}")
 
 neuro_out = run_code("neuroimaging", """
-import pathlib, shutil, subprocess, sys, tempfile
+import pathlib, shutil, site, subprocess, sys, tempfile
 import numpy as np
 import nibabel as nib
 import nipype, niwrap, pydra, nipoppy, ipyniivue, datalad, datalad_osf, osfclient, matplotlib, scipy, pandas, watermark, xnat
@@ -159,6 +159,7 @@ img = nib.Nifti1Image(np.ones((4, 4, 4), dtype=np.float32), np.eye(4))
 nv = ipyniivue.NiiVue()
 assert "scidesktop-ipyniivue-shared-bundle" in (pathlib.Path(ipyniivue.__file__).parent / "static/widget.js").read_text()
 assert sys.executable.startswith("/opt/neuroimaging-env/"), sys.executable
+assert site.ENABLE_USER_SITE is False, f"expected user site disabled, got {site.ENABLE_USER_SITE}"
 assert shutil.which("git-annex") is not None, "PATH lost git-annex"
 work = pathlib.Path(tempfile.mkdtemp())
 subprocess.run(["git", "config", "--global", "user.name", "smoke"], check=True)

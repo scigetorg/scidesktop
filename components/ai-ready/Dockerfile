@@ -45,6 +45,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && /opt/ai-ready/env/bin/python -m ipykernel install --prefix /opt/ai-ready --name ai-ready \
         --display-name "AI Ready (Python $(/opt/ai-ready/env/bin/python -c 'import sys; print("%d.%d" % sys.version_info[:2])'))" \
         --env PYTHONPATH '${HOME}/ai-ready/src' --env PATH '/opt/ai-ready/env/bin:${PATH}' \
+        --env PYTHONNOUSERSITE 1 \
     && trim-python-env /opt/ai-ready/env /opt/ai-ready/airflow \
     # conda packages carry group-writable modes; nothing root-owned here should
     # be writable by a group.

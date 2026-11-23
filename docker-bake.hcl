@@ -1056,8 +1056,9 @@ target "datadesktop" {
   inherits = ["_common"]
   context  = "images/datadesktop"
   contexts = {
-    scidesktop-base = "target:scidesktop"
-    datascience-env = "target:datascience-env"
+    scidesktop-base    = "target:scidesktop"
+    sciget-datascience = "target:sciget-datascience"
+    datascience-env    = "target:datascience-env"
   }
   tags   = [DATADESKTOP_IMAGE]
   output = ["type=docker"]

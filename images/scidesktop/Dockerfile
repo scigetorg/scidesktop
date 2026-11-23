@@ -39,7 +39,12 @@ COPY --link --from=t3-code / /
 COPY --link --from=t3-connect / /
 
 LABEL maintainer="Sciget project <sciget.org>" \
-      org.scidesktop.status="experimental" \
+      org.opencontainers.image.title="scidesktop" \
+      org.opencontainers.image.description="scidesktop: multi-arch scientific desktop with JupyterLab, Selkies, Apptainer, Lmod, Slurm, VS Code, workflow engines, coding agents and all sciget domain catalogs" \
+      org.opencontainers.image.url="https://github.com/scigetorg/scidesktop" \
+      org.opencontainers.image.source="https://github.com/scigetorg/scidesktop" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="Sciget project" \
       org.scidesktop.desktop_adapter="selkies" \
       org.scidesktop.manifest="/opt/scidesktop/manifest.d"
 

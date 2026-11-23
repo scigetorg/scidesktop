@@ -192,7 +192,8 @@ def kernel():
 
     from tornado.websocket import websocket_connect
 
-    code = ("import sys, mlflow, vep_pipeline\n"
+    code = ("import site, sys, mlflow, vep_pipeline\n"
+            "assert site.ENABLE_USER_SITE is False, site.ENABLE_USER_SITE\n"
             "print('KERNEL', sys.executable, mlflow.get_tracking_uri(), vep_pipeline.__file__)")
     started = get_json("api/kernels", data={"name": "ai-ready"})
 

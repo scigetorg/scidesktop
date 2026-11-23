@@ -33,6 +33,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
         --name neuroimaging \
         --display-name "Neuroimaging (Python $(/opt/neuroimaging-env/bin/python -c 'import sys; print("%d.%d" % sys.version_info[:2])'))" \
         --env PATH '/opt/neuroimaging-env/bin:${PATH}' \
+        --env PYTHONNOUSERSITE 1 \
     && install -d -m 0755 /out/usr/local/share/jupyter/kernels /out/usr/local/bin /out/opt/scidesktop/manifest.d \
     && mv /opt/neuroimaging-env/share/jupyter/kernels/neuroimaging /out/usr/local/share/jupyter/kernels/neuroimaging \
     && rm -rf /opt/neuroimaging-env/share/jupyter/kernels/python3 \
@@ -60,7 +61,7 @@ COPY --from=component / /
 USER ${NB_UID}
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     --mount=type=bind,from=jupyter-env,source=/usr/local/etc/jupyter,target=/usr/local/etc/jupyter \
-    /opt/neuroimaging-env/bin/python -c 'import json, os, pathlib, nibabel, nipype, niwrap, pydra, nipoppy, ipyniivue, datalad, matplotlib, scipy, pandas, osfclient, watermark, xnat; spec = json.load(open("/usr/local/share/jupyter/kernels/neuroimaging/kernel.json")); assert os.access(spec["argv"][0], os.X_OK), spec["argv"]; wjs = (pathlib.Path(ipyniivue.__file__).parent / "static/widget.js").read_text(); assert "scidesktop-ipyniivue-shared-bundle" in wjs; assets = list(pathlib.Path("/opt/neuroimaging-env/static").glob("scidesktop-ipyniivue.*.js")); assert len(assets) == 1 and "scidesktop-ipyniivue-model-cleanup" in assets[0].read_text(); print("neuroimaging-env ok:", spec["display_name"])' \
+    /opt/neuroimaging-env/bin/python -c 'import json, os, pathlib, nibabel, nipype, niwrap, pydra, nipoppy, ipyniivue, datalad, matplotlib, scipy, pandas, osfclient, watermark, xnat; spec = json.load(open("/usr/local/share/jupyter/kernels/neuroimaging/kernel.json")); assert os.access(spec["argv"][0], os.X_OK), spec["argv"]; assert spec["env"].get("PYTHONNOUSERSITE") == "1", spec["env"]; wjs = (pathlib.Path(ipyniivue.__file__).parent / "static/widget.js").read_text(); assert "scidesktop-ipyniivue-shared-bundle" in wjs; assets = list(pathlib.Path("/opt/neuroimaging-env/static").glob("scidesktop-ipyniivue.*.js")); assert len(assets) == 1 and "scidesktop-ipyniivue-model-cleanup" in assets[0].read_text(); print("neuroimaging-env ok:", spec["display_name"])' \
     && /opt/neuroimaging-env/bin/python -m pip check \
     && nf-core --version >/dev/null \
     && nipoppy --version >/dev/null \
