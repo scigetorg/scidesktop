@@ -1,9 +1,9 @@
 # microdesktop
 
 scidesktop for microscopy: the same JupyterLab, desktop, Apptainer, Lmod and
-sciget, with microscopy applications on top.
-
-> **Status: shell.** It is scidesktop with its own name, ready to be built out.
+sciget, configured with the published `microscopy` tool catalog
+(`https://apps-catalog.scigetorg.workers.dev/microscopy/apps.json`, backed by
+`/cvmfs/neurodesk.ardc.edu.au/containers` when CVMFS is mounted).
 
 ## Building and running
 

@@ -181,21 +181,23 @@ done
 # sciget arrives configured: the user sees the image's catalog from sciget's
 # system layer, with nothing copied into the home, and the start-up refresh
 # downloads it.
-docker exec -u "${NB_USER}" "${NAME}" bash -c '
-    sciget catalog list | grep -q neuroimaging && [ ! -e ~/.config/sciget/catalogs.json ]' 2>/dev/null \
-    && pass "sciget catalog from the system layer" \
+SCIGET_CATALOG=$(docker exec -u "${NB_USER}" "${NAME}" bash -c \
+    'sciget catalog list | awk "NR==1 {print \$1}"' 2>/dev/null)
+docker exec -u "${NB_USER}" -e SCIGET_CATALOG="${SCIGET_CATALOG}" "${NAME}" bash -c '
+    [ -n "${SCIGET_CATALOG}" ] && sciget catalog list | grep -q "^${SCIGET_CATALOG}[[:space:]]" && [ ! -e ~/.config/sciget/catalogs.json ]' 2>/dev/null \
+    && pass "sciget catalog from the system layer (${SCIGET_CATALOG:-none})" \
     || fail "sciget catalog from the system layer"
-docker exec -u "${NB_USER}" "${NAME}" bash -c '
-    for _ in $(seq 1 60); do ls ~/.cache/sciget/catalogs/neuroimaging-*/ >/dev/null 2>&1 && exit 0; sleep 1; done
+docker exec -u "${NB_USER}" -e SCIGET_CATALOG="${SCIGET_CATALOG}" "${NAME}" bash -c '
+    for _ in $(seq 1 60); do ls ~/.cache/sciget/catalogs/"${SCIGET_CATALOG}"-*/ >/dev/null 2>&1 && exit 0; sleep 1; done
     exit 1' 2>/dev/null \
-    && pass "sciget catalog downloaded at start" \
+    && pass "sciget catalog downloaded at start (${SCIGET_CATALOG:-none})" \
     || fail "sciget catalog downloaded at start (see ~/.cache/sciget/refresh.log)"
 
 # Modules sciget installs are on the path: in new login shells (JupyterLab
 # terminals) and other interactive shells (desktop terminals), and for the
 # Jupyter server's Lmod panel, which lists the folders it started with.
-docker exec -u "${NB_USER}" "${NAME}" bash -c '
-    d="$(sciget config get module_dir)/neuroimaging/smoketool"
+docker exec -u "${NB_USER}" -e SCIGET_CATALOG="${SCIGET_CATALOG}" "${NAME}" bash -c '
+    d="$(sciget config get module_dir)/${SCIGET_CATALOG}/smoketool"
     mkdir -p "${d}" && echo "whatis(\"smoke\")" >"${d}/1.0.lua"' 2>/dev/null
 for mode in -lc -ic; do
     docker exec -u "${NB_USER}" -w /tmp "${NAME}" bash "${mode}" 'module -t avail smoketool' 2>&1 \
@@ -204,7 +206,7 @@ for mode in -lc -ic; do
         || fail "sciget modules on the path (bash ${mode})"
 done
 curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:${PORT}/module/paths" 2>/dev/null \
-    | grep -q 'sciget/modules/neuroimaging' \
+    | grep -q "sciget/modules/${SCIGET_CATALOG}" \
     && pass "sciget modules on the Jupyter server's path" \
     || fail "sciget modules on the Jupyter server's path"
 
