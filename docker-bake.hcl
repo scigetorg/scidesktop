@@ -36,6 +36,9 @@ variable "CVMFS_FUSE3_SHA256_AMD64" { default = "684bf3d2a71bd9eedfdedb6e4725233
 variable "CVMFS_FUSE3_SHA256_ARM64" { default = "f902cfa715f1b9345a178dd9b87e97e17ee00a4262ee634ad61fe135b00cf476" }
 variable "CVMFS_CONFIG_VERSION" { default = "1.1-0" }
 variable "CVMFS_CONFIG_NONE_SHA256" { default = "b475d2ef4300040ebce400135c5dde1a2f58702d90c62544a22743cf2f720c7f" }
+# renovate: datasource=github-releases depName=EESSI/filesystem-layer versioning=semver extractVersion=^v(?<version>.+)$
+variable "EESSI_CVMFS_CONFIG_VERSION" { default = "0.6.0" }
+variable "EESSI_CVMFS_CONFIG_SHA256" { default = "a226bc24d984e611e5118a65e35ff283c2838576d778336c84f7a86b9b70e681" }
 
 # renovate: datasource=github-releases depName=mamba-org/micromamba-releases
 variable "MICROMAMBA_VERSION" { default = "2.10.0-0" }
@@ -232,6 +235,7 @@ group "test" {
     "sciget-neuroimaging-test",
     "sciget-microscopy-test",
     "sciget-datascience-test",
+    "eessi-cvmfs-test",
     "jupyterlab-niivue-test",
     "jupyterlab-freebrowse-test",
     "jupyterlab-neuroglancer-test",
@@ -511,6 +515,24 @@ target "sciget-datascience" {
 
 target "sciget-datascience-test" {
   inherits = ["sciget-datascience"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# The EESSI CVMFS repository (software.eessi.io), Lmod integration, and
+# curated desktop app launcher hooks (included in scidesktop for all images).
+target "eessi-cvmfs" {
+  inherits = ["_component"]
+  context  = "components/eessi-cvmfs"
+  target   = "component"
+  args = {
+    EESSI_CVMFS_CONFIG_VERSION = EESSI_CVMFS_CONFIG_VERSION
+    EESSI_CVMFS_CONFIG_SHA256  = EESSI_CVMFS_CONFIG_SHA256
+  }
+}
+
+target "eessi-cvmfs-test" {
+  inherits = ["eessi-cvmfs"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1026,6 +1048,7 @@ target "scidesktop" {
     jupyterlab-slurm      = "target:jupyterlab-slurm"
     workflow-engines      = "target:workflow-engines"
     sciget-all            = "target:sciget-all"
+    eessi-cvmfs           = "target:eessi-cvmfs"
     coding-agents         = "target:coding-agents"
     acp-adapters          = "target:acp-adapters"
     antigravity-acp       = "target:antigravity-acp"

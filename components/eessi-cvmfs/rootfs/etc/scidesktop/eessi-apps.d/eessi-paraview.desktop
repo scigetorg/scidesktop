@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=ParaView (EESSI)
+Comment=3D scientific visualization via EESSI
+Exec=/usr/local/bin/eessi-launch ParaView paraview
+Terminal=false
+Categories=Science;Graphics;

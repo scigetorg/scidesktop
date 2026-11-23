@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=R (EESSI)
+Comment=Interactive R console via EESSI
+Exec=/usr/local/bin/eessi-launch R xfce4-terminal --title="R (EESSI)" -e R
+Terminal=false
+Categories=Science;Math;

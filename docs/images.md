@@ -28,6 +28,7 @@ images/
 | Component | scidesktop | microdesktop | datadesktop | aidesktop | neurodesktop |
 | --- | --- | --- | --- | --- | --- |
 | core base (`startup`, `lmod`, `apptainer`, `selkies`, `jupyter-env`, `sciget`, `slurm`, `jupyterlab-slurm`) | yes | yes | yes | yes | yes |
+| `eessi-cvmfs` (EESSI `software.eessi.io` CVMFS config, Lmod hook, `eessi-launch`, `eessi-catalog`, base & domain desktop launchers) | yes | yes | yes | yes | yes |
 | `virtualgl`, `datalad`, `workflow-engines`, `scigethelpers-cli` | yes | yes | yes | yes | yes |
 | `code-server`, `vscode-core` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes | yes |
 | `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed | narrowed |

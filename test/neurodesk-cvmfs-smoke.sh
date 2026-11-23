@@ -63,7 +63,7 @@ echo "neurodesk-cvmfs smoke: ${IMAGE}"
 out="$(docker run --rm "${IMAGE}" bash -lc "
     echo \"repositories=\${SCIDESKTOP_CVMFS_REPOSITORIES}\"
     cvmfs_config showconfig ${REPOSITORY} | grep -E '^CVMFS_(SERVER_URL|KEYS_DIR)='" 2>&1)"
-grep -qx "repositories=${REPOSITORY}" <<<"${out}" \
+grep -qE "^repositories=(.*,)?${REPOSITORY}(,.*)?$" <<<"${out}" \
     && pass "internal mode would mount ${REPOSITORY}" || fail "internal mode would mount ${REPOSITORY}"
 grep -q "^CVMFS_SERVER_URL=.*/cvmfs/${REPOSITORY}" <<<"${out}" && grep -q '^CVMFS_KEYS_DIR=/etc/cvmfs/keys/ardc.edu.au/' <<<"${out}" \
     && pass "the client has the repository's mirrors and key" || fail "the client has the repository's mirrors and key"

@@ -32,6 +32,7 @@ COPY --link --from=scigethelpers-cli / /
 COPY --link --from=jupyterlab-slurm / /
 COPY --link --from=workflow-engines / /
 COPY --link --from=sciget-all / /
+COPY --link --from=eessi-cvmfs / /
 COPY --link --from=coding-agents / /
 COPY --link --from=acp-adapters / /
 COPY --link --from=antigravity-acp / /

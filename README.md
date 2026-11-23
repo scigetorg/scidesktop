@@ -86,7 +86,7 @@ commit's short SHA, the date and `latest`.
 | Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio, VirtualGL (`vglrun`) and `mesa-utils` |
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget with all domain catalogs (`sciget-all`) by default |
-| Modules | Lmod, built from the upstream release |
+| Modules & EESSI | Lmod built from the upstream release; [EESSI](https://www.eessi.io/) CVMFS repository (`eessi-cvmfs`, `software.eessi.io`) wired into Lmod (`module load EESSI/2025.06`), `eessi-catalog`, `eessi-launch`, and JupyterLab desktop launchers (base `ParaView`, `Octave`, `Julia`, `R` plus domain launchers such as `napari` on `microdesktop`, `R + CRAN` on `datadesktop`, `R + Bioconductor` on `neurodesktop`) when mounted |
 | Viewers | [Neuroglancer](docs/viewers.md) on `microdesktop`; [NiiVue](docs/viewers.md) and [FreeBrowse](docs/viewers.md) on `neurodesktop` |
 | Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
 | AI chat | [Jupyter AI](docs/jupyter-ai.md) in JupyterLab with OpenCode, Codex and Claude personas (`acp-adapters`). No model, key or endpoint comes with it |

@@ -38,7 +38,12 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     && rm -rf /tmp/mamba-root /opt/datascience-env/conda-meta/history \
     && chmod -R a+rX,go-w /opt/datascience-env /out
 
+FROM ${UBUNTU_IMAGE} AS rootfs
+COPY rootfs/ /rootfs/
+RUN chmod -R a+rX,go-w /rootfs
+
 FROM scratch AS component
+COPY --from=rootfs /rootfs/ /
 COPY --from=build /opt/datascience-env /opt/datascience-env
 COPY --from=build /out/ /
 
