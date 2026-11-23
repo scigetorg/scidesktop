@@ -146,6 +146,7 @@ with tempfile.TemporaryDirectory() as td:
     sentinel = moved / ".venv" / "rollback_sentinel.txt"
     sentinel.write_text("keep-me")
     spec_dir = moved_spec[0].parent
+    before_spec = moved_spec[0].read_bytes()
     os.chmod(spec_dir, 0o500)
     try:
         r_fail = subprocess.run(
@@ -157,6 +158,7 @@ with tempfile.TemporaryDirectory() as td:
         )
         assert r_fail.returncode != 0, f"expected kernelspec publication failure: {r_fail.stdout}"
         assert sentinel.read_text() == "keep-me", "rebuild did not roll back .venv on kernelspec failure"
+        assert moved_spec[0].read_bytes() == before_spec, "rebuild corrupted existing kernel.json on publication failure"
         assert not list(moved.glob(".venv.scigethelpers_uv-backup-*"))
     finally:
         os.chmod(spec_dir, 0o700)
