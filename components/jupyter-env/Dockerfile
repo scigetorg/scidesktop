@@ -92,15 +92,15 @@ RUN set -e \
     && touch /opt/conda/.write-test && rm /opt/conda/.write-test \
     && exts=$(jupyter server extension list 2>&1) \
     && for e in jupyter_server_proxy jupyterlab_git jupyterlmod jupyter_resource_usage jupyter_scheduler nbgitpuller jupyter_ai_acp_client jupyter_ai_persona_manager jupyter_ai_router jupyterlab_chat jupyter_live_content; do \
-         echo "${exts}" | grep -q "${e}.*enabled" || { echo "server extension ${e} not enabled"; exit 1; }; \
+         grep -q "${e}.*enabled" <<<"${exts}" || { echo "server extension ${e} not enabled"; printf '%s\n' "${exts}"; exit 1; }; \
        done \
     # The server settings are loaded, not just installed.
     && cfg=$(jupyter server --show-config 2>/dev/null) \
-    && echo "${cfg}" | grep -q 'allow_hidden = True' \
-    && echo "${cfg}" | grep -q "terminado_settings = {'shell_command': \['/bin/bash', '-l'\]}" \
-    && echo "${cfg}" | grep -q 'check_for_updates_class = .*NeverCheckForUpdate' \
+    && grep -q 'allow_hidden = True' <<<"${cfg}" \
+    && grep -q "terminado_settings = {'shell_command': \['/bin/bash', '-l'\]}" <<<"${cfg}" \
+    && grep -q 'check_for_updates_class = .*NeverCheckForUpdate' <<<"${cfg}" \
     && test ! -d /opt/conda/pkgs -o -z "$(ls -A /opt/conda/pkgs 2>/dev/null | grep -v -E '^(cache|urls|urls.txt)$')" \
-    && jupyter server extension list 2>&1 | grep -E 'enabled|disabled' \
+    && grep -E 'enabled|disabled' <<<"${exts}" \
     # rfc3987_syntax must not compile its parsers at import (patches/).
     && python -c 'import rfc3987_syntax.syntax_helpers as h; assert not hasattr(h, "_LazyLark") or h.syntax_parser._parser is None' \
     && us=$(cd /tmp && python -X importtime -c 'import jsonschema' 2>&1 \
@@ -109,7 +109,7 @@ RUN set -e \
     # JupyterLab extensions (Jupyter AI, RISE, scheduler, resource usage, widgets) are compatible.
     && labs=$(jupyter labextension list 2>&1) \
     && for e in '@jupyter-ai/acp-client' '@jupyter-ai/persona-manager' jupyterlab-chat-extension '@jupyter-server/resource-usage' jupyterlab-rise '@jupyterlab/scheduler' anywidget ipycanvas; do \
-         echo "${labs}" | grep -q "${e} .*enabled.*OK" || { echo "JupyterLab extension ${e} not OK"; exit 1; }; \
+         grep -q "${e} .*enabled.*OK" <<<"${labs}" || { echo "JupyterLab extension ${e} not OK"; printf '%s\n' "${labs}"; exit 1; }; \
        done \
     && python -c 'import pathlib, jupyter_ai_acp_client as c; d = pathlib.Path(c.__file__).parent; assert "scidesktop-acp-per-event-debug-log" in (d / "default_acp_client.py").read_text(); assert "scidesktop-acp-opencode-2" in (d / "acp_personas/opencode.py").read_text()' \
     && python -c 'import inspect, jupyterlab_rise.app as a; assert "scidesktop-rise-extension-isolation" in inspect.getsource(a)' \

@@ -12,6 +12,7 @@
 #
 #   sciget-microscopy        narrows sciget to the microscopy catalog only
 #   jupyterlab-neuroglancer  Neuroglancer WebGL2 viewer for OME-Zarr, N5, Precomputed and microscopy volumes
+#   microscopy-env           locked Python 3.13 microscopy kernel (scikit-image, tifffile, zarr, ome-zarr, bioio, dask, xarray)
 #
 # Slurm (+ jupyterlab-slurm), VS Code (+ core extensions), DataLad,
 # workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, scigethelpers,
@@ -22,6 +23,7 @@ FROM scidesktop-base
 
 COPY --link --from=sciget-microscopy / /
 COPY --link --from=jupyterlab-neuroglancer / /
+COPY --link --from=microscopy-env / /
 
 LABEL org.opencontainers.image.title="microdesktop" \
       org.opencontainers.image.description="scidesktop for microscopy: the microscopy tools through sciget"

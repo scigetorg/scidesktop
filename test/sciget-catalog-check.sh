@@ -2,17 +2,17 @@
 # End-to-end check of an image that copies a sciget catalog component.
 # Called by test/sciget-<catalog>-smoke.sh.
 #
-#   ./test/sciget-catalog-check.sh <image> <catalog> <offered tool> <tool of another catalog>
+#   ./test/sciget-catalog-check.sh <image> <catalog> <offered tool> [tool of another catalog]
 #
 # Runs what a user runs: sciget as the notebook user in a started session.
 # The catalog is downloaded from its publisher, as in every session.
 
 set -uo pipefail
 
-IMAGE="${1:?usage: sciget-catalog-check.sh <image> <catalog> <offered tool> <tool of another catalog>}"
+IMAGE="${1:?usage: sciget-catalog-check.sh <image> <catalog> <offered tool> [tool of another catalog]}"
 CATALOG="${2:?}"
 OFFERED="${3:?}"
-OTHER="${4:?}"
+OTHER="${4:-}"
 NAME="sciget-${CATALOG}-smoke-$$"
 TOKEN="sciget-smoke"
 FAILED=0
@@ -44,15 +44,26 @@ as_user "for _ in \$(seq 1 60); do ls ~/.cache/sciget/catalogs/${CATALOG}-*/ >/d
     || fail "the catalog is downloaded at start (see ~/.cache/sciget/refresh.log)"
 
 # What the image offers, and what it does not: a tool of the catalog is
-# found, a tool only another catalog has is not.
+# found, and every tool sciget offers comes strictly from that catalog.
 found="$(as_user "sciget find ${OFFERED}" | awk -F '\t' -v tool="${OFFERED}" -v catalog="${CATALOG}" \
     'index($1, tool "/") == 1 && $2 == catalog' | head -n 1)"
 [ -n "${found}" ] && pass "sciget offers ${OFFERED} ($(cut -f 1 <<<"${found}"))" \
     || fail "sciget offers ${OFFERED}"
-other="$(as_user "sciget find ${OTHER}" | awk -F '\t' -v tool="${OTHER}" 'index($1, tool "/") == 1' | wc -l)"
-total="$(as_user 'sciget find' | awk -F '\t' -v catalog="${CATALOG}" '$2 != "" && $2 != catalog' | wc -l)"
-[ "${other}" = 0 ] && [ "${total}" = 0 ] && pass "sciget offers no ${OTHER} and nothing outside ${CATALOG}" \
-    || fail "sciget offers no ${OTHER} and nothing outside ${CATALOG} (${other} ${OTHER}, ${total} from other catalogs)"
+if ! all_tools="$(as_user 'sciget find')"; then
+    fail "sciget find failed while checking catalog isolation"
+elif [ -z "${all_tools}" ]; then
+    fail "sciget find returned no tools"
+else
+    total="$(awk -F '\t' -v catalog="${CATALOG}" '$2 != "" && $2 != catalog' <<<"${all_tools}" | wc -l)"
+    if [ -n "${OTHER}" ]; then
+        other="$(awk -F '\t' -v tool="${OTHER}" 'index($1, tool "/") == 1' <<<"${all_tools}" | wc -l)"
+        [ "${other}" = 0 ] && [ "${total}" = 0 ] && pass "sciget offers no ${OTHER} and nothing outside ${CATALOG}" \
+            || fail "sciget offers no ${OTHER} and nothing outside ${CATALOG} (${other} ${OTHER}, ${total} from other catalogs)"
+    else
+        [ "${total}" = 0 ] && pass "sciget offers nothing outside ${CATALOG}" \
+            || fail "sciget offers nothing outside ${CATALOG} (${total} from other catalogs)"
+    fi
+fi
 
 # Modules sciget installs are on the path: in new login shells (JupyterLab
 # terminals) and other interactive shells (desktop terminals), and for the

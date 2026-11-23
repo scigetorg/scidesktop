@@ -46,6 +46,7 @@ NOT_RENOVATED = {
     "PLATFORM": "build setting",
     "IMAGE": "output tag",
     "MICRODESKTOP_IMAGE": "output tag",
+    "DATADESKTOP_IMAGE": "output tag",
     "AIDESKTOP_IMAGE": "output tag",
     "NEURODESKTOP_IMAGE": "output tag",
     "SCIGET_COMMIT": "tracked by its own Renovate rule (git-refs on main)",

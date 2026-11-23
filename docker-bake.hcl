@@ -179,6 +179,7 @@ variable "NB_GID" { default = "100" }
 variable "PLATFORM" { default = "" }
 variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
+variable "DATADESKTOP_IMAGE" { default = "datadesktop:latest" }
 variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
 variable "NEURODESKTOP_IMAGE" { default = "neurodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
@@ -214,7 +215,7 @@ variable "NF_NEURO_MODULES_SRC" { default = "https://github.com/nf-neuro/modules
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop", "aidesktop", "neurodesktop"]
+  targets = ["scidesktop", "microdesktop", "datadesktop", "aidesktop", "neurodesktop"]
 }
 
 group "test" {
@@ -251,6 +252,8 @@ group "test" {
     "virtualgl-test",
     "jupyterlab-slurm-test",
     "workflow-engines-test",
+    "microscopy-env-test",
+    "datascience-env-test",
     "neuroimaging-env-test",
     "neurodesk-compat-test",
   ]
@@ -919,6 +922,35 @@ target "workflow-engines-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: microscopy Python analysis kernel (numpy, scipy, scikit-image,
+# tifffile, imagecodecs, zarr, ome-zarr, bioio, dask, xarray). Copied by microdesktop.
+target "microscopy-env" {
+  inherits = ["_component"]
+  context  = "components/microscopy-env"
+  target   = "component"
+}
+
+target "microscopy-env-test" {
+  inherits = ["microscopy-env"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: general Data Science Python kernel (numpy, scipy, pandas, polars,
+# pyarrow, duckdb, jupysql, scikit-learn, statsmodels, xgboost, lightgbm,
+# optuna, shap, plotly, altair, sqlalchemy). Copied by datadesktop.
+target "datascience-env" {
+  inherits = ["_component"]
+  context  = "components/datascience-env"
+  target   = "component"
+}
+
+target "datascience-env-test" {
+  inherits = ["datascience-env"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # Optional: neuroimaging Python analysis kernel (nibabel, nipype, niwrap,
 # pydra, nipoppy, ipyniivue, datalad, xnat, nf-core). Copied by neurodesktop.
 target "neuroimaging-env" {
@@ -1000,8 +1032,20 @@ target "microdesktop" {
     scidesktop-base         = "target:scidesktop"
     sciget-microscopy       = "target:sciget-microscopy"
     jupyterlab-neuroglancer = "target:jupyterlab-neuroglancer"
+    microscopy-env          = "target:microscopy-env"
   }
   tags   = [MICRODESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
+target "datadesktop" {
+  inherits = ["_common"]
+  context  = "images/datadesktop"
+  contexts = {
+    scidesktop-base = "target:scidesktop"
+    datascience-env = "target:datascience-env"
+  }
+  tags   = [DATADESKTOP_IMAGE]
   output = ["type=docker"]
 }
 

@@ -1,7 +1,8 @@
 # microdesktop
 
 scidesktop for microscopy: the same JupyterLab, desktop, Apptainer, Lmod and
-sciget, offering the microscopy tools and no others.
+sciget, narrowed to the microscopy catalog and paired with Neuroglancer and a
+locked Python bioimaging kernel.
 
 - **Tools.** `sciget find` lists the `microscopy` catalog; `sciget install
   <tool>/<version>` downloads a tool's container and writes its module; the
@@ -10,6 +11,11 @@ sciget, offering the microscopy tools and no others.
 - **Viewers.** OME-Zarr, N5, Precomputed, NIfTI and mesh datasets open in
   Neuroglancer from JupyterLab's file browser or launcher tile. See
   [docs/viewers.md](../../docs/viewers.md).
+- **Microscopy Python kernel.** The `Microscopy (Python 3.13)` kernel at
+  `/opt/microscopy-env` provides `numpy`, `scipy`, `pandas`, `scikit-image`,
+  `scikit-learn`, `matplotlib`, `seaborn`, `dask`, `xarray`, `imageio`,
+  `tifffile`, `imagecodecs`, `zarr`, `ome-zarr`, `bioio` (`bioio-ome-tiff`,
+  `bioio-ome-zarr`, `bioio-tifffile`) and `watermark`.
 - **Coding agents.** `codex`, `claude` and `opencode` in terminals, and the
   **scigent.ai** launcher tile. See
   [docs/coding-agents.md](../../docs/coding-agents.md).
@@ -31,15 +37,15 @@ Open <http://localhost:8888/lab?token=microdesktop>. In a terminal:
 ## What is here
 
 Only the assembly: this image is `scidesktop` (which already includes Slurm +
-`jupyterlab-slurm`, VS Code with `vscode-core`, DataLad,
-workflow engines, VirtualGL, `scigethelpers`,
-coding agents, ACP adapters, T3 Code and T3 Connect) plus `sciget-microscopy`
-and `jupyterlab-neuroglancer`.
+`jupyterlab-slurm`, VS Code with `vscode-core`, DataLad, workflow engines,
+VirtualGL, `scigethelpers`, coding agents, ACP adapters, T3 Code and T3
+Connect) plus the microscopy components:
 
 | Component | What it adds |
 | --- | --- |
 | `sciget-microscopy` | narrows sciget to the microscopy catalog |
 | `jupyterlab-neuroglancer` | Neuroglancer WebGL2 viewer for OME-Zarr, N5, Precomputed and microscopy volumes |
+| `microscopy-env` | locked Python 3.13 microscopy kernel (`/opt/microscopy-env`) |
 
 The microscopy tools are whatever the catalog publishes; none is listed in
 this repository. See [docs/images.md](../../docs/images.md) for what an image

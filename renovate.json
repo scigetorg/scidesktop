@@ -21,6 +21,8 @@
       "/^components/ai-ready/airflow-requirements\\.in$/",
       "/^components/datalad/requirements\\.in$/",
       "/^components/workflow-engines/requirements\\.in$/",
+      "/^components/microscopy-env/requirements\\.in$/",
+      "/^components/datascience-env/requirements\\.in$/",
       "/^components/neuroimaging-env/requirements\\.in$/"
     ]
   },
@@ -551,6 +553,26 @@
       "groupName": "component workflow-engines",
       "addLabels": [
         "component:workflow-engines"
+      ]
+    },
+    {
+      "description": "Component microscopy-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/microscopy-env/**"
+      ],
+      "groupName": "component microscopy-env",
+      "addLabels": [
+        "component:microscopy-env"
+      ]
+    },
+    {
+      "description": "Component datascience-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/datascience-env/**"
+      ],
+      "groupName": "component datascience-env",
+      "addLabels": [
+        "component:datascience-env"
       ]
     },
     {
