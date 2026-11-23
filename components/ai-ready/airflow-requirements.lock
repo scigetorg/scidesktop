@@ -248,10 +248,12 @@ apache-airflow-providers-postgres==7.1.1 \
     --hash=sha256:090cc1674f04205179737645a7054ec887d4f2adb02a1d8b7f8fb86a263f17be \
     --hash=sha256:ebea35773fdfd97fa404632b3c35ceb846082a6d94ffdf710fcd448b41a58990
     # via -r airflow-requirements.in
-apache-airflow-providers-smtp==3.2.0 \
-    --hash=sha256:21881645d1717df7102abc4ca0e3c308dd01fc02700fca9edd45c3fe0063640e \
-    --hash=sha256:99b0875a5678981be8ac0b9ad94ce1d38f44a37c516ddebd3837481aec069135
-    # via apache-airflow-core
+apache-airflow-providers-smtp==3.2.2 \
+    --hash=sha256:afd076560e4593b3af3caa5a45b61c8e91d6e9497791212e7b84d26bd21f38ae \
+    --hash=sha256:bddbfcf118e77e4ab01f95bc48504a7fc31e5b13c682ddd5699b7b49ce40deec
+    # via
+    #   -r airflow-requirements.in
+    #   apache-airflow-core
 apache-airflow-providers-standard==1.21.0 \
     --hash=sha256:12969f10b7735f46dfa1d4f48675ca19dce46bbaa3a68d42c0fdb94eca4cff25 \
     --hash=sha256:4345d66cc4b02fdf984218d318f40361ed12116bb13575169c444c64bd04ea4b
