@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: image-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   # Images pushed to GHCR as ghcr.io/<owner>/<image>. Every folder in images/
@@ -45,6 +45,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -127,6 +129,82 @@ jobs:
           done
           exit "${failed}"
 
+      # Vulnerability scan of built images (single Trivy pass per image using a
+      # SHA-verified binary) plus hashed pip-audit across all Python environments.
+      - name: Vulnerability scan (Trivy & Python pip-audit)
+        run: |
+          set -euo pipefail
+          ver="0.76.2"
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+              trivy_arch="ARM64"
+              sha="ab9d51f86e6a5fb936f605faff6b593ac51bc378fff4d3e8b9d58358b9c367c3"
+          else
+              trivy_arch="64bit"
+              sha="bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf"
+          fi
+          curl -fsSL -o /tmp/trivy.tar.gz \
+              "https://github.com/aquasecurity/trivy/releases/download/v${ver}/trivy_${ver}_Linux-${trivy_arch}.tar.gz"
+          printf '%s  %s\n' "${sha}" /tmp/trivy.tar.gz | sha256sum -c -
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          /tmp/trivy image --download-db-only \
+              --db-repository mirror.gcr.io/aquasec/trivy-db,ghcr.io/aquasecurity/trivy-db
+          failed=0
+          for image in ${PUBLISH}; do
+              echo "::group::trivy ${image}"
+              /tmp/trivy image --skip-db-update --scanners vuln --ignore-unfixed \
+                  --format json --output "/tmp/trivy-${image}.json" "${image}:ci"
+              python3 - "/tmp/trivy-${image}.json" <<'PY' || failed=1
+          import json, sys
+          data = json.load(open(sys.argv[1]))
+          os_high_crit, any_crit, lib_high = [], [], []
+          for res in data.get("Results") or []:
+              cls = res.get("Class", "")
+              tgt = res.get("Target", "")
+              for v in res.get("Vulnerabilities") or []:
+                  sev = v.get("Severity", "")
+                  entry = f"{tgt}: {v.get('PkgName')} {v.get('InstalledVersion')} {v.get('VulnerabilityID')} ({sev}, fix: {v.get('FixedVersion')})"
+                  if sev == "CRITICAL":
+                      any_crit.append(entry)
+                  if cls == "os-pkgs" and sev in ("HIGH", "CRITICAL"):
+                      os_high_crit.append(entry)
+                  elif cls != "os-pkgs" and sev == "HIGH":
+                      lib_high.append(entry)
+          print(f"OS HIGH/CRITICAL: {len(os_high_crit)}, Any CRITICAL: {len(any_crit)}, Library HIGH (informational): {len(lib_high)}")
+          for e in lib_high:
+              print("  [info]", e)
+          for e in os_high_crit + any_crit:
+              print("  [FAIL]", e)
+          sys.exit(1 if (os_high_crit or any_crit) else 0)
+          PY
+              rm -f "/tmp/trivy-${image}.json"
+              echo "::endgroup::"
+          done
+          python3 -m venv /tmp/pip-audit-venv
+          /tmp/pip-audit-venv/bin/pip install --quiet --no-deps --require-hashes \
+              -r .github/requirements/pip-audit.txt
+          for spec in \
+              "scidesktop:ci:/opt/conda/bin/python" \
+              "scidesktop:ci:/opt/selkies/bin/python" \
+              "aidesktop:ci:/opt/ai-ready/env/bin/python" \
+              "aidesktop:ci:/opt/ai-ready/airflow/bin/python" \
+              "neurodesktop:ci:/opt/neuroimaging-env/bin/python"; do
+              img="${spec%:*}"
+              py="${spec##*:}"
+              echo "::group::pip-audit ${img} ${py}"
+              if ! docker run --rm --entrypoint "${py}" "${img}" -c \
+                  'import importlib.metadata as im; seen = set(); [print(n + "==" + d.version) for d in im.distributions() if (n := d.metadata.get("Name")) and (n.lower(), d.version) not in seen and not seen.add((n.lower(), d.version))]' \
+                  > /tmp/env-freeze.txt; then
+                  failed=1
+                  echo "::endgroup::"
+                  continue
+              fi
+              /tmp/pip-audit-venv/bin/pip-audit -r /tmp/env-freeze.txt --no-deps --disable-pip || failed=1
+              rm -f /tmp/env-freeze.txt
+              echo "::endgroup::"
+          done
+          rm -rf /tmp/pip-audit-venv /tmp/trivy /tmp/trivy.tar.gz
+          exit "${failed}"
+
       - name: Log in to GHCR
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
@@ -174,3 +252,51 @@ jobs:
         run: |
           # shellcheck disable=SC2086
           .github/scripts/publish-manifests "ghcr.io/${GITHUB_REPOSITORY_OWNER}" "${CANDIDATE}" ${PUBLISH}
+
+  attest:
+    name: Attest build provenance (${{ matrix.image }})
+    needs: publish
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [scidesktop, microdesktop, aidesktop, neurodesktop]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve published multi-arch digest
+        id: digest
+        env:
+          IMAGE_NAME: ${{ matrix.image }}
+          SHORT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_NAME}"
+          short_sha="$(printf '%.7s' "${SHORT_SHA}")"
+          digest="$(docker buildx imagetools inspect "${repo}:${short_sha}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+          if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Unexpected manifest digest for ${repo}:${short_sha}: '${digest}'" >&2
+              exit 1
+          fi
+          echo "repo=${repo}" >> "${GITHUB_OUTPUT}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.digest.outputs.repo }}
+          subject-digest: ${{ steps.digest.outputs.digest }}
+          push-to-registry: true

@@ -3,6 +3,14 @@ bash-kernel==0.10.0 \
     --hash=sha256:2ed5a0a416c418d1d751e71505bd6c889e12157444b50c4287a685da775c28ca \
     --hash=sha256:da28513230f5307c7a49e87352366304dc52b66faa207d6caed1b2bdec03c1fa
     # via -r requirements.in
+fastmcp==3.4.11 \
+    --hash=sha256:36273b04eff98021da4601d4f86c64dfa10e61119e9ddd17ad80650465c65355 \
+    --hash=sha256:f50a7aa4cc2a5954d02fcc9672ff1d69daff73a02387f959c2647523cd6d5606
+    # via -r requirements.in
+fastmcp-slim==3.4.11 \
+    --hash=sha256:24535dd843b3dcb3272b86c88fdf6ada5026c39ec5b56e2426557223c4d2c8bf \
+    --hash=sha256:50e29b0830fb216aba437f35cfc7dd4bce7451f2f85f8786d6fff3da78d79386
+    # via -r requirements.in
 filetype==1.2.0 \
     --hash=sha256:66b56cd6474bf41d8c54660347d37afcc3f7d1970648de365c102ef77548aadb \
     --hash=sha256:7ce71b6880181241cf7ac8697a2f1eb6a8bd9b429f7ad6d27b8db9ba5f1c2d25

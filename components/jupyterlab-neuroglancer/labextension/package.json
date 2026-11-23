@@ -24,6 +24,9 @@
   "devDependencies": {
     "@jupyterlab/builder": "4.5.11"
   },
+  "overrides": {
+    "sanitize-html": "^2.18.2"
+  },
   "jupyterlab": {
     "extension": true,
     "outputDir": "labextension"

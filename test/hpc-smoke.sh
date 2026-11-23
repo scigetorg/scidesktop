@@ -84,6 +84,9 @@ fi
     && pass "k8s: running as UID 12345" || fail "k8s: running as UID 12345"
 [ "$(docker exec "${NAME}-k8s" awk '/^CapEff:/ { print $2 }' /proc/1/status 2>/dev/null)" = "0000000000000000" ] \
     && pass "k8s: holds no capabilities" || fail "k8s: holds no capabilities"
+docker exec "${NAME}-k8s" sh -c 'pid=$(pgrep -o -f "[j]upyter-lab|[j]upyter lab"); [ -n "${pid}" ] && grep -qx "NoNewPrivs:[[:space:]]*1" "/proc/${pid}/status"' 2>/dev/null \
+    && pass "k8s: Jupyter server runs with NoNewPrivs=1" \
+    || fail "k8s: Jupyter server runs with NoNewPrivs=1"
 docker exec "${NAME}-k8s" grep -q ':12345:' /etc/passwd 2>/dev/null \
     && pass "k8s: start.sh registered UID 12345 in /etc/passwd" \
     || fail "k8s: start.sh registered UID 12345 in /etc/passwd"

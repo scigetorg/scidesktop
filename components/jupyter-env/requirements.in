@@ -6,3 +6,7 @@
 jupyterlmod==5.3.2
 bash-kernel==0.10.0
 filetype==1.2.0
+# Security patch over conda-forge's 3.4.7 (GHSA-7xgj-8392-5q4r, fixed in 3.4.10);
+# jupyter-server-mcp 0.3.0 requires fastmcp<4,>=3.4.4.
+fastmcp==3.4.11
+fastmcp-slim==3.4.11

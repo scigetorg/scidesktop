@@ -47,10 +47,12 @@ user create a namespace but refused Apptainer's user mapping, while a kernel
 6.8 host allowed both.
 
 **Workstations (`docker run`):** Docker's default seccomp and AppArmor profiles
-block user namespaces. Run with:
+block user namespaces. Run with dropped capabilities, `no-new-privileges`, and
+only the seccomp/AppArmor relaxation needed for unprivileged user namespaces:
 
 ```sh
 docker run --rm -p 8888:8888 --shm-size=2g \
+    --cap-drop ALL --security-opt no-new-privileges:true \
     --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
     --device /dev/fuse \
     ghcr.io/scigetorg/scidesktop:<short-sha>
@@ -66,6 +68,11 @@ kernel.apparmor_restrict_unprivileged_userns=0` lifts it until reboot.
 c.KubeSpawner.image = "ghcr.io/scigetorg/scidesktop:<short-sha>"
 c.KubeSpawner.cpu_guarantee = 2
 c.KubeSpawner.cpu_limit = 2
+c.KubeSpawner.container_security_context = {
+    "runAsNonRoot": True,
+    "allowPrivilegeEscalation": False,
+    "capabilities": {"drop": ["ALL"]},
+}
 
 c.KubeSpawner.volumes = [
     {"name": "shm", "emptyDir": {"medium": "Memory", "sizeLimit": "2Gi"}},
@@ -77,19 +84,24 @@ c.KubeSpawner.volume_mounts = [
     {"name": "cvmfs", "mountPath": "/cvmfs", "readOnly": True,
      "mountPropagation": "HostToContainer"},
 ]
-# Plus the cluster's security settings from "Platform requirements".
+# Plus the cluster's AppArmor/seccomp settings from "Platform requirements".
+# scidesktop ships zero SUID/SGID binaries and locks NoNewPrivs=1 in start.sh;
+# mounting SIF files via /dev/fuse requires Linux >= 5.18 (unprivileged FUSE
+# inside user namespaces).
 ```
 
 Do not set `c.KubeSpawner.cmd`, `command` or `args` just to start Jupyter. The
-image keeps docker-stacks' `start.sh`, which accepts the spawner's command and
-sets up the user. Only port 8888 listens outside the pod; the desktop starts
-when the user first opens **Desktop** from the launcher.
+image keeps docker-stacks' `start.sh` (hardened to drop privileges via `setpriv`
+with `NoNewPrivs` and zero bounding capabilities instead of `sudo`), which
+accepts the spawner's command and sets up the user. Only port 8888 listens
+outside the pod; the desktop starts when the user first opens **Desktop** from
+the launcher.
 
 ## Environment
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SCIDESKTOP_APPTAINER_SETUID` | `auto` | Applies only when the container starts as root. `auto` enables the setuid starter only if user namespaces fail for the notebook user; `yes`/`no` force it. The setuid starter only works in privileged containers. |
+| `SCIDESKTOP_APPTAINER_SETUID` | unused | Removed for security hardening: Apptainer is built `--without-suid` and `starter-suid` is not shipped. Setting `yes` logs a warning and leaves setuid disabled. |
 | `APPTAINER_HOME` | the notebook user's home | Set at start so Apptainer does not look the home up for the host uid, which fails under rootless Podman ("failed to add  as session directory"). An explicit value is kept. |
 | `APPTAINER_NV` | `1` when the NVIDIA driver is loaded | Binds the host's NVIDIA devices and libraries into tool containers. Set `0` if a tool fails with `GLIBC_* not found` from a host library. |
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`: use the `/cvmfs` the platform mounts. `internal`: mount inside the container (needs root, `/dev/fuse`, mount capability, an AppArmor profile that allows FUSE mounts, repository config and keys under `/etc/cvmfs`; with `docker run`: `--cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor=unconfined`). `disabled`: skip. |

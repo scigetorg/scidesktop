@@ -1,14 +1,32 @@
 #!/bin/bash
 # Runs a command as the notebook user, replacing itself via setpriv/exec so
-# signals (SIGTERM/SIGINT) reach the child directly. Safe whether invoked as
-# root or already as the notebook user.
+# signals (SIGTERM/SIGINT) reach the child directly, with NoNewPrivs locked
+# and capabilities dropped. Uses absolute root-owned binaries so writable
+# user PATH entries (e.g. /opt/conda/bin) cannot hijack a root invocation.
 #
 #   /opt/scidesktop/run-as-user <command> [args...]
 set -euo pipefail
-if [ "$(id -u)" -eq 0 ]; then
+if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+    orig_path="${PATH:-/usr/local/bin:/usr/bin:/bin}"
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    export PATH
     user="${NB_USER:-jovyan}"
-    home="$(getent passwd "${user}" | cut -d: -f6)"
-    exec setpriv --reuid "${user}" --regid "$(id -g "${user}")" --init-groups \
-        env "HOME=${home}" "USER=${user}" "$@"
+    home="$(/usr/bin/getent passwd "${user}" | /usr/bin/cut -d: -f6)"
+    setpriv_args=(
+        --reuid "$(/usr/bin/id -u "${user}")"
+        --regid "$(/usr/bin/id -g "${user}")"
+        --init-groups
+        --no-new-privs
+        --inh-caps -all
+        --ambient-caps -all
+    )
+    if /usr/bin/setpriv --bounding-set -all -- /bin/true 2>/dev/null; then
+        setpriv_args+=(--bounding-set -all)
+    elif ! /bin/grep -qx 'CapBnd:[[:space:]]*0000000000000000' /proc/self/status 2>/dev/null; then
+        echo "[run-as-user] WARNING: could not clear capability bounding set; continuing with NoNewPrivs=1" >&2
+    fi
+    exec /usr/bin/env "HOME=${home}" "USER=${user}" "LOGNAME=${user}" \
+        "PATH=${orig_path}" \
+        /usr/bin/setpriv "${setpriv_args[@]}" -- "$@"
 fi
-exec "$@"
+exec /usr/bin/setpriv --no-new-privs --inh-caps -all --ambient-caps -all -- "$@"

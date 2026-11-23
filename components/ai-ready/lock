@@ -26,6 +26,13 @@ trap 'rm -rf upstream' EXIT
 raw="https://raw.githubusercontent.com/IntersectAustralia/ai-ready-containers/${AI_READY_COMMIT}"
 curl -fsSL -o upstream/base-requirements.txt "${raw}/docker/base/requirements.txt"
 curl -fsSL -o upstream/airflow-requirements.txt "${raw}/docker/airflow/requirements.txt"
+# Upstream's airflow requirements capped cryptography<46.0.0 for Airflow 3.1.x;
+# Airflow 3.4+ supports cryptography 50.x, which fixes multiple CVEs in 45.x.
+sed -i 's/^cryptography>=41\.0\.0,<46\.0\.0$/cryptography>=46.0.5/' upstream/airflow-requirements.txt
+if grep -qE '^cryptography.*<46' upstream/airflow-requirements.txt; then
+    echo "ai-ready/lock: upstream cryptography<46 cap was not removed; update sed pattern" >&2
+    exit 1
+fi
 curl -fsSL -o upstream/airflow-constraints.txt \
     "https://raw.githubusercontent.com/apache/airflow/constraints-${airflow_version}/constraints-${python_version}.txt"
 

@@ -1,0 +1,24 @@
+#!/bin/bash
+# Regenerates yarn.lock for jupyterlab-slurm from the pinned
+# JUPYTERLAB_SLURM_COMMIT in docker-bake.hcl using jupyter-env's jlpm.
+# Requires a locally built scidesktop:latest image (`docker buildx bake scidesktop`).
+#
+#   ./lock
+set -euo pipefail
+cd "$(dirname "$0")"
+commit=$(sed -n 's/^variable "JUPYTERLAB_SLURM_COMMIT" { default = "\(.*\)" }$/\1/p' ../../docker-bake.hcl)
+[ -n "${commit}" ] || { echo "JUPYTERLAB_SLURM_COMMIT not found in docker-bake.hcl" >&2; exit 1; }
+tmp=$(mktemp -d)
+trap 'rm -rf "${tmp}"' EXIT
+git clone -q https://github.com/NERSC/jupyterlab-slurm.git "${tmp}/slurm"
+git -C "${tmp}/slurm" checkout -q "${commit}"
+docker run --rm --entrypoint bash \
+    -v "${tmp}/slurm:/work" \
+    scidesktop:latest -c '
+    set -euo pipefail
+    export PATH="/opt/code-server/lib:/opt/conda/bin:${PATH}"
+    cd /work
+    YARN_ENABLE_IMMUTABLE_INSTALLS=0 jlpm install --mode=update-lockfile
+'
+install -m 0644 "${tmp}/slurm/yarn.lock" yarn.lock
+echo "jupyterlab-slurm: updated yarn.lock for jupyterlab-slurm@${commit}"

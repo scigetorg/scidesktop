@@ -16,7 +16,11 @@ Not vendored: `10activate-conda-env.sh`. The image ships its own
 `before-notebook.d` hook instead (each component's `rootfs/`).
 
 Local changes, if any, are made in separate commits after the unchanged copy
-so `git log -p components/startup/docker-stacks` shows each one.
+so `git log -p components/startup/docker-stacks` shows each one:
+
+- `start.sh`: replaced `sudo` privilege-drop and `GRANT_SUDO` with
+  `setpriv --no-new-privs --inh-caps -all [--bounding-set -all]` so the OS
+  layer does not ship SUID `sudo`.
 
 To update: copy the same files from a newer commit, update the commit above,
 and run `docker buildx bake startup-test` and the smoke test.

@@ -35,15 +35,19 @@ hook=/usr/local/bin/before-notebook.d/45-neurodesk-agents.sh
 # OpenCode gives its own start-up a fixed time ("Location plugins did not
 # finish activating"), which a builder running every component's test at once
 # can exceed. Only that error is tried again.
-for attempt in 1 2 3 4 5; do
-    opencode models --standalone > "${HOME}/models" 2>&1 && break
-    if [ "${attempt}" = 5 ] || ! grep -q 'did not finish activating' "${HOME}/models"; then
-        cat "${HOME}/models" >&2
-        exit 1
-    fi
-done
+list_models() {
+    local out="$1"; shift
+    for attempt in 1 2 3 4 5; do
+        "$@" opencode models --standalone > "${out}" 2>&1 && return 0
+        if [ "${attempt}" = 5 ] || ! grep -q 'did not finish activating' "${out}"; then
+            cat "${out}" >&2
+            return 1
+        fi
+    done
+}
+list_models "${HOME}/models"
 grep -qx 'neurodesk/neurodesk' "${HOME}/models" || { cat "${HOME}/models" >&2; exit 1; }
-env -u OPENCODE_CONFIG opencode models --standalone > "${HOME}/models-without" 2>&1
+list_models "${HOME}/models-without" env -u OPENCODE_CONFIG
 if grep -q '^neurodesk/' "${HOME}/models-without"; then
     echo "OpenCode offers the Neurodesk model without the hook's setting" >&2
     exit 1

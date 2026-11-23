@@ -50,3 +50,19 @@ jobs:
           printf '%s  %s\n' "${sha}" /tmp/actionlint.tar.gz | sha256sum -c -
           tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
           /tmp/actionlint
+
+      - name: Security audit (Python & npm locks)
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/pip-audit-venv
+          /tmp/pip-audit-venv/bin/pip install --quiet --no-deps --require-hashes \
+            -r .github/requirements/pip-audit.txt
+          for lock in components/*/*requirements.lock; do
+            echo "=== pip-audit ${lock} ==="
+            /tmp/pip-audit-venv/bin/pip-audit -r "${lock}" --no-deps --disable-pip
+          done
+          rm -rf /tmp/pip-audit-venv
+          for pkg in components/acp-adapters components/jupyterlab-neuroglancer/labextension; do
+            echo "=== npm audit ${pkg} ==="
+            npm --prefix "${pkg}" audit --omit=dev --audit-level=moderate
+          done

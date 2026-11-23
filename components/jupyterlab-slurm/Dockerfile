@@ -11,6 +11,7 @@ FROM docker.io/library/node:${NODE_VERSION}-bookworm-slim AS build
 ARG JUPYTERLAB_SLURM_COMMIT
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 COPY --from=jupyterlab-slurm-src . /src
+COPY yarn.lock /src/yarn.lock
 COPY patch_jupyterlab_slurm.py /tmp/patch_jupyterlab_slurm.py
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     --mount=type=cache,target=/root/.npm \
@@ -19,7 +20,7 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     && export PATH="${PATH}:/opt/conda/bin" \
     && /opt/conda/bin/python /tmp/patch_jupyterlab_slurm.py /src/jupyterlab_slurm/handlers.py \
     && cd /src \
-    && YARN_ENABLE_IMMUTABLE_INSTALLS=0 jlpm install \
+    && jlpm install --immutable \
     && jlpm build:lib \
     && jupyter-builder build --core-package-file=/opt/conda/share/jupyter/lab/static/package.json . \
     && labextension=/out/opt/jupyterlab-slurm/lib/share/jupyter/labextensions/jupyterlab-slurm \

@@ -15,6 +15,7 @@
   ],
   "pip_requirements": {
     "managerFilePatterns": [
+      "/^components/jupyter-env/requirements\\.in$/",
       "/^components/selkies/requirements\\.in$/",
       "/^components/ai-ready/requirements\\.in$/",
       "/^components/ai-ready/airflow-requirements\\.in$/",
@@ -238,7 +239,7 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Component os-ubuntu: its versions in docker-bake.hcl join the component's group.",
+      "description": "Component os-ubuntu: its versions in docker-bake.hcl join the component's group. A cvmfs bump needs all CVMFS_*_SHA256 variables updated.",
       "matchFileNames": [
         "docker-bake.hcl"
       ],
@@ -265,7 +266,7 @@
       ]
     },
     {
-      "description": "Component apptainer: its versions in docker-bake.hcl join the component's group.",
+      "description": "Component apptainer: its versions in docker-bake.hcl join the component's group. An apptainer bump needs APPTAINER_SHA256 updated.",
       "matchFileNames": [
         "docker-bake.hcl"
       ],
@@ -273,7 +274,10 @@
         "apptainer/apptainer",
         "apptainer-go",
         "google.golang.org/grpc",
-        "golang.org/x/crypto"
+        "golang.org/x/crypto",
+        "github.com/go-jose/go-jose/v4",
+        "github.com/klauspost/compress",
+        "github.com/moby/go-archive"
       ],
       "groupName": "component apptainer",
       "addLabels": [
@@ -623,7 +627,7 @@
       "currentValueTemplate": "main"
     },
     {
-      "description": "FreeBrowse fork commit; the build stops if the patched viewer registration moved.",
+      "description": "FreeBrowse fork commit; a bump needs components/jupyterlab-freebrowse/lock run if dependencies changed, and the build stops if the patched viewer registration moved.",
       "customType": "regex",
       "managerFilePatterns": [
         "/^docker-bake\\.hcl$/"
@@ -651,7 +655,7 @@
       "currentValueTemplate": "master"
     },
     {
-      "description": "NERSC jupyterlab-slurm commit; the build stops if the patched identity lookup moved.",
+      "description": "NERSC jupyterlab-slurm commit; a bump needs components/jupyterlab-slurm/lock run if dependencies changed, and the build stops if the patched identity lookup moved.",
       "customType": "regex",
       "managerFilePatterns": [
         "/^docker-bake\\.hcl$/"

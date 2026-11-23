@@ -78,7 +78,7 @@ USER ${NB_UID}
 RUN set -e \
     && jupyter lab --version \
     && jupyterhub-singleuser --version \
-    && python -c 'import jupyter_server_proxy, ipykernel, jupyterlab, ipywidgets, anywidget, ipycanvas, jupyterlab_git, jupyterlmod, jupyter_resource_usage, jupyter_scheduler, nbgitpuller, papermill, bash_kernel, jupyter_ai_acp_client, jupyterlab_chat' \
+    && python -c 'import jupyter_server_proxy, ipykernel, jupyterlab, ipywidgets, anywidget, ipycanvas, jupyterlab_git, jupyterlmod, jupyter_resource_usage, jupyter_scheduler, nbgitpuller, papermill, bash_kernel, jupyter_ai_acp_client, jupyterlab_chat, fastmcp; import importlib.metadata as im; assert tuple(int(p) for p in im.version("fastmcp").split(".")[:3]) >= (3, 4, 10), im.version("fastmcp")' \
     && pip check \
     && mamba --version \
     && uv --version \

@@ -20,6 +20,7 @@ the machine it runs on.
 docker buildx bake                           # builds every image (scidesktop:latest, ...)
 docker buildx bake test                      # every component's own test
 docker run --rm -p 8888:8888 --shm-size=2g -e JUPYTER_TOKEN=scidesktop \
+    --cap-drop ALL --security-opt no-new-privileges:true \
     --security-opt seccomp=unconfined --security-opt apparmor=unconfined scidesktop
 ./test/image-smoke.sh scidesktop             # end-to-end checks
 ```
@@ -79,7 +80,7 @@ commit's short SHA, the date and `latest`.
 | | |
 |---|---|
 | Base | Ubuntu 26.04 LTS, digest-pinned, packages from a dated `snapshot.ubuntu.com` snapshot |
-| Startup | docker-stacks `start.sh` and hooks, vendored unchanged (JupyterHub contract) |
+| Startup | docker-stacks `start.sh` and hooks (hardened to drop privileges via `setpriv --no-new-privs` without `sudo`; JupyterHub contract) |
 | Jupyter | JupyterLab and `jupyterhub-singleuser` in `/opt/conda` (micromamba, locked), with `bash_kernel`, `jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`, `nbgitpuller`, `papermill`, `pytest`, `anywidget`, `ipycanvas` and `uv` |
 | Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio, VirtualGL (`vglrun`) and `mesa-utils` |
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
@@ -121,7 +122,7 @@ publisher provides one. Renovate proposes updates rather than builds drifting si
 | `SCIDESKTOP_APP_DIRS` | `/opt/sciget/applications` | Colon-separated folders whose desktop entries become launcher tiles; read when Jupyter starts |
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | Desktop credential; generated per container if unset |
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`, `internal` or `disabled`; see the runbook |
-| `SCIDESKTOP_APPTAINER_SETUID` | `auto` | `auto`, `yes` or `no`; applies only when the container starts as root |
+| `SCIDESKTOP_APPTAINER_SETUID` | unused | Removed: Apptainer is built `--without-suid` and `starter-suid` is not shipped |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download the sciget catalogs in the background at start |
 | `SCIDESKTOP_SLURM` | `yes` | Start the session's Slurm queue; see [docs/slurm.md](docs/slurm.md) |
 | `AI_READY_PUBLIC_ORIGIN` | `http://127.0.0.1:8888` | AI images only: the origin users reach the session at; see [docs/ai-ready.md](docs/ai-ready.md) |

@@ -19,6 +19,7 @@ FROM docker.io/library/node:${NODE_VERSION}-bookworm-slim AS build
 ARG FREEBROWSE_COMMIT
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 COPY --from=freebrowse-src . /src
+COPY yarn.lock /src/jupyter/yarn.lock
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     --mount=type=cache,target=/root/.npm \
     --mount=type=cache,target=/root/.yarn/berry/cache \
@@ -36,10 +37,9 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     # default. The registration must be there exactly once, or the build stops.
     && [ "$(grep -c 'defaultFor: \["nifti", "nifti-gz", "nvd"\],' /src/jupyter/src/index.ts)" = 1 ] \
     && sed -i 's/defaultFor: \["nifti", "nifti-gz", "nvd"\],/defaultFor: ["nvd"],/' /src/jupyter/src/index.ts \
-    # The JupyterLab extension. Upstream's yarn.lock does not cover every
-    # package, so yarn may complete it.
+    # The JupyterLab extension, pinned by our checked-in yarn.lock.
     && cd /src/jupyter \
-    && YARN_ENABLE_IMMUTABLE_INSTALLS=0 jlpm install \
+    && jlpm install --immutable \
     && jlpm build:lib \
     && jupyter-builder build --core-package-file=/opt/conda/share/jupyter/lab/static/package.json . \
     # The Python package is two modules and the files they serve. It is laid

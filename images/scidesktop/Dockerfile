@@ -59,7 +59,7 @@ ENV CONDA_DIR=/opt/conda \
 EXPOSE 8888
 HEALTHCHECK --interval=3s --timeout=1s --start-period=3s --retries=3 \
     CMD ["/etc/jupyter/docker_healthcheck.py"]
-ENTRYPOINT ["tini", "-g", "--", "start.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/local/bin/start.sh"]
 CMD ["start-notebook.py"]
 WORKDIR "/home/${NB_USER}"
 USER ${NB_UID}

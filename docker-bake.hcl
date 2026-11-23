@@ -25,10 +25,17 @@
 # renovate: datasource=docker depName=ubuntu
 variable "UBUNTU" { default = "26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96" }
 # Ubuntu archive snapshot; moved weekly by .github/workflows/apt-snapshot.yml.
-variable "APT_SNAPSHOT" { default = "20261115T000000Z" }
+variable "APT_SNAPSHOT" { default = "20261123T000000Z" }
 # renovate: datasource=github-releases depName=cvmfs/cvmfs extractVersion=^cvmfs-(?<version>.*)$
 variable "CVMFS_VERSION" { default = "2.13.3" }
+variable "CVMFS_SHA256_AMD64" { default = "1bcd2417752d2560fa554618317b02ecf4ce3a0e1bac66bb0322ebf78451ef37" }
+variable "CVMFS_SHA256_ARM64" { default = "9bc91c372c48ee38b7fb206b9151115877118df636a3259be196d1725b910103" }
+variable "CVMFS_LIBS_SHA256_AMD64" { default = "b7aa7690030b0844969e80e0ce52f1ecabb0875bf817bfdd2436910238115eb0" }
+variable "CVMFS_LIBS_SHA256_ARM64" { default = "23b12aa8092cacfe134fd9d7e3b20e1a4b66b4fd458dab47bc96be3a6b1a9875" }
+variable "CVMFS_FUSE3_SHA256_AMD64" { default = "684bf3d2a71bd9eedfdedb6e472523368dcfa0a9b33135f813672ec101833d8c" }
+variable "CVMFS_FUSE3_SHA256_ARM64" { default = "f902cfa715f1b9345a178dd9b87e97e17ee00a4262ee634ad61fe135b00cf476" }
 variable "CVMFS_CONFIG_VERSION" { default = "1.1-0" }
+variable "CVMFS_CONFIG_NONE_SHA256" { default = "b475d2ef4300040ebce400135c5dde1a2f58702d90c62544a22743cf2f720c7f" }
 
 # renovate: datasource=github-releases depName=mamba-org/micromamba-releases
 variable "MICROMAMBA_VERSION" { default = "2.10.0-0" }
@@ -37,19 +44,26 @@ variable "MICROMAMBA_SHA256_ARM64" { default = "3bb56786e21b9b24024f599fe9185b4a
 
 # renovate: datasource=github-releases depName=apptainer/apptainer extractVersion=^v(?<version>.*)$
 variable "APPTAINER_VERSION" { default = "1.5.5" }
+variable "APPTAINER_SHA256" { default = "d61347c9e554954ae662f40077a163d2af6422e65bbd254797606a8a36cf31c6" }
 # renovate: datasource=docker depName=apptainer-go packageName=golang
 variable "APPTAINER_GO_VERSION" { default = "1.27.4-bookworm" }
 # renovate: datasource=go depName=google.golang.org/grpc
 variable "APPTAINER_GRPC_VERSION" { default = "1.85.0" }
 # renovate: datasource=go depName=golang.org/x/crypto
 variable "APPTAINER_CRYPTO_VERSION" { default = "0.59.0" }
+# renovate: datasource=go depName=github.com/go-jose/go-jose/v4
+variable "APPTAINER_JOSE_VERSION" { default = "4.1.6" }
+# renovate: datasource=go depName=github.com/klauspost/compress
+variable "APPTAINER_COMPRESS_VERSION" { default = "1.18.7" }
+# renovate: datasource=go depName=github.com/moby/go-archive
+variable "APPTAINER_GO_ARCHIVE_VERSION" { default = "0.3.0" }
 
 # renovate: datasource=github-releases depName=TACC/Lmod
 variable "LMOD_VERSION" { default = "9.4.5" }
 variable "LMOD_SHA256" { default = "05292b7a1d9285a869129726f1429f86393fe274bf12d311828e16df27cdaaf3" }
 
 # renovate: datasource=docker depName=sciget-go packageName=golang
-variable "SCIGET_GO_VERSION" { default = "1.27.0-bookworm" }
+variable "SCIGET_GO_VERSION" { default = "1.27.4-bookworm" }
 
 # The command-line coding agents (components/coding-agents). Each is its
 # upstream's release binary; docs/coding-agents.md has their licences.
@@ -88,9 +102,9 @@ variable "ANTIGRAVITY_ACP_SHA256_ARM64" { default = "609336a1c97545487e3ddd55dbd
 # The relay client T3 Connect uses (components/t3-connect): cloudflared's
 # release executable. T3 Code checks the version it is given.
 # renovate: datasource=github-releases depName=cloudflare/cloudflared
-variable "T3_CLOUDFLARED_VERSION" { default = "2026.10.7" }
-variable "T3_CLOUDFLARED_SHA256_AMD64" { default = "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872" }
-variable "T3_CLOUDFLARED_SHA256_ARM64" { default = "3df43aedc9ff291d1735b5cb576cb97e0b157488796db2e32b28aecabb445775" }
+variable "T3_CLOUDFLARED_VERSION" { default = "2026.11.1" }
+variable "T3_CLOUDFLARED_SHA256_AMD64" { default = "97bb3b02d23a5980fc9c15a1a270e692da1923f103f920d5b16d4931d5ab55e7" }
+variable "T3_CLOUDFLARED_SHA256_ARM64" { default = "b155cec3e48e489cfb8e5c602769fb8c771083018d8881d68b4d18a791567c5a" }
 
 # code-server (components/code-server): the upstream release, unmodified.
 # renovate: datasource=github-releases depName=coder/code-server extractVersion=^v(?<version>.*)$
@@ -101,8 +115,8 @@ variable "CODE_SERVER_SHA256_ARM64" { default = "e867a34416e2da4a83496b095800018
 # The NiiVue viewer for JupyterLab (components/jupyterlab-niivue): the wheel
 # on PyPI, one file for every architecture.
 # renovate: datasource=pypi depName=jupyterlab-niivue
-variable "JUPYTERLAB_NIIVUE_VERSION" { default = "0.2.7" }
-variable "JUPYTERLAB_NIIVUE_SHA256" { default = "192d71973065358fd6151ad2c6fef2e207275d3323f175e682ab7d30686b33a7" }
+variable "JUPYTERLAB_NIIVUE_VERSION" { default = "0.3.0" }
+variable "JUPYTERLAB_NIIVUE_SHA256" { default = "5b97abbbf9608960629c80f22065735eac7e585e688f3f8729492cd14f3d5e69" }
 
 # Preinstalled VS Code extensions (components/vscode-core, vscode-niivue,
 # vscode-coding-agents), from Open VSX. Three are published per
@@ -258,14 +272,21 @@ target "os-ubuntu" {
     components = "components"
   }
   args = {
-    UBUNTU_IMAGE         = "docker.io/library/ubuntu:${UBUNTU}"
-    APT_CACHE_ID         = "ubuntu-${regex("^[^@]+", UBUNTU)}"
-    APT_SNAPSHOT         = APT_SNAPSHOT
-    CVMFS_VERSION        = CVMFS_VERSION
-    CVMFS_CONFIG_VERSION = CVMFS_CONFIG_VERSION
-    NB_USER              = NB_USER
-    NB_UID               = NB_UID
-    NB_GID               = NB_GID
+    UBUNTU_IMAGE             = "docker.io/library/ubuntu:${UBUNTU}"
+    APT_CACHE_ID             = "ubuntu-${regex("^[^@]+", UBUNTU)}"
+    APT_SNAPSHOT             = APT_SNAPSHOT
+    CVMFS_VERSION            = CVMFS_VERSION
+    CVMFS_SHA256_AMD64       = CVMFS_SHA256_AMD64
+    CVMFS_SHA256_ARM64       = CVMFS_SHA256_ARM64
+    CVMFS_LIBS_SHA256_AMD64  = CVMFS_LIBS_SHA256_AMD64
+    CVMFS_LIBS_SHA256_ARM64  = CVMFS_LIBS_SHA256_ARM64
+    CVMFS_FUSE3_SHA256_AMD64 = CVMFS_FUSE3_SHA256_AMD64
+    CVMFS_FUSE3_SHA256_ARM64 = CVMFS_FUSE3_SHA256_ARM64
+    CVMFS_CONFIG_VERSION     = CVMFS_CONFIG_VERSION
+    CVMFS_CONFIG_NONE_SHA256 = CVMFS_CONFIG_NONE_SHA256
+    NB_USER                  = NB_USER
+    NB_UID                   = NB_UID
+    NB_GID                   = NB_GID
   }
 }
 
@@ -365,10 +386,14 @@ target "apptainer" {
   context  = "components/apptainer"
   target   = "component"
   args = {
-    APPTAINER_VERSION        = APPTAINER_VERSION
-    APPTAINER_GO_VERSION     = APPTAINER_GO_VERSION
-    APPTAINER_GRPC_VERSION   = APPTAINER_GRPC_VERSION
-    APPTAINER_CRYPTO_VERSION = APPTAINER_CRYPTO_VERSION
+    APPTAINER_VERSION            = APPTAINER_VERSION
+    APPTAINER_SHA256             = APPTAINER_SHA256
+    APPTAINER_GO_VERSION         = APPTAINER_GO_VERSION
+    APPTAINER_GRPC_VERSION       = APPTAINER_GRPC_VERSION
+    APPTAINER_CRYPTO_VERSION     = APPTAINER_CRYPTO_VERSION
+    APPTAINER_JOSE_VERSION       = APPTAINER_JOSE_VERSION
+    APPTAINER_COMPRESS_VERSION   = APPTAINER_COMPRESS_VERSION
+    APPTAINER_GO_ARCHIVE_VERSION = APPTAINER_GO_ARCHIVE_VERSION
   }
 }
 

@@ -2,5 +2,7 @@
 # neither constrains the other. ./lock compiles this file with upstream's
 # docker/airflow/requirements.txt at AI_READY_COMMIT, preferring the versions in
 # Airflow's own constraints for this pin (the Postgres provider's among them).
-apache-airflow==3.1.8
+apache-airflow==3.4.0
 apache-airflow-providers-postgres
+# Security floor over Airflow 3.4.0's constraints pin (CVE-2026-128089).
+dnspython>=2.9.2

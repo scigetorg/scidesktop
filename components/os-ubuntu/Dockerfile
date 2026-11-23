@@ -17,7 +17,14 @@ RUN apt-get update \
 FROM ${UBUNTU_IMAGE} AS build
 ARG APT_SNAPSHOT
 ARG CVMFS_VERSION
+ARG CVMFS_SHA256_AMD64
+ARG CVMFS_SHA256_ARM64
+ARG CVMFS_LIBS_SHA256_AMD64
+ARG CVMFS_LIBS_SHA256_ARM64
+ARG CVMFS_FUSE3_SHA256_AMD64
+ARG CVMFS_FUSE3_SHA256_ARM64
 ARG CVMFS_CONFIG_VERSION
+ARG CVMFS_CONFIG_NONE_SHA256
 ARG NB_USER
 ARG NB_UID
 ARG NB_GID
@@ -32,11 +39,15 @@ RUN --mount=type=bind,from=bootstrap-certs,source=/etc/ssl/certs/ca-certificates
     --mount=type=bind,source=install,target=/tmp/os-ubuntu/install \
     --mount=type=bind,source=packages,target=/tmp/os-ubuntu/packages \
     --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
+    --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-${TARGETARCH},target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     APT_SNAPSHOT="${APT_SNAPSHOT:?}" CVMFS_VERSION="${CVMFS_VERSION:?}" \
-    CVMFS_CONFIG_VERSION="${CVMFS_CONFIG_VERSION:?}" TARGETARCH="${TARGETARCH}" \
-    NB_USER="${NB_USER:?}" NB_UID="${NB_UID:?}" NB_GID="${NB_GID:?}" \
+    CVMFS_SHA256_AMD64="${CVMFS_SHA256_AMD64:?}" CVMFS_SHA256_ARM64="${CVMFS_SHA256_ARM64:?}" \
+    CVMFS_LIBS_SHA256_AMD64="${CVMFS_LIBS_SHA256_AMD64:?}" CVMFS_LIBS_SHA256_ARM64="${CVMFS_LIBS_SHA256_ARM64:?}" \
+    CVMFS_FUSE3_SHA256_AMD64="${CVMFS_FUSE3_SHA256_AMD64:?}" CVMFS_FUSE3_SHA256_ARM64="${CVMFS_FUSE3_SHA256_ARM64:?}" \
+    CVMFS_CONFIG_VERSION="${CVMFS_CONFIG_VERSION:?}" CVMFS_CONFIG_NONE_SHA256="${CVMFS_CONFIG_NONE_SHA256:?}" \
+    TARGETARCH="${TARGETARCH}" NB_USER="${NB_USER:?}" NB_UID="${NB_UID:?}" NB_GID="${NB_GID:?}" \
     /tmp/os-ubuntu/install
 
 ENV SHELL=/bin/bash \

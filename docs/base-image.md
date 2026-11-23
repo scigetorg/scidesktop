@@ -102,7 +102,7 @@ name.
 
 | Capability | Must provide |
 | --- | --- |
-| `core` | bash, coreutils, sudo, ca-certificates, curl, shadow-utils (`usermod`, `groupmod`), tini |
+| `core` | bash, coreutils, setpriv, ca-certificates, curl, shadow-utils (`usermod`, `groupmod`), tini (`sudo` omitted; zero SUID/SGID binaries and zero POSIX file capabilities) |
 | `locale` | `LANG=C.UTF-8` works, `en_US.UTF-8` generated |
 | `user` | `jovyan` UID 1000, group `users` GID 100, home `/home/jovyan` |
 | `x11` | Xvfb, xrandr, xdpyinfo, xkb tools, libX11/xcb/Xtst/Xfixes/Xdamage |
@@ -148,8 +148,9 @@ Copied unchanged from a pinned docker-stacks commit first, then trimmed in
 separate, reviewable commits once startup timing shows what costs time.
 `ENTRYPOINT ["tini", "-g", "--", "start.sh"]` and
 `CMD ["start-notebook.py"]` stay identical, as do `NB_USER`, `NB_UID`,
-`NB_GID`, `GRANT_SUDO`, `CHOWN_HOME` and `before-notebook.d` /
-`start-notebook.d`. The conda activation hook replacement becomes our own
+`NB_GID`, `CHOWN_HOME` and `before-notebook.d` /
+`start-notebook.d` (`GRANT_SUDO` and `sudo` are omitted; privilege drops use
+`setpriv --no-new-privs --inh-caps -all --bounding-set -all`). The conda activation hook replacement becomes our own
 `before-notebook.d` entry rather than an override.
 
 ## Build components and assembly
@@ -217,7 +218,7 @@ dashboard shows the state of every component in parallel.
 
 | Component | Today | Options |
 | --- | --- | --- |
-| Apptainer | built from source on Debian bookworm, copied in | **Revised 2026-11-16: source build `FROM os`, `--with-suid`.** conda-forge builds `--without-suid` (checked in its feedstock), which would remove the setuid fallback `config/startup/10-apptainer` relies on. Revisit if the image commits to user namespaces only. |
+| Apptainer | built from source on Ubuntu, copied in | **Revised 2026-11-23: source build `FROM os`, `--without-suid`, SHA-256 verified release tarball.** scidesktop commits to unprivileged user namespaces only and omits `starter-suid`. |
 | Lmod | 9.3 built from source on Ubuntu 24.04 | **Decided: latest release (9.4.5) from source**, in a stage `FROM os`. The archive has 8.7.60; conda-forge's is stale and amd64-only. |
 | CVMFS | CERN `.deb` per arch | CERN publishes `.deb` and `.rpm` for amd64 and arm64 |
 

@@ -36,8 +36,15 @@ RUN printf '#!/bin/bash\necho hook-ran\n' > /usr/local/bin/before-notebook.d/10-
     && out=$(start.sh id -un 2>&1) && echo "${out}" \
     && echo "${out}" | grep -q hook-ran \
     && echo "${out}" | tail -1 | grep -qx "${NB_USER}" \
+    && start.sh grep -qx 'NoNewPrivs:[[:space:]]*1' /proc/self/status \
+    && start.sh grep -qx 'CapBnd:[[:space:]]*0000000000000000' /proc/self/status \
+    && start.sh grep -qx 'CapAmb:[[:space:]]*0000000000000000' /proc/self/status \
+    && start.sh grep -qx 'CapInh:[[:space:]]*0000000000000000' /proc/self/status \
     && out=$(runuser -u "${NB_USER}" -- start.sh id -un 2>&1) && echo "${out}" \
+    && echo "${out}" | grep -q hook-ran \
     && echo "${out}" | tail -1 | grep -qx "${NB_USER}" \
+    && runuser -u "${NB_USER}" -- start.sh grep -qx 'NoNewPrivs:[[:space:]]*1' /proc/self/status \
+    && runuser -u "${NB_USER}" -- env _START_SH_EXECUTED=1 start.sh grep -qx 'NoNewPrivs:[[:space:]]*1' /proc/self/status \
     && bash -n /usr/local/bin/run-hooks.sh \
     # Resource limits from a cgroup: whole CPUs, memory, thread counts.
     && mkdir -p /tmp/cg && echo "150000 100000" > /tmp/cg/cpu.max && echo 2147483648 > /tmp/cg/memory.max \

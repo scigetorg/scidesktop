@@ -332,7 +332,7 @@ def end_session(main_process):
 
 def run():
     # The start hook launched this from the shell that becomes the notebook
-    # server (or sudo in front of it, when the container started as root).
+    # server (or setpriv in front of it, when the container started as root).
     main_process = os.getppid()
 
     def on_signal(signum, _frame):
