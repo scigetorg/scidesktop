@@ -141,6 +141,26 @@ with tempfile.TemporaryDirectory() as td:
     moved_spec = [s for s in specs2 if json.loads(s.read_text())["metadata"]["scigethelpers_uv"]["project"] == str(moved)]
     assert len(moved_spec) == 1, specs2
     exec_on_kernel(moved_spec[0].parent.name, moved)
+
+    # Verify atomic rollback if kernelspec publication fails after venv rebuild.
+    sentinel = moved / ".venv" / "rollback_sentinel.txt"
+    sentinel.write_text("keep-me")
+    spec_dir = moved_spec[0].parent
+    os.chmod(spec_dir, 0o500)
+    try:
+        r_fail = subprocess.run(
+            ["scigethelpers", "uv", "rebuild", str(moved)],
+            env=dict(env, UV_OFFLINE="1"),
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert r_fail.returncode != 0, f"expected kernelspec publication failure: {r_fail.stdout}"
+        assert sentinel.read_text() == "keep-me", "rebuild did not roll back .venv on kernelspec failure"
+        assert not list(moved.glob(".venv.scigethelpers_uv-backup-*"))
+    finally:
+        os.chmod(spec_dir, 0o700)
+
     run_uv("remove", moved)
     assert not moved_spec[0].parent.exists()
     print("UV_LIFECYCLE_OK")

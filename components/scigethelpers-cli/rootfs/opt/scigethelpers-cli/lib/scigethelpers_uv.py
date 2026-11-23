@@ -163,6 +163,10 @@ def prepare(project: Path, command: str) -> None:
 
         backup_venv: Path | None = None
         created_venv = False
+        marker_path = project / f".{MARKER}.json"
+        old_marker_bytes = marker_path.read_bytes() if marker_path.is_file() else None
+        old_target_bytes = target.read_bytes() if target.is_file() else None
+        spec_dir_existed = spec_dir.exists()
         if command == "rebuild":
             if not manifest.is_file() or not (project / "uv.lock").is_file():
                 raise ValueError("Rebuild requires pyproject.toml and uv.lock; run init first.")
@@ -189,7 +193,17 @@ def prepare(project: Path, command: str) -> None:
             else:
                 run("sync", "--locked")
             subprocess.run([str(venv / "bin/python"), "-I", "-c", "import ipykernel"], env=env, check=True)
-            atomic_json(project / f".{MARKER}.json", {"project": str(project)})
+            atomic_json(marker_path, {"project": str(project)})
+            spec_dir.mkdir(exist_ok=True)
+            atomic_json(
+                target,
+                {
+                    "argv": [sys.executable, "-I", str(Path(__file__).resolve()), "launch", str(project), "-f", "{connection_file}"],
+                    "display_name": f"Python (uv: {project.name})",
+                    "language": "python",
+                    "metadata": {MARKER: {"project": str(project)}},
+                },
+            )
         except BaseException:
             if backup_venv is not None and backup_venv.exists():
                 if venv.exists():
@@ -197,19 +211,20 @@ def prepare(project: Path, command: str) -> None:
                 backup_venv.rename(venv)
             elif created_venv and venv.exists():
                 shutil.rmtree(venv)
+            if old_marker_bytes is not None:
+                marker_path.write_bytes(old_marker_bytes)
+            else:
+                marker_path.unlink(missing_ok=True)
+            if old_target_bytes is not None:
+                try:
+                    target.write_bytes(old_target_bytes)
+                except OSError:
+                    pass
+            elif not spec_dir_existed and spec_dir.exists():
+                shutil.rmtree(spec_dir, ignore_errors=True)
             raise
         if backup_venv is not None and backup_venv.exists():
             shutil.rmtree(backup_venv)
-        spec_dir.mkdir(exist_ok=True)
-        atomic_json(
-            target,
-            {
-                "argv": [sys.executable, "-I", str(Path(__file__).resolve()), "launch", str(project), "-f", "{connection_file}"],
-                "display_name": f"Python (uv: {project.name})",
-                "language": "python",
-                "metadata": {MARKER: {"project": str(project)}},
-            },
-        )
         print(f"Registered {kernel_name(project)}. Select Python (uv: {project.name}).")
 
 
