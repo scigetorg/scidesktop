@@ -40,8 +40,13 @@ T3 Code drives the agents installed in the image. When `coding-agents` is
 installed, T3 starts with bundled provider defaults for Codex
 (`config.setupMode: "existing"`, reusing the CLI's login under `~/.codex`) and
 OpenCode (`enabled: true`), without overwriting any explicit user provider
-configuration. Sign in to an agent in a terminal first, or in T3 Code's
-provider settings, where each agent can also be turned on or off.
+configuration under `providerInstances`. Because T3 0.1.5 writes
+`providers.opencode: {"enabled": false}` automatically for its own default-off
+bookkeeping, that exact legacy entry is treated as inert on upgrade; to disable
+OpenCode persistently, turn it off in T3 Code's **Settings → Providers** (which
+records `providerInstances.opencode.enabled: false` and is always preserved).
+Sign in to an agent in a terminal first, or in T3 Code's provider settings,
+where each agent can also be turned on or off.
 
 **T3 Connect** (using this session's T3 Code from the T3 desktop or mobile
 app, through T3's relay) is the `t3-connect` component, also included in
@@ -55,9 +60,13 @@ app, through T3's relay) is the `t3-connect` component, also included in
 | T3 Code server (`/opt/t3-code/app/t3`), from the first use of the tile | `127.0.0.1`, a port the proxy picks | `<session URL>/t3-code/` |
 | the agents T3 Code or a terminal starts | nothing | |
 
-Jupyter Server Proxy starts the server with `/opt/t3-code/lib/t3_code_serve.py`
-and stops it when the notebook server stops. T3 then removes its runtime file
-and closes its database; this took under a second when measured.
+Jupyter Server Proxy starts the server with `/opt/t3-code/lib/t3_code_serve.py`,
+and an `atexit` hook (`t3_code_proxy.stop_server`) signals and waits up to 20 s
+for that notebook server's own child `t3 serve` process to stop child provider
+servers (such as `opencode serve`), remove its runtime file, and close its
+SQLite database before the container exits. When stopping a container directly
+with Docker, pass a stop timeout that covers Jupyter, T3, and other session
+hooks (for example `docker stop --timeout=40`, above Docker's 10 s default).
 
 ## Isolation
 
@@ -145,7 +154,7 @@ supplies them through the same places, without changing a component:
 | an agent's default settings (a provider, an MCP server, instructions) | the file at its home path under `/etc/scidesktop/home-defaults/`, for example `.codex/AGENTS.md`, `.claude/CLAUDE.md`, `.config/opencode/AGENTS.md`. An image's own Dockerfile may also replace one of the three settings files this component ships: the image's layer wins. Another component may not (rule L1) |
 | an OpenCode provider or MCP server, from a component | a JSON file of its own, and a start hook in `/usr/local/bin/before-notebook.d/` that sets `OPENCODE_CONFIG` to it. OpenCode merges that file with the user's `~/.config/opencode/opencode.json` |
 | Defaults for the T3 Code server's environment | a JSON file of variable names and values in `/etc/scidesktop/t3-code/environment.d/`. A variable the deployment set is kept. `t3-connect` names T3's relay client there |
-| T3 Code's default settings (provider instances, binary paths) | a JSON file in `/etc/scidesktop/t3-code/settings.d/`. The files are merged in name order into the user's `~/.t3/userdata/settings.json` when T3 starts. They only fill gaps: a value already in the user's file is never changed, at any depth |
+| T3 Code's default settings (provider instances, binary paths) | a JSON file in `/etc/scidesktop/t3-code/settings.d/`. The files are applied in name order to `~/.t3/userdata/settings.json` when T3 starts. Top-level keys fill gaps recursively without changing existing values. `providerInstances` uses instance-ID and driver-level precedence (first drop-in in name order wins per driver/ID; later fragments do not merge into existing instances), with two migration exceptions: an earlier bundled Codex instance (`binaryPath` only) is upgraded in place to add `setupMode: "existing"`, and T3's default-off `providers.opencode: {"enabled": false}` bookkeeping (plus an exact legacy `providers.codex` `binaryPath`-only default) is treated as inert |
 | environment for T3 Code and the agents it starts | `ENV` in the image's Dockerfile, or a start hook in `/usr/local/bin/before-notebook.d/` |
 
 `T3CODE_*` variables set in the image reach T3, except where it listens
