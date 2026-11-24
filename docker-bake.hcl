@@ -272,6 +272,7 @@ group "test" {
     "neuroimaging-env-test",
     "neurodesk-compat-test",
     "rclone-test",
+    "gh-test",
   ]
 }
 
@@ -989,6 +990,19 @@ target "rclone-test" {
   output   = ["type=cacheonly"]
 }
 
+# gh from conda-forge in /opt/gh, on PATH. Part of the base image.
+target "gh" {
+  inherits = ["_component"]
+  context  = "components/gh"
+  target   = "component"
+}
+
+target "gh-test" {
+  inherits = ["gh"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # tifffile, imagecodecs, zarr, ome-zarr, bioio, dask, xarray). Copied by microdesktop.
 target "microscopy-env" {
   inherits = ["_component"]
@@ -1085,6 +1099,7 @@ target "scidesktop" {
     t3-code               = "target:t3-code"
     t3-connect            = "target:t3-connect"
     rclone                = "target:rclone"
+    gh                    = "target:gh"
   }
   tags   = [IMAGE]
   output = ["type=docker"]

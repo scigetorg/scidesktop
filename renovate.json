@@ -643,6 +643,16 @@
       ]
     },
     {
+      "description": "Component gh: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/gh/**"
+      ],
+      "groupName": "component gh",
+      "addLabels": [
+        "component:gh"
+      ]
+    },
+    {
       "description": "Component slurm: its updates arrive together and run its own test.",
       "matchFileNames": [
         "components/slurm/**"

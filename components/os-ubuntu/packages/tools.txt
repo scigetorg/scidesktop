@@ -2,7 +2,6 @@
 # components or interactive workflows rely on across all desktops.
 # git, with ssh for remotes and an editor for commit messages: jupyterlab-git
 git
-gh
 openssh-client
 nano
 vim-tiny
