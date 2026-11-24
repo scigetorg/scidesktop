@@ -533,9 +533,11 @@ cat >"${tmp}/blank-label.eessi.json" <<'EOF'
 EOF
 assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/blank-label.eessi.json" /usr/local/bin/eessi-catalog sync
 
-# Newlines in EESSI_CATALOG_FILES are rejected rather than silently loading a
-# prefix file that happens to exist.
+# Newlines in EESSI_CATALOG_FILES (literal or via symlink target) are rejected
+# rather than silently loading a prefix file that happens to exist.
 assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="$(printf '%s\n%s' "${tmp}/data.eessi.json" "${tmp}/nonexistent.json")" /usr/local/bin/eessi-catalog sync
+ln -s "${tmp}/data.eessi.json"$'\n' "${tmp}/lf-target.json"
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/lf-target.json" /usr/local/bin/eessi-catalog sync
 
 # Staging reaper removes unlocked abandoned .staging.* dirs older than 10m
 # without disturbing an aged .staging.* dir held by an active sync's flock.
@@ -543,9 +545,10 @@ live_ns_dir="$(dirname "$(dirname "$(dirname "${coll_dir}")")")"
 live_stage="${live_ns_dir}/snapshots/.staging.live01"
 dead_stage="${live_ns_dir}/snapshots/.staging.dead01"
 mkdir -p "${live_stage}" "${dead_stage}"
-touch -d '30 minutes ago' "${live_stage}" "${dead_stage}"
 exec {live_stage_fd}>"${live_stage}/.in-use"
 flock -x "${live_stage_fd}"
+touch -d '30 minutes ago' "${live_stage}" "${dead_stage}"
+[ -n "$(find "${live_ns_dir}/snapshots" -maxdepth 1 -type d -name '.staging.live01' -mmin +10)" ]
 EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/collision.eessi.json" /usr/local/bin/eessi-catalog sync
 test -d "${live_stage}"
 [ ! -e "${dead_stage}" ]

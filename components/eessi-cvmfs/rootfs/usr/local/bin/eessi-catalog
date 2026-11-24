@@ -52,13 +52,24 @@ resolve_sources() {
             return 1
         fi
         local -a raw_paths=()
-        local path resolved
+        local -A seen_sources=()
+        local path resolved entry
         IFS=':' read -r -a raw_paths <<<"${EESSI_CATALOG_FILES}"
         for path in "${raw_paths[@]}"; do
             [ -n "${path}" ] || continue
-            resolved="$(realpath -m -- "${path}")"
-            printf 'file:%s\n' "${resolved}"
-        done | awk '!seen[$0]++'
+            resolved="$(realpath -m -- "${path}" && printf X)" || return 1
+            resolved="${resolved%X}"
+            resolved="${resolved%$'\n'}"
+            if [[ "${resolved}" == *$'\n'* || "${resolved}" == *$'\r'* ]]; then
+                echo "eessi-catalog: canonical catalog path must not contain newlines" >&2
+                return 1
+            fi
+            entry="file:${resolved}"
+            if [ -z "${seen_sources[${entry}]+x}" ]; then
+                seen_sources["${entry}"]=1
+                printf '%s\n' "${entry}"
+            fi
+        done
         return 0
     fi
 
@@ -139,13 +150,25 @@ active_apps_dir() {
 }
 
 session_apps_dir() {
-    local src_dir session_root session_dir f copied=0
+    local expected ns_dir lock_fd="" src_dir session_root session_dir f copied=0
+    if expected="$(resolve_sources)" && [ -n "${expected}" ]; then
+        ns_dir="$(namespace_dir_for_sources "${expected}")"
+        if [ -r "${ns_dir}/.lock" ]; then
+            exec {lock_fd}<"${ns_dir}/.lock"
+            flock -s "${lock_fd}"
+        elif [ -d "${ns_dir}" ] && [ -w "${ns_dir}" ]; then
+            exec {lock_fd}>>"${ns_dir}/.lock"
+            flock -s "${lock_fd}"
+        fi
+    fi
+
     src_dir="$(active_apps_dir)"
-    [ -n "${src_dir}" ] || return 0
-    if [ "${src_dir}" = "${STATIC_APPS_DIR}" ]; then
-        printf '%s\n' "${src_dir}"
+    if [ -z "${src_dir}" ] || [ "${src_dir}" = "${STATIC_APPS_DIR}" ]; then
+        [ -n "${lock_fd}" ] && exec {lock_fd}>&-
+        [ -n "${src_dir}" ] && printf '%s\n' "${src_dir}"
         return 0
     fi
+
     session_root="${EESSI_SESSION_APPS_ROOT:-/tmp}"
     mkdir -p "${session_root}"
     session_dir="$(mktemp -d "${session_root}/scidesktop-eessi-apps.XXXXXX")"
@@ -157,6 +180,8 @@ session_apps_dir() {
         chmod 0644 "${session_dir}/$(basename "${f}")"
         copied=$((copied + 1))
     done
+    [ -n "${lock_fd}" ] && exec {lock_fd}>&-
+
     if [ "${copied}" -eq 0 ]; then
         cleanup_staging
         if [ -d "${STATIC_APPS_DIR}" ]; then
