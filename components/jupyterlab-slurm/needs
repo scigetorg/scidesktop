@@ -1,0 +1,4 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S8).
+slurm  # the queue it shows
+jupyter-env

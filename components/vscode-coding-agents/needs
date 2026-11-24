@@ -1,0 +1,4 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S8).
+code-server  # its extensions
+coding-agents  # the agents the extensions run

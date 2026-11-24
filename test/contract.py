@@ -301,6 +301,25 @@ def static():
             fail("S8", f"{rel(path)}: a Jupyter config file of its own; move it to "
                        f"rootfs/{JUPYTER_PARTS}/{u}.py")
 
+    # S9: a component that needs another at runtime says so in
+    # components/<component>/needs (one name per line), and every image that
+    # holds it holds what it needs, so moving a component between images
+    # cannot leave it without, say, the Node.js it runs on.
+    names = set(component_names())
+    needs = {}
+    for f in sorted(COMPONENTS.glob("*/needs")):
+        u = f.parent.name
+        needs[u] = [w for w in (line.split("#", 1)[0].strip() for line in f.read_text().splitlines()) if w]
+        for n in needs[u]:
+            if n not in names:
+                fail("S9", f"{rel(f)}: needs {n}, which is not a component")
+    for image in image_names():
+        held = image_components(targets, image)
+        for u in sorted(held & needs.keys()):
+            for n in needs[u]:
+                if n in names and n not in held:
+                    fail("S9", f"{image}: holds {u}, which needs {n} (components/{u}/needs), but not {n}")
+
     # S5: every bake variable is one line, and tracked by Renovate unless
     # listed in NOT_RENOVATED.
     lines = BAKE.read_text().splitlines()

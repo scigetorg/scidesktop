@@ -201,6 +201,16 @@ image it is `FROM`) copies, and no manifest entry, prefix (`/opt/<component>`)
 or `rootfs/` file of any other component. This is the check that keeps
 optional components out of the base. `test/image-smoke.sh` runs it first.
 
+### What a component needs (S9)
+
+A component that only works with another in the same image lists it in
+`components/<component>/needs`, one name per line (`#` starts a comment):
+`acp-adapters` runs on code-server's Node.js, `jupyterlab-slurm` shows the
+`slurm` queue. `python3 test/contract.py static` fails any image that holds a
+component without what it needs, so a component can move between images
+safely. The core every image holds (`jupyter-env`, `lmod`, `sciget`) is listed
+too where it is used, so the file says what the component relies on.
+
 ### Order and layers
 
 The assembly copies components from least to most frequently changed. Each `COPY
