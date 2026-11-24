@@ -41,6 +41,7 @@ COPY --link --from=t3-connect / /
 COPY --link --from=rclone / /
 COPY --link --from=gh / /
 COPY --link --from=aria2 / /
+COPY --link --from=tcsh / /
 
 LABEL maintainer="Sciget project <sciget.org>" \
       org.opencontainers.image.title="scidesktop" \

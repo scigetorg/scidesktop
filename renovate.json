@@ -663,6 +663,16 @@
       ]
     },
     {
+      "description": "Component tcsh: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/tcsh/**"
+      ],
+      "groupName": "component tcsh",
+      "addLabels": [
+        "component:tcsh"
+      ]
+    },
+    {
       "description": "Component slurm: its updates arrive together and run its own test.",
       "matchFileNames": [
         "components/slurm/**"

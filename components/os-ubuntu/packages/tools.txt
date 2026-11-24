@@ -22,9 +22,8 @@ rsync
 sshfs
 davfs2
 s3fs
-# networking, desktop URL opening, graph rendering, legacy csh scripts
+# networking, desktop URL opening, graph rendering
 iputils-ping
 dnsutils
 xdg-utils
 graphviz
-tcsh

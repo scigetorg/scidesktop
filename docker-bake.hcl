@@ -274,6 +274,7 @@ group "test" {
     "rclone-test",
     "gh-test",
     "aria2-test",
+    "tcsh-test",
   ]
 }
 
@@ -1017,6 +1018,19 @@ target "aria2-test" {
   output   = ["type=cacheonly"]
 }
 
+# tcsh from conda-forge in /opt/tcsh, on PATH. Part of the base image.
+target "tcsh" {
+  inherits = ["_component"]
+  context  = "components/tcsh"
+  target   = "component"
+}
+
+target "tcsh-test" {
+  inherits = ["tcsh"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # tifffile, imagecodecs, zarr, ome-zarr, bioio, dask, xarray). Copied by microdesktop.
 target "microscopy-env" {
   inherits = ["_component"]
@@ -1115,6 +1129,7 @@ target "scidesktop" {
     rclone                = "target:rclone"
     gh                    = "target:gh"
     aria2                 = "target:aria2"
+    tcsh                  = "target:tcsh"
   }
   tags   = [IMAGE]
   output = ["type=docker"]
