@@ -109,9 +109,9 @@ namespace_dir_for_sources() {
     printf '%s/by-source/%s\n' "${CACHE_DIR}" "${digest}"
 }
 
-cache_matches_sources() {
-    local expected ns_dir current_dir
-    expected="$(resolve_sources)" || return 1
+cache_matches_sources_for() {
+    local expected="$1"
+    local ns_dir current_dir
     [ -n "${expected}" ] || return 1
     ns_dir="$(namespace_dir_for_sources "${expected}")"
     current_dir="${ns_dir}/current"
@@ -120,16 +120,11 @@ cache_matches_sources() {
     [ "$(cat "${current_dir}/sources.txt")" = "${expected}" ]
 }
 
-current_namespace_dir() {
-    local expected
-    expected="$(resolve_sources)"
-    namespace_dir_for_sources "${expected}"
-}
-
-active_apps_dir() {
+active_apps_dir_for_sources() {
+    local expected="$1"
     local ns_dir cached_apps resolved_apps
-    if cache_matches_sources; then
-        ns_dir="$(current_namespace_dir)"
+    if [ -n "${expected}" ] && cache_matches_sources_for "${expected}"; then
+        ns_dir="$(namespace_dir_for_sources "${expected}")"
         cached_apps="${ns_dir}/current/applications"
         if [ -d "${cached_apps}" ]; then
             resolved_apps="$(readlink -f -- "${cached_apps}" 2>/dev/null || true)"
@@ -149,22 +144,33 @@ active_apps_dir() {
     fi
 }
 
+active_apps_dir() {
+    local expected=""
+    expected="$(resolve_sources 2>/dev/null || true)"
+    active_apps_dir_for_sources "${expected}"
+}
+
 session_apps_dir() {
-    local expected ns_dir lock_fd="" src_dir session_root session_dir f copied=0
-    if expected="$(resolve_sources)" && [ -n "${expected}" ]; then
-        ns_dir="$(namespace_dir_for_sources "${expected}")"
-        if [ -r "${ns_dir}/.lock" ]; then
-            exec {lock_fd}<"${ns_dir}/.lock"
-            flock -s "${lock_fd}"
-        elif [ -d "${ns_dir}" ] && [ -w "${ns_dir}" ]; then
-            exec {lock_fd}>>"${ns_dir}/.lock"
-            flock -s "${lock_fd}"
-        fi
+    local expected="" ns_dir lock_fd="" src_dir session_root session_dir f copied=0
+    if ! expected="$(resolve_sources 2>/dev/null)" || [ -z "${expected}" ]; then
+        [ -d "${STATIC_APPS_DIR}" ] && printf '%s\n' "${STATIC_APPS_DIR}"
+        return 0
+    fi
+    ns_dir="$(namespace_dir_for_sources "${expected}")"
+    if [ -r "${ns_dir}/.lock" ]; then
+        exec {lock_fd}<"${ns_dir}/.lock"
+        flock -s "${lock_fd}"
+    elif [ -d "${ns_dir}" ] && [ -w "${ns_dir}" ]; then
+        exec {lock_fd}>>"${ns_dir}/.lock"
+        flock -s "${lock_fd}"
+    else
+        [ -d "${STATIC_APPS_DIR}" ] && printf '%s\n' "${STATIC_APPS_DIR}"
+        return 0
     fi
 
-    src_dir="$(active_apps_dir)"
+    src_dir="$(active_apps_dir_for_sources "${expected}")"
     if [ -z "${src_dir}" ] || [ "${src_dir}" = "${STATIC_APPS_DIR}" ]; then
-        [ -n "${lock_fd}" ] && exec {lock_fd}>&-
+        exec {lock_fd}>&-
         [ -n "${src_dir}" ] && printf '%s\n' "${src_dir}"
         return 0
     fi
@@ -180,7 +186,7 @@ session_apps_dir() {
         chmod 0644 "${session_dir}/$(basename "${f}")"
         copied=$((copied + 1))
     done
-    [ -n "${lock_fd}" ] && exec {lock_fd}>&-
+    exec {lock_fd}>&-
 
     if [ "${copied}" -eq 0 ]; then
         cleanup_staging
@@ -557,8 +563,9 @@ show_catalog() {
     echo "  module avail"
     echo "  eessi-catalog sync    # refresh curated catalog & JupyterLab launchers"
 
-    local apps_dir
-    apps_dir="$(active_apps_dir)"
+    local expected="" apps_dir
+    expected="$(resolve_sources 2>/dev/null || true)"
+    apps_dir="$(active_apps_dir_for_sources "${expected}")"
     if [ -n "${apps_dir}" ] && [ -d "${apps_dir}" ]; then
         echo
         echo "Desktop launchers (shown in JupyterLab EESSI section when EESSI is mounted):"
@@ -571,9 +578,9 @@ show_catalog() {
         done
     fi
 
-    if cache_matches_sources; then
+    if [ -n "${expected}" ] && cache_matches_sources_for "${expected}"; then
         local ns_dir
-        ns_dir="$(current_namespace_dir)"
+        ns_dir="$(namespace_dir_for_sources "${expected}")"
         echo
         echo "Curated EESSI modules from live catalog (explicit selection; no DOI):"
         jq -r '
@@ -611,8 +618,9 @@ case "${cmd}" in
         session_apps_dir
         ;;
     json)
-        if cache_matches_sources; then
-            ns_dir="$(current_namespace_dir)"
+        expected="$(resolve_sources)"
+        if cache_matches_sources_for "${expected}"; then
+            ns_dir="$(namespace_dir_for_sources "${expected}")"
             cat "${ns_dir}/current/merged.json"
         else
             echo "eessi-catalog: no synced catalog cache found (run: eessi-catalog sync)" >&2
