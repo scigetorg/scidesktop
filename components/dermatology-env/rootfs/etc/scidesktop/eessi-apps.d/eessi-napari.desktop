@@ -4,4 +4,5 @@ Name=napari (EESSI)
 Comment=Multi-dimensional dermatology and pathology image viewer via EESSI
 Exec=/usr/local/bin/eessi-launch napari napari
 Terminal=false
+X-Scidesktop-Category=EESSI
 Categories=Science;Biology;Graphics;

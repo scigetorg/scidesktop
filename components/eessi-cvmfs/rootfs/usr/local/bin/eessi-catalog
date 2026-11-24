@@ -1,11 +1,12 @@
 #!/bin/bash
 # Manage and inspect EESSI software catalogs and desktop launchers for scidesktop.
 #
-#   eessi-catalog [list]   Show mount status, desktop launchers, and curated tools
-#   eessi-catalog sync     Fetch live <domain>/eessi.json catalogs and generate launchers
-#   eessi-catalog urls     Print resolved EESSI catalog URLs or local files
-#   eessi-catalog apps-dir Print active EESSI .desktop directory for SCIDESKTOP_APP_DIRS
-#   eessi-catalog json     Print merged cached EESSI catalog JSON
+#   eessi-catalog [list]           Show mount status, desktop launchers, and curated tools
+#   eessi-catalog sync             Fetch live <domain>/eessi.json catalogs and generate launchers
+#   eessi-catalog urls             Print resolved EESSI catalog URLs or local files
+#   eessi-catalog apps-dir         Print active EESSI .desktop snapshot directory
+#   eessi-catalog session-apps-dir Stage a container-local copy of active launchers for JupyterLab
+#   eessi-catalog json             Print merged cached EESSI catalog JSON
 #
 # Environment overrides:
 #   EESSI_CACHE_DIR        Cache directory (default: ${XDG_CACHE_HOME:-$HOME/.cache}/scidesktop/eessi)
@@ -24,8 +25,13 @@ CONNECT_TIMEOUT="${EESSI_CATALOG_CONNECT_TIMEOUT:-3}"
 MAX_TIME="${EESSI_CATALOG_TIMEOUT:-6}"
 MAX_BYTES="${EESSI_CATALOG_MAX_BYTES:-5242880}"
 STAGING_DIR=""
+STAGE_LOCK_FD=""
 
 cleanup_staging() {
+    if [ -n "${STAGE_LOCK_FD}" ]; then
+        exec {STAGE_LOCK_FD}>&- 2>/dev/null || true
+        STAGE_LOCK_FD=""
+    fi
     if [ -n "${STAGING_DIR}" ]; then
         rm -rf "${STAGING_DIR}"
         STAGING_DIR=""
@@ -35,12 +41,16 @@ trap cleanup_staging EXIT
 
 usage() {
     cat >&2 <<'EOF'
-usage: eessi-catalog [list|sync|refresh|urls|apps-dir|json]
+usage: eessi-catalog [list|sync|refresh|urls|apps-dir|session-apps-dir|json]
 EOF
 }
 
 resolve_sources() {
     if [ -n "${EESSI_CATALOG_FILES:-}" ]; then
+        if [[ "${EESSI_CATALOG_FILES}" == *$'\n'* || "${EESSI_CATALOG_FILES}" == *$'\r'* ]]; then
+            echo "eessi-catalog: EESSI_CATALOG_FILES must not contain newlines" >&2
+            return 1
+        fi
         local -a raw_paths=()
         local path resolved
         IFS=':' read -r -a raw_paths <<<"${EESSI_CATALOG_FILES}"
@@ -90,7 +100,7 @@ namespace_dir_for_sources() {
 
 cache_matches_sources() {
     local expected ns_dir current_dir
-    expected="$(resolve_sources)"
+    expected="$(resolve_sources)" || return 1
     [ -n "${expected}" ] || return 1
     ns_dir="$(namespace_dir_for_sources "${expected}")"
     current_dir="${ns_dir}/current"
@@ -128,6 +138,36 @@ active_apps_dir() {
     fi
 }
 
+session_apps_dir() {
+    local src_dir session_root session_dir f copied=0
+    src_dir="$(active_apps_dir)"
+    [ -n "${src_dir}" ] || return 0
+    if [ "${src_dir}" = "${STATIC_APPS_DIR}" ]; then
+        printf '%s\n' "${src_dir}"
+        return 0
+    fi
+    session_root="${EESSI_SESSION_APPS_ROOT:-/tmp}"
+    mkdir -p "${session_root}"
+    session_dir="$(mktemp -d "${session_root}/scidesktop-eessi-apps.XXXXXX")"
+    STAGING_DIR="${session_dir}"
+    chmod 0755 "${session_dir}"
+    for f in "${src_dir}"/*.desktop; do
+        [ -f "${f}" ] || continue
+        cp -- "${f}" "${session_dir}/"
+        chmod 0644 "${session_dir}/$(basename "${f}")"
+        copied=$((copied + 1))
+    done
+    if [ "${copied}" -eq 0 ]; then
+        cleanup_staging
+        if [ -d "${STATIC_APPS_DIR}" ]; then
+            printf '%s\n' "${STATIC_APPS_DIR}"
+        fi
+        return 0
+    fi
+    STAGING_DIR=""
+    printf '%s\n' "${session_dir}"
+}
+
 validate_catalog_json() {
     local file="$1"
     # Slurp (-s) and assert length == 1 so trailing or multi-document streams
@@ -149,12 +189,12 @@ validate_catalog_json() {
                 [.tools | to_entries[] | .value]
                 | all(.[];
                     type == "object"
-                    and (.package | type == "string" and length > 0 and (contains("\u0000") | not) and (test("[[:cntrl:]]") | not))
+                    and (.package | type == "string" and length > 0 and test("\\S") and (contains("\u0000") | not) and (test("[[:cntrl:]]") | not))
                     and (.categories | type == "array" and all(.[]; type == "string" and (contains("\u0000") | not) and (test("[[:cntrl:]]") | not)))
                     and ((.description == null) or (.description | type == "string" and (contains("\u0000") | not)))
                     and ((.homepage == null) or (.homepage | type == "string" and (contains("\u0000") | not)))
                     and (.apps | type == "object")
-                    and ((.apps | keys) | all(.[]; length > 0 and (contains("\u0000") | not) and (test("[[:cntrl:]]") | not)))
+                    and ((.apps | keys) | all(.[]; length > 0 and test("\\S") and (contains("\u0000") | not) and (test("[[:cntrl:]]") | not)))
                     and (
                         [.apps | to_entries[] | .value]
                         | all(.[];
@@ -230,6 +270,8 @@ sync_catalogs() {
     local stage
     stage="$(mktemp -d "${ns_dir}/snapshots/.staging.XXXXXX")"
     STAGING_DIR="${stage}"
+    exec {STAGE_LOCK_FD}>"${stage}/.in-use"
+    flock -x "${STAGE_LOCK_FD}"
     chmod 0755 "${stage}"
     mkdir -p "${stage}/catalogs" "${stage}/applications"
     chmod 0755 "${stage}/catalogs" "${stage}/applications"
@@ -319,7 +361,11 @@ sync_catalogs() {
             .tools | to_entries[] as $t
             | [
                 $t.value.apps | to_entries[] as $a
-                | select(($a.value.show_in_menu // false) == true and (($a.value.exec // []) | length > 0))
+                | select(
+                    ($a.value.show_in_menu // false) == true
+                    and (($a.value.exec // []) | length > 0)
+                    and (($a.key | gsub("^[[:space:]]+|[[:space:]]+$"; "") | length) > 0)
+                  )
                 | {
                     id: $t.key,
                     label: $a.key,
@@ -436,6 +482,11 @@ EOF
     if [ -L "${ns_dir}/current" ]; then
         prev_target="$(readlink "${ns_dir}/current" 2>/dev/null || true)"
     fi
+    rm -f "${stage}/.in-use"
+    if [ -n "${STAGE_LOCK_FD}" ]; then
+        exec {STAGE_LOCK_FD}>&-
+        STAGE_LOCK_FD=""
+    fi
     mv -T "${stage}" "${final_snap}"
     STAGING_DIR=""
     tmp_link="$(mktemp -u "${ns_dir}/.current.tmp.XXXXXX")"
@@ -443,9 +494,10 @@ EOF
     mv -Tf "${tmp_link}" "${ns_dir}/current"
 
     # Keep the active snapshot, the immediate previous snapshot, and any
-    # snapshot created within the last 24h so running Jupyter sessions keep
-    # their registered immutable launcher paths intact. Also reap abandoned
-    # staging directories older than 10 minutes.
+    # snapshot created within the last 24h; long-running Jupyter sessions copy
+    # their launchers to container-local storage via session-apps-dir. Also
+    # reap unlocked abandoned staging directories older than 10 minutes without
+    # disturbing any still-running sync holding its .in-use flock.
     local old old_rel
     while IFS= read -r -d '' old; do
         old_rel="snapshots/$(basename "${old}")"
@@ -453,7 +505,12 @@ EOF
         [ -n "${prev_target}" ] && [ "${old_rel}" = "${prev_target}" ] && continue
         rm -rf "${old}"
     done < <(find "${ns_dir}/snapshots" -maxdepth 1 -mindepth 1 -type d -name 'sync-*' -mmin +1440 -print0 2>/dev/null || true)
-    find "${ns_dir}/snapshots" -maxdepth 1 -mindepth 1 -type d -name '.staging.*' -mmin +10 -exec rm -rf {} + 2>/dev/null || true
+    local stale_stage
+    while IFS= read -r -d '' stale_stage; do
+        if [ ! -e "${stale_stage}/.in-use" ] || flock -n "${stale_stage}/.in-use" true 2>/dev/null; then
+            rm -rf "${stale_stage}"
+        fi
+    done < <(find "${ns_dir}/snapshots" -maxdepth 1 -mindepth 1 -type d -name '.staging.*' -mmin +10 -print0 2>/dev/null || true)
     exec {lock_fd}>&-
 }
 
@@ -524,6 +581,9 @@ case "${cmd}" in
         ;;
     apps-dir)
         active_apps_dir
+        ;;
+    session-apps-dir)
+        session_apps_dir
         ;;
     json)
         if cache_matches_sources; then

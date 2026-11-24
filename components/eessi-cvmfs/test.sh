@@ -505,21 +505,99 @@ grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- Foo/2\.0 foo$' "$
 grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- FooLegacy/1\.0 foolegacy$' "${coll_dir}/eessi-foo-2023-06-1.desktop"
 grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2023\.06 -- Foo/1\.0 foo$' "${coll_dir}/eessi-foo-2023-06-2.desktop"
 
-# 32-eessi-apps.sh selects the live synced dir when mounted (dropping privileges
-# for both sync and apps-dir when invoked as root), and falls back on error.
+# Whitespace-only app labels are rejected upfront so they can never claim
+# canonical slots or suppress valid labels during deduplication.
+cat >"${tmp}/blank-label.eessi.json" <<'EOF'
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06"],
+  "tools": {
+    "paraview": {
+      "package": "ParaView",
+      "categories": ["visualization"],
+      "apps": {
+        "   ": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "ParaView/6.0.1-foss-2025b",
+          "exec": ["paraview"],
+          "show_in_menu": true
+        }
+      }
+    }
+  }
+}
+EOF
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/blank-label.eessi.json" /usr/local/bin/eessi-catalog sync
+
+# Newlines in EESSI_CATALOG_FILES are rejected rather than silently loading a
+# prefix file that happens to exist.
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="$(printf '%s\n%s' "${tmp}/data.eessi.json" "${tmp}/nonexistent.json")" /usr/local/bin/eessi-catalog sync
+
+# Staging reaper removes unlocked abandoned .staging.* dirs older than 10m
+# without disturbing an aged .staging.* dir held by an active sync's flock.
+live_ns_dir="$(dirname "$(dirname "$(dirname "${coll_dir}")")")"
+live_stage="${live_ns_dir}/snapshots/.staging.live01"
+dead_stage="${live_ns_dir}/snapshots/.staging.dead01"
+mkdir -p "${live_stage}" "${dead_stage}"
+touch -d '30 minutes ago' "${live_stage}" "${dead_stage}"
+exec {live_stage_fd}>"${live_stage}/.in-use"
+flock -x "${live_stage_fd}"
+EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/collision.eessi.json" /usr/local/bin/eessi-catalog sync
+test -d "${live_stage}"
+[ ! -e "${dead_stage}" ]
+exec {live_stage_fd}>&-
+rm -rf "${live_stage}"
+
+# 32-eessi-apps.sh stages a container-local session copy when mounted (dropping
+# privileges for sync and staging when invoked as root), keeps session launchers
+# intact even if shared-home snapshots age out and are pruned, respects
+# XDG_CACHE_HOME when refresh is disabled, and falls back to static on error.
 chmod 0755 "${tmp}"
 chmod 0644 "${tmp}/neuro.eessi.json" "${tmp}/data.eessi.json"
-install -d -m 0755 -o jovyan "${tmp}/hook-cache"
+install -d -m 0755 -o jovyan "${tmp}/hook-cache" "${tmp}/session-apps"
 mounted_dirs="$(env -u SCIDESKTOP_APP_DIRS EESSI_MODULE_ROOT="${tmp}/modroot" \
-    EESSI_CACHE_DIR="${tmp}/hook-cache" EESSI_CATALOG_FILES="${files}" \
+    EESSI_CACHE_DIR="${tmp}/hook-cache" EESSI_SESSION_APPS_ROOT="${tmp}/session-apps" \
+    EESSI_CATALOG_FILES="${files}" \
     bash -c ". ${app_hook}; echo \"\${SCIDESKTOP_APP_DIRS}\"")"
-expected_hook_dir="$(EESSI_CACHE_DIR="${tmp}/hook-cache" EESSI_CATALOG_FILES="${files}" /usr/local/bin/eessi-catalog apps-dir)"
-[ "${mounted_dirs}" = "/opt/sciget/applications:${expected_hook_dir}" ]
-[ "$(stat -c '%U' "${expected_hook_dir}/eessi-paraview.desktop")" = "jovyan" ]
+hook_session_dir="${mounted_dirs#/opt/sciget/applications:}"
+[ "${mounted_dirs}" = "/opt/sciget/applications:${hook_session_dir}" ]
+case "${hook_session_dir}" in
+    "${tmp}/session-apps/scidesktop-eessi-apps."*) ;;
+    *) echo "FAIL: expected container-local session dir, got ${hook_session_dir}" >&2; exit 1 ;;
+esac
+test -f "${hook_session_dir}/eessi-paraview.desktop"
+[ "$(stat -c '%U' "${hook_session_dir}/eessi-paraview.desktop")" = "jovyan" ]
+# Age the cached snapshot past 24h and refresh twice; the session's staged
+# launcher files remain intact for long-running Jupyter sessions.
+hook_snap_dir="$(dirname "$(EESSI_CACHE_DIR="${tmp}/hook-cache" EESSI_CATALOG_FILES="${files}" /usr/local/bin/eessi-catalog apps-dir)")"
+touch -d '48 hours ago' "${hook_snap_dir}"
+EESSI_CACHE_DIR="${tmp}/hook-cache" EESSI_CATALOG_FILES="${files}" /usr/local/bin/eessi-catalog sync
+EESSI_CACHE_DIR="${tmp}/hook-cache" EESSI_CATALOG_FILES="${files}" /usr/local/bin/eessi-catalog sync
+[ ! -e "${hook_snap_dir}" ]
+test -f "${hook_session_dir}/eessi-paraview.desktop"
+
+# With refresh disabled, 32-eessi-apps.sh honors XDG_CACHE_HOME just like CLI.
+install -d -m 0755 -o jovyan "${tmp}/xdg-cache"
+su -s /bin/bash jovyan -c "XDG_CACHE_HOME='${tmp}/xdg-cache' EESSI_CATALOG_FILES='${tmp}/data.eessi.json' /usr/local/bin/eessi-catalog sync"
+xdg_dirs="$(env -u SCIDESKTOP_APP_DIRS -u EESSI_CACHE_DIR \
+    XDG_CACHE_HOME="${tmp}/xdg-cache" EESSI_MODULE_ROOT="${tmp}/modroot" \
+    EESSI_SESSION_APPS_ROOT="${tmp}/session-apps" \
+    EESSI_CATALOG_FILES="${tmp}/data.eessi.json" \
+    SCIDESKTOP_EESSI_CATALOG_REFRESH=no \
+    bash -c ". ${app_hook}; echo \"\${SCIDESKTOP_APP_DIRS}\"")"
+xdg_session_dir="${xdg_dirs#/opt/sciget/applications:}"
+[ "${xdg_session_dir}" != "/etc/scidesktop/eessi-apps.d" ]
+test -f "${xdg_session_dir}/eessi-r-cran.desktop"
+[ ! -e "${xdg_session_dir}/eessi-r-bioconductor.desktop" ]
 
 install -d -m 0755 -o jovyan "${tmp}/fail-cache"
 fallback_dirs="$(env -u SCIDESKTOP_APP_DIRS EESSI_MODULE_ROOT="${tmp}/modroot" \
-    EESSI_CACHE_DIR="${tmp}/fail-cache" EESSI_CATALOG_FILES="${tmp}/nonexistent.json" \
+    EESSI_CACHE_DIR="${tmp}/fail-cache" EESSI_SESSION_APPS_ROOT="${tmp}/session-apps" \
+    EESSI_CATALOG_FILES="${tmp}/nonexistent.json" \
     bash -c ". ${app_hook} 2>/dev/null; echo \"\${SCIDESKTOP_APP_DIRS}\"")"
 [ "${fallback_dirs}" = "/opt/sciget/applications:/etc/scidesktop/eessi-apps.d" ]
 

@@ -15,13 +15,15 @@ if [ "${SCIDESKTOP_CVMFS_MODE:-external}" != disabled ] \
         _eessi_user=""
         _eessi_home="${HOME}"
     fi
-    _eessi_cache="${EESSI_CACHE_DIR:-${_eessi_home}/.cache/scidesktop/eessi}"
+    _eessi_xdg_cache="${XDG_CACHE_HOME:-${_eessi_home}/.cache}"
+    _eessi_cache="${EESSI_CACHE_DIR:-${_eessi_xdg_cache}/scidesktop/eessi}"
     _eessi_static_dir="${EESSI_STATIC_APPS_DIR:-/etc/scidesktop/eessi-apps.d}"
     _eessi_env=("EESSI_CACHE_DIR=${_eessi_cache}")
     [ -n "${EESSI_CATALOG_FILES:-}" ] && _eessi_env+=("EESSI_CATALOG_FILES=${EESSI_CATALOG_FILES}")
     [ -n "${EESSI_CATALOG_URLS:-}" ] && _eessi_env+=("EESSI_CATALOG_URLS=${EESSI_CATALOG_URLS}")
     [ -n "${SCIGET_CATALOGS_FILE:-}" ] && _eessi_env+=("SCIGET_CATALOGS_FILE=${SCIGET_CATALOGS_FILE}")
     [ -n "${EESSI_STATIC_APPS_DIR:-}" ] && _eessi_env+=("EESSI_STATIC_APPS_DIR=${EESSI_STATIC_APPS_DIR}")
+    [ -n "${EESSI_SESSION_APPS_ROOT:-}" ] && _eessi_env+=("EESSI_SESSION_APPS_ROOT=${EESSI_SESSION_APPS_ROOT}")
 
     # Helper runner that drops privileges to NB_USER when sourced as root so
     # root never reads or writes user-controlled cache paths.
@@ -48,7 +50,7 @@ if [ "${SCIDESKTOP_CVMFS_MODE:-external}" != disabled ] \
 
     _eessi_selected_dir=""
     if [ -x /usr/local/bin/eessi-catalog ]; then
-        _eessi_selected_dir="$("${_eessi_run_cmd[@]}" timeout 5 /usr/local/bin/eessi-catalog apps-dir 2>/dev/null || true)"
+        _eessi_selected_dir="$("${_eessi_run_cmd[@]}" timeout 5 /usr/local/bin/eessi-catalog session-apps-dir 2>/dev/null || true)"
     fi
     if [ -z "${_eessi_selected_dir}" ] && [ -d "${_eessi_static_dir}" ]; then
         _eessi_selected_dir="${_eessi_static_dir}"
@@ -62,5 +64,5 @@ if [ "${SCIDESKTOP_CVMFS_MODE:-external}" != disabled ] \
         esac
         export SCIDESKTOP_APP_DIRS="${_eessi_app_dirs}"
     fi
-    unset _eessi_user _eessi_home _eessi_cache _eessi_static_dir _eessi_env _eessi_run_cmd _eessi_selected_dir _eessi_app_dirs
+    unset _eessi_user _eessi_home _eessi_xdg_cache _eessi_cache _eessi_static_dir _eessi_env _eessi_run_cmd _eessi_selected_dir _eessi_app_dirs
 fi
