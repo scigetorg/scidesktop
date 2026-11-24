@@ -1,0 +1,7 @@
+# aria2 from conda-forge, in its own prefix (/opt/aria2). Regenerate the locks
+# with ./lock after changing the pin.
+name: aria2
+channels:
+  - conda-forge
+dependencies:
+  - aria2==1.37.0

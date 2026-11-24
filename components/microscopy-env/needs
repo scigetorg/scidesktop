@@ -1,0 +1,4 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+jupyter-env  # its kernel is offered by the Jupyter server
+eessi-cvmfs  # its EESSI launcher and catalog drop-ins

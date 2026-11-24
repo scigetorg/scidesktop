@@ -13,9 +13,10 @@ squeue                                 # what is queued and running
 srun --pty bash                        # an interactive step
 ```
 
-It is the `slurm` component, part of the base image. Slurm itself is the OS
-layer's packages (`components/os-ubuntu/packages/slurm.txt`); the component
-is what runs it.
+It is the `slurm` component, part of the base image. The component builds
+Slurm from source into `/opt/slurm`, with what the session's configuration
+and external MUNGE clusters (`SLURM_CONF`) use, and links its commands into
+`/usr/local/bin`. The release is `SLURM_TAG` in `docker-bake.hcl`.
 
 ## What runs
 
@@ -117,5 +118,7 @@ docker buildx bake slurm-test
 
 ## Licence
 
-Slurm is GPL-2.0-or-later, installed from Ubuntu's packages, unmodified. The
-start logic and the preloaded library are this repository's.
+Slurm is GPL-2.0-or-later, built from unmodified upstream source (`SLURM_TAG`
+in `docker-bake.hcl`), with its upstream notices (`COPYING`, `LICENSE.OpenSSL`)
+installed under `/opt/slurm/share/licenses/slurm/`. The start logic and the
+preloaded library are this repository's.

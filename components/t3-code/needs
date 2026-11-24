@@ -1,0 +1,4 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+code-server  # runs on its Node.js
+jupyter-env  # served through the Jupyter server

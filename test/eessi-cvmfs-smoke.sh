@@ -6,8 +6,9 @@
 # Checks EESSI CVMFS configuration, eessi-catalog, and (where /dev/fuse is
 # available and SMOKE_CVMFS_MOUNT=1) mounts software.eessi.io in internal mode,
 # verifies Lmod discovery of EESSI/2025.06, runs a real EESSI binary via
-# eessi-launch as the notebook user, and verifies JupyterLab registers base and
-# domain-specific EESSI desktop launcher tiles.
+# eessi-launch as the notebook user, and verifies JupyterLab registers base
+# EESSI desktop launcher tiles (domain-specific tiles are checked by each
+# domain environment's own smoke test).
 
 set -uo pipefail
 
@@ -199,20 +200,5 @@ for tile in app-eessi-paraview app-eessi-octave app-eessi-julia app-eessi-r; do
         fail "JupyterLab launcher registers ${tile}"
     fi
 done
-
-check_domain_tile() {
-    local manifest="$1" tile="$2"
-    if docker exec "${NAME}" test -f "/opt/scidesktop/manifest.d/${manifest}.json" 2>/dev/null; then
-        if grep -q "\"${tile}\"" <<<"${servers}"; then
-            pass "domain image (${manifest}) registers ${tile}"
-        else
-            fail "domain image (${manifest}) registers ${tile}"
-        fi
-    fi
-}
-
-check_domain_tile microscopy-env app-eessi-napari
-check_domain_tile datascience-env app-eessi-r-cran
-check_domain_tile neuroimaging-env app-eessi-r-bioconductor
 
 finish

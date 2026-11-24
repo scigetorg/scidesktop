@@ -1,0 +1,5 @@
+#!/bin/bash
+# Regenerates linux-64.lock and linux-aarch64.lock from environment.yml.
+set -euo pipefail
+cd "$(dirname "$0")"
+../conda-lock .

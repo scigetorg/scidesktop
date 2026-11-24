@@ -1,16 +1,25 @@
 # syntax=docker/dockerfile:1
 # A Slurm queue for one session: a controller and a worker for this container
 # alone, started beside the notebook server as the notebook user
-# (/opt/slurm/bin/slurm-session). Slurm itself is the OS layer's packages
-# (components/os-ubuntu/packages/slurm.txt). This component is what runs it
-# without root: its configuration, its start hook, and a small library that
-# keeps the daemons on loopback.
+# (/opt/slurm/bin/slurm-session). Slurm is built from source into /opt/slurm,
+# with what the session's configuration and external HPC clients use: Slurm's
+# own authentication (auth/slurm, via libjwt; no local munged daemon), MUNGE
+# client plugins (auth/munge, cred/munge, via libmunge) for connecting to an
+# external site cluster when SLURM_CONF is set, JSON output and Lua (scrun and
+# Lua plugins, on the OS layer's Lua 5.4), without cgroups, PAM, an accounting
+# database or hwloc. libjwt (with jansson and libb64) and libmunge, which the
+# OS layer lacks, ship in /opt/slurm/lib/deps. Commands and daemons are linked
+# into /usr/local/bin and /usr/local/sbin.
+# The component also carries the configuration links, the start hook, and a
+# small library that keeps the daemons on loopback.
 
 ARG UBUNTU_IMAGE
 
-# Built on plain Ubuntu of the OS layer's release: the library uses only the
-# C library.
+# Built on plain Ubuntu of the OS layer's release, against libraries the OS
+# layer has (C library, json-c, OpenSSL, Lua 5.4) plus the bundled libjwt.
 FROM ${UBUNTU_IMAGE} AS build
+ARG SLURM_TAG
+ARG SLURM_SHA256
 ARG TARGETARCH
 ARG APT_CACHE_ID
 ARG NB_UID
@@ -18,7 +27,50 @@ ARG NB_GID
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
-    apt-get update && apt-get install --no-install-recommends -y gcc libc6-dev
+    apt-get update && apt-get install --no-install-recommends -y \
+        gcc libc6-dev make pkg-config python3 binutils curl ca-certificates \
+        libjwt-dev libjson-c-dev liblua5.4-dev libmunge-dev patchelf
+RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
+    : "${SLURM_TAG:?}" "${SLURM_SHA256:?}" \
+    # Tag slurm-25-11-9-1 is release 25.11.9.
+    && version="$(sed -E 's/^slurm-([0-9]+)-([0-9]+)-([0-9]+)-[0-9]+$/\1.\2.\3/' <<<"${SLURM_TAG}")" \
+    && fetch "https://github.com/SchedMD/slurm/archive/refs/tags/${SLURM_TAG}.tar.gz" \
+        "${SLURM_SHA256}" /tmp/slurm.tar.gz \
+    && mkdir -p /tmp/slurm && tar -xzf /tmp/slurm.tar.gz -C /tmp/slurm --strip-components=1 \
+    && cd /tmp/slurm \
+    # Optional features are found only when their development files are
+    # installed: here libjwt, libmunge (for external site clusters), json-c and Lua.
+    && { ./configure --prefix=/opt/slurm --sysconfdir=/etc/slurm --disable-debug \
+        --disable-pam --disable-x11 \
+        LDFLAGS="-Wl,-rpath,/opt/slurm/lib/deps" >/tmp/configure.log \
+        || { tail -n 50 /tmp/configure.log >&2; exit 1; }; } \
+    && grep -q '^#define HAVE_JWT' config.h \
+    && grep -q '^#define HAVE_JSON' config.h \
+    && grep -q '^#define HAVE_LUA' config.h \
+    && { make -j"$(nproc)" >/tmp/make.log \
+        || { tail -n 50 /tmp/make.log >&2; exit 1; }; } \
+    && { make install >/tmp/install.log \
+        || { tail -n 50 /tmp/install.log >&2; exit 1; }; } \
+    && rm -rf /opt/slurm/include /opt/slurm/share \
+    && install -d -m 0755 /opt/slurm/share/licenses/slurm \
+    && install -m 0644 /tmp/slurm/COPYING /tmp/slurm/LICENSE.OpenSSL /opt/slurm/share/licenses/slurm/ \
+    && install -d -m 0755 /opt/slurm/lib/deps \
+    && cp -L /usr/lib/*/libjwt.so.2 /usr/lib/*/libjansson.so.4 /usr/lib/*/libb64.so.0d /usr/lib/*/libmunge.so.2 /opt/slurm/lib/deps/ \
+    && patchelf --set-rpath '$ORIGIN' /opt/slurm/lib/deps/libjwt.so.2 \
+    && find /opt/slurm \( -name '*.a' -o -name '*.la' \) -delete \
+    && { find /opt/slurm -type f \( -perm -u+x -o -name '*.so*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true; } \
+    && /opt/slurm/sbin/slurmctld -V | grep -qx "slurm ${version}" \
+    && test -r /opt/slurm/lib/slurm/auth_slurm.so \
+    && test -r /opt/slurm/lib/slurm/auth_munge.so \
+    && test -r /opt/slurm/lib/slurm/cred_munge.so \
+    && test -r /opt/slurm/lib/slurm/select_cons_tres.so \
+    && test -r /opt/slurm/lib/slurm/sched_backfill.so \
+    && test -x /opt/slurm/bin/scrun \
+    && install -d -m 0755 /out/opt /out/usr/local/bin /out/usr/local/sbin \
+    && cp -a /opt/slurm /out/opt/slurm \
+    && for f in /opt/slurm/bin/*; do ln -s "${f}" "/out/usr/local/bin/$(basename "${f}")"; done \
+    && for f in /opt/slurm/sbin/*; do ln -s "${f}" "/out/usr/local/sbin/$(basename "${f}")"; done \
+    && echo "${version}" > /tmp/slurm-version
 COPY src/loopback_bind.c /src/loopback_bind.c
 COPY rootfs/opt/slurm/bin/slurm-session /src/slurm-session
 RUN : "${NB_UID:?}" "${NB_GID:?}" \
@@ -29,9 +81,8 @@ RUN : "${NB_UID:?}" "${NB_GID:?}" \
     # and where this session's configuration, state and logs go: the
     # notebook user's, so nothing needs root at start.
     && install -d -m 0775 -o "${NB_UID}" -g "${NB_GID}" /out/run/slurm /out/run/slurmctld \
-    # The manifest identifies the start logic by content; the Slurm version
-    # is the OS layer's.
-    && printf '{"session_sha256": "%s", "loopback_bind_sha256": "%s"}\n' \
+    && printf '{"slurm": "%s", "session_sha256": "%s", "loopback_bind_sha256": "%s"}\n' \
+        "$(cat /tmp/slurm-version)" \
         "$(sha256sum /src/slurm-session | cut -d ' ' -f 1)" \
         "$(sha256sum /src/loopback_bind.c | cut -d ' ' -f 1)" \
         > /out/opt/scidesktop/manifest.d/slurm.json
@@ -48,8 +99,12 @@ COPY --from=rootfs /rootfs/ /
 COPY --from=build /out/ /
 
 # On the OS layer, as the notebook user: a queue starts, runs a job and
-# stops, with no privilege a JupyterHub pod lacks.
+# stops, with no privilege a JupyterHub pod lacks. Every Slurm binary finds
+# its libraries there.
 FROM os AS test
 COPY --from=component / /
+RUN missing=$(find /opt/slurm -type f \( -perm -u+x -o -name '*.so*' \) -exec sh -c \
+        '[ "$(head -c 4 "$1" | tail -c 3)" = ELF ] && ldd "$1" 2>/dev/null | grep "not found" | sed "s|^|$1: |"' _ {} \;) \
+    && { [ -z "${missing}" ] || { echo "${missing}"; exit 1; }; }
 USER ${NB_UID}
 RUN --mount=type=bind,source=test.sh,target=/tmp/test.sh bash /tmp/test.sh

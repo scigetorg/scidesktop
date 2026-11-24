@@ -61,7 +61,9 @@ components/<component>/
   version to report.
 - **`test/<component>-smoke.sh` (optional):** end-to-end checks of the
   component in an assembled image, taking the image as its argument.
-  `test/image-smoke.sh` runs it on every image that holds the component.
+  `test/image-smoke.sh` runs it on each image that adds the component to the
+  image it is `FROM` (`SMOKE_ALL_COMPONENTS=1` runs it on every image that
+  holds the component).
 - **Manifest entry (L4):** the component writes `/opt/scidesktop/manifest.d/<component>.json`
   with its versions, detected from what was built.
 - **Build `FROM ${UBUNTU_IMAGE}`** (plain Ubuntu of the OS layer's release) and
@@ -200,6 +202,26 @@ bake target: it has the manifest entry of every component the target (or the
 image it is `FROM`) copies, and no manifest entry, prefix (`/opt/<component>`)
 or `rootfs/` file of any other component. This is the check that keeps
 optional components out of the base. `test/image-smoke.sh` runs it first.
+
+### What a component needs (S9)
+
+A component that only works with another in the same image lists it in
+`components/<component>/needs`, one name per line (`#` starts a comment):
+`acp-adapters` runs on code-server's Node.js, `jupyterlab-slurm` shows the
+`slurm` queue. `python3 test/contract.py static` fails any image that holds a
+component without what it needs, so a component can move between images
+safely. The core every image holds (`jupyter-env`, `lmod`, `sciget`) is listed
+too where it is used, so the file says what the component relies on.
+
+### Each component is tested once
+
+`test/image-smoke.sh <image>` runs the smoke test of each component the image
+adds to the image it is `FROM` (`python3 test/contract.py added <image>`):
+the base tests its components, a domain image only its own, since it holds
+the base's layers unchanged. Every image also runs the base's session checks
+(`test/smoke.sh`), its notebook and sciget checks, and the foreign-UID checks
+(`test/hpc-smoke.sh`). `SMOKE_ALL_COMPONENTS=1` tests every component an image
+holds.
 
 ### Order and layers
 

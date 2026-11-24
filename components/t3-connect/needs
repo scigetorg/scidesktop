@@ -1,0 +1,4 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+t3-code  # connects T3 Code sessions
+jupyter-env  # served through the Jupyter server

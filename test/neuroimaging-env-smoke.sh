@@ -9,12 +9,14 @@
 #   - `neuroimaging` kernel executes neuroimaging stack, ipyniivue, and a local
 #     DataLad create/save/get roundtrip using shared git-annex
 #   - Default `python3` kernel remains on /opt/conda
+#   - Domain EESSI desktop launcher tile (app-eessi-r-bioconductor) registers when EESSI is mounted
 
 set -uo pipefail
 
 IMAGE="${1:-neurodesktop}"
 NAME="neuroimaging-env-smoke-$$"
 TOKEN="neuroimaging-smoke"
+EESSI_STUB=""
 FAILED=0
 
 pass() { printf '  ok    %s\n' "$1"; }
@@ -23,11 +25,16 @@ fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 cleanup() {
     docker logs "${NAME}" >"/tmp/${NAME}.log" 2>&1 || true
     docker rm -f "${NAME}" >/dev/null 2>&1 || true
+    [ -z "${EESSI_STUB}" ] || rm -rf "${EESSI_STUB}"
 }
 trap cleanup EXIT
 
+EESSI_STUB="$(mktemp -d)"
+chmod 0755 "${EESSI_STUB}"
+
 echo "neuroimaging-env smoke: ${IMAGE}"
 docker run -d --name "${NAME}" --shm-size=2g -e JUPYTER_TOKEN="${TOKEN}" \
+    -v "${EESSI_STUB}:/cvmfs/software.eessi.io/init/modules:ro" \
     "${IMAGE}" start-notebook.py >/dev/null \
     || { echo "  FAIL  container did not start"; exit 1; }
 
@@ -178,6 +185,33 @@ assert "NEURO_OK (4, 4, 4) NiiVue" in neuro_out, neuro_out
 base_out = run_code("python3", "import sys; print(sys.executable)")
 assert base_out.startswith("/opt/conda/"), base_out
 PY
+
+servers="$(docker exec "${NAME}" curl -fsS -H "Authorization: token ${TOKEN}" \
+    "http://127.0.0.1:8888/server-proxy/servers-info" 2>/dev/null || true)"
+if grep -q '"app-eessi-r-bioconductor"' <<<"${servers}"; then
+    pass "JupyterLab launcher registers app-eessi-r-bioconductor when EESSI is mounted"
+else
+    fail "JupyterLab launcher registers app-eessi-r-bioconductor when EESSI is mounted"
+fi
+bad_execs="$(docker exec "${NAME}" bash -c '
+    for f in /etc/scidesktop/eessi-apps.d/*.desktop; do
+        [ -f "${f}" ] || continue
+        exec_line="$(sed -n "s/^Exec=//p" "${f}" | head -n 1)"
+        case "${exec_line}" in
+            *xfce4-terminal*)
+                case "${exec_line}" in
+                    *--disable-server*) ;;
+                    *) echo "${f}: ${exec_line}" ;;
+                esac
+                ;;
+        esac
+    done
+' 2>&1)"
+if [ -z "${bad_execs}" ]; then
+    pass "all xfce4-terminal EESSI desktop launchers pass --disable-server"
+else
+    fail "all xfce4-terminal EESSI desktop launchers pass --disable-server (${bad_execs})"
+fi
 
 echo
 if [ "${FAILED}" -eq 0 ]; then

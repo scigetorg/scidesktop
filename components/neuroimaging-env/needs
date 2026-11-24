@@ -1,0 +1,5 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+jupyter-env  # its kernel and ipyniivue asset handler run in the Jupyter server
+datalad  # shared git-annex on PATH for DataLad datasets
+eessi-cvmfs  # its EESSI launcher and catalog drop-ins

@@ -1,0 +1,61 @@
+#!/bin/bash
+# update-ca-certificates hook: keeps the workflow-engines Temurin JRE trust
+# store in sync with Ubuntu's system CA certificates (including institutional
+# CAs added under /usr/local/share/ca-certificates).
+set -euo pipefail
+
+KEYTOOL="/opt/workflow-engines/jre/bin/keytool"
+CACERTS="/opt/workflow-engines/jre/lib/security/cacerts"
+STOREPASS="changeit"
+
+[ -x "${KEYTOOL}" ] && [ -f "${CACERTS}" ] || exit 0
+
+fresh=0
+if [ "${1:-}" = "--fresh" ]; then
+    fresh=1
+fi
+
+cert_alias() {
+    printf 'system-ca:%s' "$(printf '%s' "$1" | sha256sum | cut -c1-16)"
+}
+
+target="${CACERTS}"
+tmp=""
+if [ "${fresh}" -eq 1 ]; then
+    tmp="$(mktemp -u "${CACERTS}.XXXXXX")"
+    trap 'rm -f "${tmp}"' EXIT
+    target="${tmp}"
+fi
+
+changed=0
+while IFS= read -r line; do
+    [ -n "${line}" ] || continue
+    op="${line:0:1}"
+    cert="${line:1}"
+    alias="$(cert_alias "${cert}")"
+    case "${op}" in
+        +)
+            [ -r "${cert}" ] || continue
+            if [ "${fresh}" -eq 0 ]; then
+                "${KEYTOOL}" -delete -noprompt -keystore "${target}" -storepass "${STOREPASS}" \
+                    -alias "${alias}" >/dev/null 2>&1 || true
+            fi
+            "${KEYTOOL}" -importcert -noprompt -trustcacerts -keystore "${target}" \
+                -storepass "${STOREPASS}" -alias "${alias}" -file "${cert}" >/dev/null
+            changed=1
+            ;;
+        -)
+            "${KEYTOOL}" -delete -noprompt -keystore "${target}" -storepass "${STOREPASS}" \
+                -alias "${alias}" >/dev/null 2>&1 || true
+            changed=1
+            ;;
+    esac
+done
+
+if [ "${fresh}" -eq 1 ] && [ -f "${tmp}" ]; then
+    chmod 0644 "${tmp}"
+    mv -f "${tmp}" "${CACERTS}"
+    trap - EXIT
+elif [ "${changed}" -eq 1 ]; then
+    chmod 0644 "${CACERTS}"
+fi

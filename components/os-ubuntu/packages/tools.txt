@@ -2,7 +2,6 @@
 # components or interactive workflows rely on across all desktops.
 # git, with ssh for remotes and an editor for commit messages: jupyterlab-git
 git
-gh
 openssh-client
 nano
 vim-tiny
@@ -20,16 +19,11 @@ bc
 jq
 # data transfer and remote filesystem mounts (generic across all domains)
 rsync
-rclone
-aria2
 sshfs
 davfs2
 s3fs
-# networking, desktop URL opening, graph rendering, legacy csh scripts
+# networking, desktop URL opening, graph rendering
 iputils-ping
 dnsutils
 xdg-utils
 graphviz
-tcsh
-# headless Java runtime for workflow engines (Nextflow, nf-test)
-openjdk-21-jre-headless

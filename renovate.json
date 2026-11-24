@@ -571,12 +571,23 @@
       ],
       "matchDepNames": [
         "nextflow-io/nextflow",
-        "askimed/nf-test"
+        "askimed/nf-test",
+        "adoptium/temurin21-binaries"
       ],
       "groupName": "component workflow-engines",
       "addLabels": [
         "component:workflow-engines"
       ]
+    },
+    {
+      "description": "Temurin 21 releases use 3- or 4-part versions with a +build number (e.g. 21.0.13+7, 21.0.13.1+2). Anchor the constant 21. prefix so optional 4th segment maps to patch (defaulting to 0) and +N always maps to build.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "adoptium/temurin21-binaries"
+      ],
+      "versioning": "regex:^21\\.(?<major>\\d+)\\.(?<minor>\\d+)(?:\\.(?<patch>\\d+))?\\+(?<build>\\d+)$"
     },
     {
       "description": "Component microscopy-env: its updates arrive together and run its own test.",
@@ -629,6 +640,69 @@
       "groupName": "component neurodesk-compat",
       "addLabels": [
         "component:neurodesk-compat"
+      ]
+    },
+    {
+      "description": "Component rclone: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/rclone/**"
+      ],
+      "groupName": "component rclone",
+      "addLabels": [
+        "component:rclone"
+      ]
+    },
+    {
+      "description": "Component gh: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/gh/**"
+      ],
+      "groupName": "component gh",
+      "addLabels": [
+        "component:gh"
+      ]
+    },
+    {
+      "description": "Component aria2: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/aria2/**"
+      ],
+      "groupName": "component aria2",
+      "addLabels": [
+        "component:aria2"
+      ]
+    },
+    {
+      "description": "Component tcsh: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/tcsh/**"
+      ],
+      "groupName": "component tcsh",
+      "addLabels": [
+        "component:tcsh"
+      ]
+    },
+    {
+      "description": "Component slurm: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/slurm/**"
+      ],
+      "groupName": "component slurm",
+      "addLabels": [
+        "component:slurm"
+      ]
+    },
+    {
+      "description": "Component slurm: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "slurm"
+      ],
+      "groupName": "component slurm",
+      "addLabels": [
+        "component:slurm"
       ]
     }
   ],
@@ -738,6 +812,20 @@
       ],
       "packageNameTemplate": "conda-forge/{{depName}}",
       "datasourceTemplate": "conda"
+    },
+    {
+      "description": "Slurm release tag (slurm-<major>-<minor>-<patch>-<build>); a bump needs SLURM_SHA256 updated for the new tag's archive.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"SLURM_TAG\" \\{ default = \"(?<currentValue>slurm-[0-9-]+)\" \\}"
+      ],
+      "depNameTemplate": "slurm",
+      "packageNameTemplate": "SchedMD/slurm",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^slurm-(?<major>\\d+)-(?<minor>\\d+)-(?<patch>\\d+)-(?<build>\\d+)$"
     }
   ],
   "vulnerabilityAlerts": {

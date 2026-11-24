@@ -1,0 +1,7 @@
+# gh from conda-forge, in its own prefix (/opt/gh). Regenerate the locks
+# with ./lock after changing the pin.
+name: gh
+channels:
+  - conda-forge
+dependencies:
+  - gh==2.105.0

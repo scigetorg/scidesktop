@@ -1,0 +1,7 @@
+# tcsh from conda-forge, in its own prefix (/opt/tcsh). Regenerate the locks
+# with ./lock after changing the pin.
+name: tcsh
+channels:
+  - conda-forge
+dependencies:
+  - tcsh==6.24.16
