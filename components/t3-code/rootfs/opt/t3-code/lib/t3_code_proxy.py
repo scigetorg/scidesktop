@@ -19,7 +19,9 @@ import json
 import logging
 import os
 import re
+import signal
 import sys
+import time
 from pathlib import Path
 
 ROUTE = "t3-code"
@@ -252,6 +254,58 @@ def redact_tickets():
 
     record_factory.redacts_t3_tickets = True
     logging.setLogRecordFactory(record_factory)
+
+
+def _find_t3_pids(base):
+    """Return PIDs of running `t3 serve` processes for `base`."""
+    target = str(base).encode()
+    pids = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            argv = (entry / "cmdline").read_bytes().split(b"\0")
+        except OSError:
+            continue
+        if len(argv) < 4 or argv[0] != b"/opt/t3-code/app/t3" or argv[1] != b"serve":
+            continue
+        for i in range(2, len(argv) - 1):
+            if argv[i] == b"--base-dir" and argv[i + 1] == target:
+                pids.append(int(entry.name))
+                break
+    return pids
+
+
+def stop_server(seconds=20):
+    """Stop this session's T3 Code server and wait for it to close its state.
+
+    Registered with atexit by jupyter_server_config.d/t3-code.py: simpervisor
+    forwards SIGTERM without waiting, and the container ends as soon as the
+    notebook server exits. Waiting here keeps T3 from being SIGKILLed while
+    stopping child provider servers (such as opencode serve) and checkpointing
+    its SQLite WAL.
+    """
+    pids = _find_t3_pids(base_dir())
+    if not pids:
+        return
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    deadline = time.monotonic() + seconds
+    while pids and time.monotonic() < deadline:
+        alive = []
+        for pid in pids:
+            try:
+                state = Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()[0]
+            except OSError:
+                continue
+            if state != "Z":
+                alive.append(pid)
+        pids = alive
+        if pids:
+            time.sleep(0.1)
 
 
 def server_entry():
