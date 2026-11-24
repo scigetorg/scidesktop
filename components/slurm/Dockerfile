@@ -3,8 +3,9 @@
 # alone, started beside the notebook server as the notebook user
 # (/opt/slurm/bin/slurm-session). Slurm is built from source into /opt/slurm,
 # with only what the session's configuration uses: its own authentication
-# (auth/slurm, which needs libjwt; no munge) and JSON output, without cgroups,
-# PAM, an accounting database, Lua or hwloc. libjwt and its jansson and libb64,
+# (auth/slurm, which needs libjwt; no munge), JSON output and Lua (scrun and
+# Lua plugins, on the OS layer's Lua 5.4), without cgroups, PAM, an
+# accounting database or hwloc. libjwt and its jansson and libb64,
 # which the OS layer lacks, ship in /opt/slurm/lib/deps. Commands and daemons are linked
 # into /usr/local/bin and /usr/local/sbin.
 # The component also carries the configuration links, the start hook, and a
@@ -13,7 +14,7 @@
 ARG UBUNTU_IMAGE
 
 # Built on plain Ubuntu of the OS layer's release, against libraries the OS
-# layer has (C library, json-c, OpenSSL) plus the bundled libjwt.
+# layer has (C library, json-c, OpenSSL, Lua 5.4) plus the bundled libjwt.
 FROM ${UBUNTU_IMAGE} AS build
 ARG SLURM_TAG
 ARG SLURM_SHA256
@@ -26,7 +27,7 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
         gcc libc6-dev make pkg-config python3 binutils curl ca-certificates \
-        libjwt-dev libjson-c-dev patchelf
+        libjwt-dev libjson-c-dev liblua5.4-dev patchelf
 RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${SLURM_TAG:?}" "${SLURM_SHA256:?}" \
     # Tag slurm-25-11-9-1 is release 25.11.9.
@@ -36,12 +37,13 @@ RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     && mkdir -p /tmp/slurm && tar -xzf /tmp/slurm.tar.gz -C /tmp/slurm --strip-components=1 \
     && cd /tmp/slurm \
     # Optional features are found only when their development files are
-    # installed: here libjwt and json-c.
+    # installed: here libjwt, json-c and Lua.
     && ./configure --prefix=/opt/slurm --sysconfdir=/etc/slurm --disable-debug \
         --without-munge --disable-pam --disable-x11 \
         LDFLAGS="-Wl,-rpath,/opt/slurm/lib/deps" >/tmp/configure.log \
     && grep -q '^#define HAVE_JWT' config.h \
     && grep -q '^#define HAVE_JSON' config.h \
+    && grep -q '^#define HAVE_LUA' config.h \
     && make -j"$(nproc)" >/tmp/make.log \
     && make install >/tmp/install.log \
     && rm -rf /opt/slurm/include /opt/slurm/share \
@@ -54,6 +56,7 @@ RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     && test -r /opt/slurm/lib/slurm/auth_slurm.so \
     && test -r /opt/slurm/lib/slurm/select_cons_tres.so \
     && test -r /opt/slurm/lib/slurm/sched_backfill.so \
+    && test -x /opt/slurm/bin/scrun \
     && install -d -m 0755 /out/opt /out/usr/local/bin /out/usr/local/sbin \
     && cp -a /opt/slurm /out/opt/slurm \
     && for f in /opt/slurm/bin/*; do ln -s "${f}" "/out/usr/local/bin/$(basename "${f}")"; done \
