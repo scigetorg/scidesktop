@@ -5,7 +5,7 @@
 #   - nf-test (MIT): test runner JAR for Nextflow pipelines
 #   - Snakemake (MIT): isolated locked venv backed by jupyter-env's Python 3.13
 #   - Java for both Nextflow and nf-test: the Eclipse Temurin 21 runtime at
-#     /opt/workflow-engines/jre, also linked as /usr/local/bin/java
+#     /opt/workflow-engines/jre; java, keytool and rmiregistry on PATH
 
 ARG UBUNTU_IMAGE
 FROM ${UBUNTU_IMAGE} AS build
@@ -45,7 +45,7 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     && tar -xzf /tmp/jre.tar.gz -C /opt/workflow-engines/jre --strip-components=1 \
     && rm -f /tmp/jre.tar.gz \
     && /opt/workflow-engines/jre/bin/java -version 2>&1 | grep -q '"21\.' \
-    && ln -s /opt/workflow-engines/jre/bin/java /out/usr/local/bin/java \
+    && for t in java keytool rmiregistry; do ln -s "/opt/workflow-engines/jre/bin/${t}" "/out/usr/local/bin/${t}"; done \
     && fetch "https://github.com/askimed/nf-test/releases/download/v${NF_TEST_VERSION:?}/nf-test-${NF_TEST_VERSION}.tar.gz" \
         "${NF_TEST_SHA256:?}" /tmp/nf-test.tar.gz \
     && tar -xzf /tmp/nf-test.tar.gz -C /opt/workflow-engines/nf-test \
