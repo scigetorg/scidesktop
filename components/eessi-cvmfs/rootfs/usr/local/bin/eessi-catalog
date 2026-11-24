@@ -6,7 +6,7 @@ set -euo pipefail
 eessi_modroot="${EESSI_MODULE_ROOT:-/cvmfs/software.eessi.io/init/modules}"
 if [ -d "${eessi_modroot}" ]; then
     echo "EESSI repository: mounted (/cvmfs/software.eessi.io)"
-    stacks="$(find "${eessi_modroot}/EESSI" -maxdepth 1 -name '*.lua' -printf '%f\n' 2>/dev/null | sed 's/\.lua$//' | sort | tr '\n' ' ')"
+    stacks="$(find "${eessi_modroot}/EESSI" -maxdepth 1 -name '*.lua' -printf '%f\n' 2>/dev/null | sed 's/\.lua$//' | sort | tr '\n' ' ' || true)"
     [ -n "${stacks}" ] && echo "Available stacks: ${stacks}"
 else
     echo "EESSI repository: not mounted (/cvmfs/software.eessi.io)"

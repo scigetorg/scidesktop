@@ -27,6 +27,8 @@ if [ ! -r "${lmod_init}" ]; then
     echo "eessi-launch: Lmod init script not found at ${lmod_init}" >&2
     exit 1
 fi
+# Lmod's init/bash references FPATH unconditionally; define it under set -u.
+export FPATH="${FPATH:-}"
 # shellcheck source=/dev/null
 source "${lmod_init}"
 
@@ -38,6 +40,7 @@ esac
 export EESSI_MODULE_QUIET_LOAD=1
 stack="EESSI/${EESSI_DEFAULT_VERSION:-2025.06}"
 if ! module load "${stack}" >/dev/null 2>&1; then
+    echo "eessi-launch: warning: failed to load ${stack}; falling back to default EESSI module" >&2
     module load EESSI >/dev/null
 fi
 

@@ -56,6 +56,25 @@ grep -q '^\[cvmfs\] /cvmfs is empty' <<<"${out}" \
     && pass "the default mode mounts nothing" || fail "the default mode mounts nothing"
 grep -q 'ParaView (EESSI)' <<<"${out}" \
     && pass "eessi-catalog lists base EESSI launchers" || fail "eessi-catalog lists base EESSI launchers"
+bad_execs="$(docker run --rm "${IMAGE}" bash -lc '
+    for f in /etc/scidesktop/eessi-apps.d/*.desktop; do
+        [ -f "${f}" ] || continue
+        exec_line="$(sed -n "s/^Exec=//p" "${f}" | head -n 1)"
+        case "${exec_line}" in
+            *xfce4-terminal*)
+                case "${exec_line}" in
+                    *--disable-server*) ;;
+                    *) echo "${f}: ${exec_line}" ;;
+                esac
+                ;;
+        esac
+    done
+' 2>&1)"
+if [ -z "${bad_execs}" ]; then
+    pass "all xfce4-terminal EESSI desktop launchers pass --disable-server"
+else
+    fail "all xfce4-terminal EESSI desktop launchers pass --disable-server (${bad_execs})"
+fi
 
 if [ "${SMOKE_CVMFS_MOUNT:-1}" != 1 ] || [ ! -c /dev/fuse ]; then
     echo
@@ -117,6 +136,49 @@ if grep -q '^R version ' <<<"${r_out}"; then
 else
     fail "eessi-launch executes EESSI R"
     printf '%s\n' "${r_out}" | tail -n 10 | sed 's/^/        /'
+fi
+
+# Verify an EESSI xfce4-terminal desktop launcher preserves its EESSI PATH even
+# when an ordinary xfce4-terminal server is already running on the D-Bus session.
+term_out="$(as_user '
+    set -euo pipefail
+    out_file="/tmp/eessi-term-r-$$.txt"
+    rm -f "${out_file}"
+    Xvfb :77 -screen 0 1024x768x24 >/dev/null 2>&1 &
+    xvfb_pid=$!
+    term_pid=""
+    cleanup_x() {
+        [ -n "${term_pid}" ] && kill "${term_pid}" 2>/dev/null || true
+        kill "${xvfb_pid}" 2>/dev/null || true
+        rm -f "${out_file}"
+    }
+    trap cleanup_x EXIT
+    export DISPLAY=:77
+    for _ in $(seq 1 30); do
+        [ -S /tmp/.X11-unix/X77 ] && break
+        sleep 0.2
+    done
+    eval "$(/usr/bin/dbus-launch --sh-syntax --exit-with-x11)"
+    xfce4-terminal -e "sleep 60" >/dev/null 2>&1 &
+    term_pid=$!
+    sleep 2
+    exec_line="$(sed -n "s/^Exec=//p" /etc/scidesktop/eessi-apps.d/eessi-r.desktop | head -n 1)"
+    case "${exec_line}" in
+        *--disable-server*) ;;
+        *) echo "missing --disable-server in ${exec_line}" >&2; exit 1 ;;
+    esac
+    eessi-launch R xfce4-terminal --disable-server -x sh -c "R --version | head -n 1 > \"${out_file}\"" >/dev/null 2>&1 &
+    for _ in $(seq 1 60); do
+        [ -s "${out_file}" ] && break
+        sleep 0.5
+    done
+    cat "${out_file}"
+')"
+if grep -q '^R version ' <<<"${term_out}"; then
+    pass "eessi-launch xfce4-terminal --disable-server keeps EESSI R with existing terminal open (${term_out})"
+else
+    fail "eessi-launch xfce4-terminal --disable-server keeps EESSI R with existing terminal open"
+    printf '%s\n' "${term_out}" | tail -n 10 | sed 's/^/        /'
 fi
 
 servers="$(docker exec "${NAME}" curl -fsS -H "Authorization: token ${TOKEN}" \

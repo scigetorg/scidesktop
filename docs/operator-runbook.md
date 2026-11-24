@@ -105,7 +105,7 @@ the launcher.
 | `APPTAINER_HOME` | the notebook user's home | Set at start so Apptainer does not look the home up for the host uid, which fails under rootless Podman ("failed to add  as session directory"). An explicit value is kept. |
 | `APPTAINER_NV` | `1` when the NVIDIA driver is loaded | Binds the host's NVIDIA devices and libraries into tool containers. Set `0` if a tool fails with `GLIBC_* not found` from a host library. |
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`: use the `/cvmfs` the platform mounts. `internal`: mount inside the container (needs root, `/dev/fuse`, mount capability, an AppArmor profile that allows FUSE mounts, repository config and keys under `/etc/cvmfs`; with `docker run`: `--cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor=unconfined`). `disabled`: skip. |
-| `SCIDESKTOP_CVMFS_REPOSITORIES` | empty; `neurodesk.ardc.edu.au` in neurodesktop | Repositories to mount in `internal` mode, comma-separated. An image with a repository's configuration (the `neurodesk-cvmfs` component) names it as the default. |
+| `SCIDESKTOP_CVMFS_REPOSITORIES` | `software.eessi.io`; `neurodesk.ardc.edu.au,software.eessi.io` in neurodesktop | Repositories to mount in `internal` mode, comma-separated. Images include `eessi-cvmfs` by default, and `neurodesktop` adds `neurodesk-cvmfs`. |
 | `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
 | `CVMFS_NFILES` | `65536`, or the container's hard open-file limit when that is lower | The open-file limit the CVMFS client sets for itself in `internal` mode. The client refuses to mount when it may not raise the limit that far. |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. |
@@ -119,7 +119,7 @@ settings win and their catalogs come first, and `sciget doctor` names a user
 file that hides a system one. `scidesktop` ships all published catalogs
 (`neuroimaging`, `microscopy` and `datascience` via `sciget-all`); domain images
 narrow that file to their community (`neuroimaging` in `neurodesktop`,
-`microscopy` in `microdesktop`, `datascience` in `aidesktop`;
+`microscopy` in `microdesktop`, `datascience` in `datadesktop` and `aidesktop`;
 [images.md](images.md#tool-catalogs)).
 
 ## Deployment check

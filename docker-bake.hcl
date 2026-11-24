@@ -36,7 +36,7 @@ variable "CVMFS_FUSE3_SHA256_AMD64" { default = "684bf3d2a71bd9eedfdedb6e4725233
 variable "CVMFS_FUSE3_SHA256_ARM64" { default = "f902cfa715f1b9345a178dd9b87e97e17ee00a4262ee634ad61fe135b00cf476" }
 variable "CVMFS_CONFIG_VERSION" { default = "1.1-0" }
 variable "CVMFS_CONFIG_NONE_SHA256" { default = "b475d2ef4300040ebce400135c5dde1a2f58702d90c62544a22743cf2f720c7f" }
-# renovate: datasource=github-releases depName=EESSI/filesystem-layer versioning=semver extractVersion=^v(?<version>.+)$
+# renovate: datasource=github-releases depName=EESSI/filesystem-layer extractVersion=^v(?<version>.+)$
 variable "EESSI_CVMFS_CONFIG_VERSION" { default = "0.6.0" }
 variable "EESSI_CVMFS_CONFIG_SHA256" { default = "a226bc24d984e611e5118a65e35ff283c2838576d778336c84f7a86b9b70e681" }
 

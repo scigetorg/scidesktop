@@ -2,6 +2,6 @@
 Type=Application
 Name=R + Bioconductor (EESSI)
 Comment=Interactive R console with Bioconductor via EESSI
-Exec=/usr/local/bin/eessi-launch R-bundle-Bioconductor xfce4-terminal --title="R + Bioconductor (EESSI)" -e R
+Exec=/usr/local/bin/eessi-launch R-bundle-Bioconductor xfce4-terminal --disable-server --title="R + Bioconductor (EESSI)" -e R
 Terminal=false
 Categories=Science;Biology;

@@ -36,6 +36,10 @@ out="$(/usr/local/bin/eessi-catalog)"
 grep -q 'ParaView (EESSI)' <<<"${out}"
 grep -q 'GNU Octave (EESSI)' <<<"${out}"
 grep -q 'GROMACS' <<<"${out}"
+empty_modroot="$(mktemp -d)"
+out_empty="$(EESSI_MODULE_ROOT="${empty_modroot}" /usr/local/bin/eessi-catalog)"
+rmdir "${empty_modroot}"
+grep -q 'GROMACS' <<<"${out_empty}"
 
 # Permissions and manifest.
 [ "$(stat -c '%a %u' /etc/cvmfs/domain.d /etc/cvmfs/keys/eessi.io /etc/scidesktop/eessi-apps.d /etc/scidesktop/eessi-catalog.d)" = "$(printf '755 0\n755 0\n755 0\n755 0')" ]

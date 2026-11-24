@@ -199,10 +199,10 @@ further files:
 | `SCIDESKTOP_CVMFS_MODE` | What happens |
 | --- | --- |
 | `external` (default) | The platform mounts `/cvmfs` (a CSI driver, a host mount). The image mounts nothing. This is how JupyterHub on Kubernetes runs it |
-| `internal` | The container mounts `neurodesk.ardc.edu.au` itself at start. It must start as root with `/dev/fuse`, the capability to mount and an AppArmor profile that allows it: `--user root --cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor=unconfined` |
+| `internal` | The container mounts `neurodesk.ardc.edu.au,software.eessi.io` itself at start. It must start as root with `/dev/fuse`, the capability to mount and an AppArmor profile that allows it: `--user root --cap-add SYS_ADMIN --device /dev/fuse --security-opt apparmor=unconfined` |
 | `disabled` | Nothing is mounted. Tools come from `sciget install` |
 
-`SCIDESKTOP_CVMFS_REPOSITORIES` defaults to `neurodesk.ardc.edu.au` in this
+`SCIDESKTOP_CVMFS_REPOSITORIES` defaults to `neurodesk.ardc.edu.au,software.eessi.io` in this
 image; a value set by the deployment is kept. The client orders the
 repository's six mirrors by distance (GeoAPI) and moves to the next when one
 fails.

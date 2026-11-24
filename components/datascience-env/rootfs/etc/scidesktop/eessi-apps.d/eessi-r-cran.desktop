@@ -2,6 +2,6 @@
 Type=Application
 Name=R + CRAN (EESSI)
 Comment=Interactive R console with R-bundle-CRAN via EESSI
-Exec=/usr/local/bin/eessi-launch R-bundle-CRAN xfce4-terminal --title="R + CRAN (EESSI)" -e R
+Exec=/usr/local/bin/eessi-launch R-bundle-CRAN xfce4-terminal --disable-server --title="R + CRAN (EESSI)" -e R
 Terminal=false
 Categories=Science;Math;
