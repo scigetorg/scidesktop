@@ -16,5 +16,11 @@
     "url": "https://apps-catalog.scigetorg.workers.dev/datascience/apps.json",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
+  },
+  {
+    "name": "dermatology",
+    "url": "https://apps-catalog.scigetorg.workers.dev/dermatology/apps.json",
+    "use": true,
+    "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   }
 ]

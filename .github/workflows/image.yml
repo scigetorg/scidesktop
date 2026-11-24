@@ -19,7 +19,7 @@ env:
   # Images pushed to GHCR as ghcr.io/<owner>/<image>. Every folder in images/
   # is built and smoke-tested on every architecture; add a name here to
   # publish it too.
-  PUBLISH: scidesktop microdesktop datadesktop aidesktop neurodesktop
+  PUBLISH: scidesktop microdesktop datadesktop dermdesktop aidesktop neurodesktop
   # This run's images before they are published: <candidate>-<arch>.
   CANDIDATE: run-${{ github.run_id }}
 
@@ -124,7 +124,7 @@ jobs:
         if: matrix.arch == 'amd64'
         run: |
           failed=0
-          for image in scidesktop microdesktop datadesktop aidesktop neurodesktop; do
+          for image in scidesktop microdesktop datadesktop dermdesktop aidesktop neurodesktop; do
               echo "::group::browser-smoke ${image}"
               ./test/browser-smoke.sh "${image}:ci" || failed=1
               echo "::endgroup::"
@@ -189,6 +189,7 @@ jobs:
               "scidesktop:ci:/opt/selkies/bin/python" \
               "microdesktop:ci:/opt/microscopy-env/bin/python" \
               "datadesktop:ci:/opt/datascience-env/bin/python" \
+              "dermdesktop:ci:/opt/dermatology-env/bin/python" \
               "aidesktop:ci:/opt/ai-ready/env/bin/python" \
               "aidesktop:ci:/opt/ai-ready/airflow/bin/python" \
               "neurodesktop:ci:/opt/neuroimaging-env/bin/python"; do
@@ -266,7 +267,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [scidesktop, microdesktop, datadesktop, aidesktop, neurodesktop]
+        image: [scidesktop, microdesktop, datadesktop, dermdesktop, aidesktop, neurodesktop]
     permissions:
       contents: read
       packages: write

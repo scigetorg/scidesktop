@@ -23,6 +23,7 @@
       "/^components/workflow-engines/requirements\\.in$/",
       "/^components/microscopy-env/requirements\\.in$/",
       "/^components/datascience-env/requirements\\.in$/",
+      "/^components/dermatology-env/requirements\\.in$/",
       "/^components/neuroimaging-env/requirements\\.in$/"
     ]
   },
@@ -607,6 +608,16 @@
       "groupName": "component datascience-env",
       "addLabels": [
         "component:datascience-env"
+      ]
+    },
+    {
+      "description": "Component dermatology-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/dermatology-env/**"
+      ],
+      "groupName": "component dermatology-env",
+      "addLabels": [
+        "component:dermatology-env"
       ]
     },
     {

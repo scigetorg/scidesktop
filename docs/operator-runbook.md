@@ -118,9 +118,10 @@ sciget's settings and catalog for every user are its system layer in
 `/etc/sciget/`, read on every run beneath each user's own files: a user's
 settings win and their catalogs come first, and `sciget doctor` names a user
 file that hides a system one. `scidesktop` ships all published catalogs
-(`neuroimaging`, `microscopy` and `datascience` via `sciget-all`); domain images
+(`neuroimaging`, `microscopy`, `datascience` and `dermatology` via `sciget-all`); domain images
 narrow that file to their community (`neuroimaging` in `neurodesktop`,
-`microscopy` in `microdesktop`, `datascience` in `datadesktop` and `aidesktop`;
+`microscopy` in `microdesktop`, `datascience` in `datadesktop` and `aidesktop`,
+`dermatology` in `dermdesktop`;
 [images.md](images.md#tool-catalogs)).
 
 ## Deployment check
