@@ -52,3 +52,28 @@ COPY --from=component / /
 RUN /opt/selkies/bin/python -c 'import selkies, pixelflux, pcmflux; print("selkies", selkies.__file__)' \
     && /opt/selkies/bin/selkies --help >/dev/null \
     && ldd /opt/selkies/lib/python3*/site-packages/pixelflux/*.so 2>/dev/null | grep 'not found' && exit 1 || true
+RUN /opt/selkies/bin/python - <<'PY'
+import os, shutil, tempfile, types
+tmp = tempfile.mkdtemp()
+try:
+    with open(os.path.join(tmp, "img.desktop"), "w") as f:
+        f.write("[Desktop Entry]\nType=Application\nName=ImgApp\nExec=true\nCategories=X-ImageAnalysis;\n")
+    with open(os.path.join(tmp, "data.desktop"), "w") as f:
+        f.write("[Desktop Entry]\nType=Application\nName=DataApp\nExec=true\nCategories=X-DataAccess;\n")
+    with open(os.path.join(tmp, "bio.desktop"), "w") as f:
+        f.write("[Desktop Entry]\nType=Application\nName=BioApp\nExec=true\nCategories=Unknown;Biology;\n")
+    with open(os.path.join(tmp, "custom.desktop"), "w") as f:
+        f.write("[Desktop Entry]\nType=Application\nName=CustomApp\nExec=true\nX-Scidesktop-Category=Microscopy\nCategories=Graphics;\n")
+    with open(os.path.join(tmp, "plain.desktop"), "w") as f:
+        f.write("[Desktop Entry]\nType=Application\nName=PlainApp\nExec=true\n")
+    os.environ["SCIDESKTOP_APP_DIRS"] = tmp
+    c = types.SimpleNamespace(ServerProxy=types.SimpleNamespace(servers={}))
+    exec(open("/etc/scidesktop/jupyter_server_config.d/selkies.py").read(), {"c": c})
+    assert c.ServerProxy.servers["app-img"]["launcher_entry"]["category"] == "Image Analysis"
+    assert c.ServerProxy.servers["app-data"]["launcher_entry"]["category"] == "Data Access"
+    assert c.ServerProxy.servers["app-bio"]["launcher_entry"]["category"] == "Science"
+    assert c.ServerProxy.servers["app-custom"]["launcher_entry"]["category"] == "Microscopy"
+    assert c.ServerProxy.servers["app-plain"]["launcher_entry"]["category"] == "Desktop applications"
+finally:
+    shutil.rmtree(tmp)
+PY

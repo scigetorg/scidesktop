@@ -39,8 +39,9 @@ pays for it.
 offered catalog to their own community (and users can add more with
 `sciget catalog add <name> <url>`).
 
-**Applications** start from launcher tiles: each desktop entry in `/opt/sciget/applications`
-(where sciget writes its launchers) becomes a tile under *Desktop applications*, which
+**Applications** start from launcher tiles: each desktop entry in `SCIDESKTOP_APP_DIRS`
+(default `/opt/sciget/applications`, where sciget writes its launchers) becomes a tile
+(grouped by its desktop category, or *Desktop applications* by default), which
 starts the application maximised on the desktop and opens the stream. The desktop's
 taskbar switches between open applications and has three buttons: sciget's text
 interface for browsing and launching containers, the Thunar file manager and a terminal.

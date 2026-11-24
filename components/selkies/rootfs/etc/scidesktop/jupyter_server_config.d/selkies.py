@@ -48,6 +48,29 @@ import configparser
 import glob
 import re
 
+_CATEGORY_MAP = {
+    'X-ImageAnalysis': 'Image Analysis',
+    'X-DataAccess': 'Data Access',
+    'Science': 'Science',
+    'Biology': 'Science',
+    'Development': 'Development',
+    'Graphics': 'Graphics',
+    'Office': 'Office',
+    'Education': 'Education',
+    'System': 'System',
+}
+
+
+def _app_category(de):
+    explicit = de.get("X-Scidesktop-Category", "").strip()
+    if explicit:
+        return explicit
+    for cat in de.get("Categories", "").split(";"):
+        mapped = _CATEGORY_MAP.get(cat.strip())
+        if mapped:
+            return mapped
+    return 'Desktop applications'
+
 
 def _app_entries():
     dirs = os.environ.get("SCIDESKTOP_APP_DIRS", "/opt/sciget/applications")
@@ -73,7 +96,7 @@ def _app_entries():
             'launcher_entry': {
                 'path_info': f'{name}/launch',
                 'title': de.get("Name", name),
-                'category': 'Desktop applications',
+                'category': _app_category(de),
                 **({'icon_path': icon} if icon.endswith(".svg") and os.path.isfile(icon) else {}),
             },
         }
