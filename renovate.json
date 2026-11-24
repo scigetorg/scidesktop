@@ -653,6 +653,16 @@
       ]
     },
     {
+      "description": "Component aria2: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/aria2/**"
+      ],
+      "groupName": "component aria2",
+      "addLabels": [
+        "component:aria2"
+      ]
+    },
+    {
       "description": "Component slurm: its updates arrive together and run its own test.",
       "matchFileNames": [
         "components/slurm/**"

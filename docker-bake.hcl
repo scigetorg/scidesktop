@@ -273,6 +273,7 @@ group "test" {
     "neurodesk-compat-test",
     "rclone-test",
     "gh-test",
+    "aria2-test",
   ]
 }
 
@@ -1003,6 +1004,19 @@ target "gh-test" {
   output   = ["type=cacheonly"]
 }
 
+# aria2 from conda-forge in /opt/aria2, on PATH. Part of the base image.
+target "aria2" {
+  inherits = ["_component"]
+  context  = "components/aria2"
+  target   = "component"
+}
+
+target "aria2-test" {
+  inherits = ["aria2"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # tifffile, imagecodecs, zarr, ome-zarr, bioio, dask, xarray). Copied by microdesktop.
 target "microscopy-env" {
   inherits = ["_component"]
@@ -1100,6 +1114,7 @@ target "scidesktop" {
     t3-connect            = "target:t3-connect"
     rclone                = "target:rclone"
     gh                    = "target:gh"
+    aria2                 = "target:aria2"
   }
   tags   = [IMAGE]
   output = ["type=docker"]
