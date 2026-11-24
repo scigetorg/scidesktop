@@ -12,13 +12,21 @@ check() {
     fi
 }
 has() { command -v "$1"; }
-lib() { ldconfig -p | grep -q "$1"; }
+# The list is read once and searched from memory: under pipefail,
+# `ldconfig -p | grep -q` fails when grep finds its match and exits before
+# ldconfig has written the rest of a long list.
+LIBRARIES="$(ldconfig -p)"
+lib() { grep -q "$1" <<<"${LIBRARIES}"; }
 
 echo "os-contract: $(. /etc/os-release && echo "${PRETTY_NAME}") $(uname -m)"
 
 # core
-for b in bash curl sudo tini usermod groupmod useradd locale-gen; do check "core: ${b}" has "${b}"; done
+for b in bash curl setpriv tini usermod groupmod useradd locale-gen; do check "core: ${b}" has "${b}"; done
+check "core: sudo omitted" bash -c '! command -v sudo'
 check "core: CA bundle" test -s /etc/ssl/certs/ca-certificates.crt
+
+# batch jobs: Slurm's daemons and commands, for the session's queue
+for b in slurmctld slurmd sbatch srun squeue scancel sinfo scontrol; do check "slurm: ${b}" has "${b}"; done
 
 # locale
 check "locale: C.UTF-8" bash -c 'LC_ALL=C.UTF-8 locale 2>&1 | grep -qv "Cannot set"'
@@ -29,6 +37,26 @@ check "user: ${NB_USER:-jovyan} is UID 1000" test "$(id -u "${NB_USER:-jovyan}")
 check "user: primary group GID 100" test "$(id -g "${NB_USER:-jovyan}")" = 100
 check "user: home exists and is owned" test -O "/home/${NB_USER:-jovyan}" -o "$(stat -c %u "/home/${NB_USER:-jovyan}")" = 1000
 check "user: /etc/passwd group-writable" bash -c '[ "$(stat -c %A /etc/passwd | cut -c6)" = w ]'
+check "security: no SUID or SGID binaries" bash -c '
+    set -eo pipefail
+    bad=$(find / -xdev \( -perm -4000 -o -perm -2000 \) -type f)
+    [ -z "${bad}" ]'
+check "security: no POSIX file capabilities" bash -c '
+    set -euo pipefail
+    command -v getfattr >/dev/null
+    list=$(mktemp)
+    trap "rm -f \"\${list}\"" EXIT
+    find / -xdev -type f -perm /111 -print0 > "${list}"
+    while IFS= read -r -d "" f; do
+        err=""
+        if err=$(getfattr -n security.capability --only-values "${f}" 2>&1 >/dev/null); then
+            echo "unexpected file capability on ${f}" >&2
+            exit 1
+        elif [[ "${err}" != *"No such attribute"* ]]; then
+            echo "getfattr scan error on ${f}: ${err}" >&2
+            exit 1
+        fi
+    done < "${list}"'
 
 # x11
 for b in Xvfb xrandr cvt dbus-launch; do check "x11: ${b}" has "${b}"; done

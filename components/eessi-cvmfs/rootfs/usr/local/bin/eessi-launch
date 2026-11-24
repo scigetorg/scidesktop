@@ -1,0 +1,48 @@
+#!/bin/bash
+# Launch a command from an EESSI module cleanly, auto-loading the EESSI stack
+# first. Used by EESSI .desktop launchers and directly from terminals:
+#
+#   eessi-launch <module> <command> [args...]
+#
+# Set EESSI_DEFAULT_VERSION (default: 2025.06) to choose a specific EESSI stack.
+set -euo pipefail
+
+if [ "$#" -lt 2 ]; then
+    echo "usage: eessi-launch <module> <command> [args...]" >&2
+    exit 2
+fi
+
+mod="$1"
+shift
+
+eessi_modroot="${EESSI_MODULE_ROOT:-/cvmfs/software.eessi.io/init/modules}"
+if [ ! -d "${eessi_modroot}" ]; then
+    echo "eessi-launch: EESSI is not mounted at /cvmfs/software.eessi.io." >&2
+    echo "Mount software.eessi.io externally or run with SCIDESKTOP_CVMFS_MODE=internal." >&2
+    exit 1
+fi
+
+lmod_init="/opt/apps/lmod/lmod/init/bash"
+if [ ! -r "${lmod_init}" ]; then
+    echo "eessi-launch: Lmod init script not found at ${lmod_init}" >&2
+    exit 1
+fi
+# Lmod's init/bash references FPATH unconditionally; define it under set -u.
+export FPATH="${FPATH:-}"
+# shellcheck source=/dev/null
+source "${lmod_init}"
+
+case ":${MODULEPATH:-}:" in
+*":${eessi_modroot}:"*) ;;
+*) export MODULEPATH="${eessi_modroot}${MODULEPATH:+:${MODULEPATH}}" ;;
+esac
+
+export EESSI_MODULE_QUIET_LOAD=1
+stack="EESSI/${EESSI_DEFAULT_VERSION:-2025.06}"
+if ! module load "${stack}" >/dev/null 2>&1; then
+    echo "eessi-launch: warning: failed to load ${stack}; falling back to default EESSI module" >&2
+    module load EESSI >/dev/null
+fi
+
+module load "${mod}" >/dev/null
+exec "$@"

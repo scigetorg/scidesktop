@@ -1,0 +1,39 @@
+#!/bin/bash
+# Lists EESSI mount status, curated domain modules, and desktop launchers
+# configured for this image.
+set -euo pipefail
+
+eessi_modroot="${EESSI_MODULE_ROOT:-/cvmfs/software.eessi.io/init/modules}"
+if [ -d "${eessi_modroot}" ]; then
+    echo "EESSI repository: mounted (/cvmfs/software.eessi.io)"
+    stacks="$(find "${eessi_modroot}/EESSI" -maxdepth 1 -name '*.lua' -printf '%f\n' 2>/dev/null | sed 's/\.lua$//' | sort | tr '\n' ' ' || true)"
+    [ -n "${stacks}" ] && echo "Available stacks: ${stacks}"
+else
+    echo "EESSI repository: not mounted (/cvmfs/software.eessi.io)"
+    echo "Hint: mount /cvmfs/software.eessi.io from the host/cluster or start with SCIDESKTOP_CVMFS_MODE=internal."
+fi
+
+echo
+echo "Quick start:"
+echo "  module load EESSI/${EESSI_DEFAULT_VERSION:-2025.06}"
+echo "  module avail"
+
+if [ -d /etc/scidesktop/eessi-apps.d ]; then
+    echo
+    echo "Desktop launchers (shown in JupyterLab when EESSI is mounted):"
+    for f in /etc/scidesktop/eessi-apps.d/*.desktop; do
+        [ -f "${f}" ] || continue
+        name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
+        exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
+        printf '  - %-26s %s\n' "${name}" "${exec_cmd}"
+    done
+fi
+
+if [ -d /etc/scidesktop/eessi-catalog.d ]; then
+    echo
+    echo "Curated EESSI modules for this image:"
+    for f in /etc/scidesktop/eessi-catalog.d/*.txt; do
+        [ -f "${f}" ] || continue
+        cat "${f}"
+    done
+fi

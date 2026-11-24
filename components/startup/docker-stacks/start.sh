@@ -4,6 +4,15 @@
 
 set -e
 
+# Preserve the container's runtime PATH for the unprivileged payload, but use a
+# strictly root-owned PATH while running privileged setup as UID 0 so writable
+# user directories (e.g. /opt/conda/bin) can never hijack root commands.
+_SCIDESKTOP_USER_PATH="${PATH}"
+if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    export PATH
+fi
+
 # shellcheck source=images/docker-stacks-foundation/_docker_stacks_log.sh
 source /usr/local/bin/_docker_stacks_log.sh
 _log_info "Entered start.sh with args:" "$@"
@@ -25,6 +34,17 @@ if [ $# -eq 0 ]; then
     cmd=("bash")
 else
     cmd=("$@")
+fi
+
+# When already non-root, check kernel /proc/self/status directly (no
+# caller-spoofable env flag) and lock NoNewPrivs + drop inheritable/ambient
+# caps BEFORE hooks or command execution so every child process inherits them.
+if [ "$(/usr/bin/id -u)" -ne 0 ] && ! {
+    /bin/grep -qx 'NoNewPrivs:[[:space:]]*1' /proc/self/status \
+        && /bin/grep -qx 'CapInh:[[:space:]]*0000000000000000' /proc/self/status \
+        && /bin/grep -qx 'CapAmb:[[:space:]]*0000000000000000' /proc/self/status
+}; then
+    exec /usr/bin/setpriv --no-new-privs --inh-caps -all --ambient-caps -all -- /usr/local/bin/start.sh "${cmd[@]}"
 fi
 
 # Backwards compatibility: `start.sh` is executed by default in ENTRYPOINT
@@ -135,13 +155,9 @@ if [ "$(id -u)" == 0 ]; then
         done
     fi
 
-    # Prepend ${CONDA_DIR}/bin to sudo secure_path
-    sed -r "s#Defaults\s+secure_path\s*=\s*\"?([^\"]+)\"?#Defaults secure_path=\"${CONDA_DIR}/bin:\1\"#" /etc/sudoers | grep secure_path >/etc/sudoers.d/path
-
-    # Optionally grant passwordless sudo rights for the desired user
-    if [[ "${GRANT_SUDO}" == "1" || "${GRANT_SUDO}" == "yes" ]]; then
-        _log_info "Granting ${NB_USER} passwordless sudo rights!"
-        echo "${NB_USER} ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/added-by-start-script
+    # sudo is intentionally omitted in scidesktop for least-privilege hardening.
+    if [[ "${GRANT_SUDO:-}" == "1" || "${GRANT_SUDO:-}" == "yes" ]]; then
+        _log_warn "GRANT_SUDO is ignored: sudo is omitted from scidesktop for security hardening."
     fi
 
     # NOTE: This hook is run as the root user!
@@ -150,49 +166,37 @@ if [ "$(id -u)" == 0 ]; then
     unset_explicit_env_vars
 
     _log_info "Running as ${NB_USER}:" "${cmd[@]}"
-    if [ "${NB_USER}" = "root" ] && [ "${NB_UID}" = "$(id -u "${NB_USER}")" ] && [ "${NB_GID}" = "$(id -g "${NB_USER}")" ]; then
-        HOME="/home/root" exec "${cmd[@]}"
+    if [ "${NB_USER}" = "root" ] && [ "${NB_UID}" = "$(/usr/bin/id -u "${NB_USER}")" ] && [ "${NB_GID}" = "$(/usr/bin/id -g "${NB_USER}")" ]; then
+        HOME="/home/root" PATH="${_SCIDESKTOP_USER_PATH}" exec "${cmd[@]}"
     else
-        exec sudo --preserve-env --set-home --user "${NB_USER}" \
-            LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" \
-            PATH="${PATH}" \
-            PYTHONPATH="${PYTHONPATH:-}" \
-            "${cmd[@]}"
-        # Notes on how we ensure that the environment that this container is started
-        # with is preserved (except vars listed in JUPYTER_ENV_VARS_TO_UNSET) when
-        # we transition from running as root to running as NB_USER.
-        #
-        # - We use `sudo` to execute the command as NB_USER. What then
-        #   happens to the environment will be determined by configuration in
-        #   /etc/sudoers and /etc/sudoers.d/* as well as flags we pass to the sudo
-        #   command. The behavior can be inspected with `sudo -V` run as root.
-        #
-        #   ref: `man sudo`    https://linux.die.net/man/8/sudo
-        #   ref: `man sudoers` https://www.sudo.ws/docs/man/sudoers.man/
-        #
-        # - We use the `--preserve-env` flag to pass through most environment
-        #   variables, but understand that exceptions are caused by the sudoers
-        #   configuration: `env_delete` and `env_check`.
-        #
-        # - We use the `--set-home` flag to set the HOME variable appropriately.
-        #
-        # - To reduce the default list of variables deleted by sudo, we could have
-        #   used `env_delete` from /etc/sudoers. It has a higher priority than the
-        #   `--preserve-env` flag and the `env_keep` configuration.
-        #
-        # - We preserve LD_LIBRARY_PATH, PATH and PYTHONPATH explicitly. Note however that sudo
-        #   resolves `${cmd[@]}` using the "secure_path" variable we modified
-        #   above in /etc/sudoers.d/path. Thus PATH is irrelevant to how the above
-        #   sudo command resolves the path of `${cmd[@]}`. The PATH will be relevant
-        #   for resolving paths of any subprocesses spawned by `${cmd[@]}`.
+        # Drop privileges via absolute root-owned setpriv (never resolving via
+        # notebook-writable PATH entries like /opt/conda/bin), locking
+        # NoNewPrivs and clearing inheritable, ambient, and bounding caps.
+        nb_home="$(/usr/bin/getent passwd "${NB_USER}" | cut -d: -f6)"
+        setpriv_args=(
+            --reuid "$(/usr/bin/id -u "${NB_USER}")"
+            --regid "$(/usr/bin/id -g "${NB_USER}")"
+            --init-groups
+            --no-new-privs
+            --inh-caps -all
+            --ambient-caps -all
+        )
+        if /usr/bin/setpriv --bounding-set -all -- /bin/true 2>/dev/null; then
+            setpriv_args+=(--bounding-set -all)
+        elif ! grep -qx 'CapBnd:[[:space:]]*0000000000000000' /proc/self/status 2>/dev/null; then
+            _log_warn "Could not clear capability bounding set (missing CAP_SETPCAP); continuing with NoNewPrivs=1"
+        fi
+        exec /usr/bin/env "HOME=${nb_home}" "USER=${NB_USER}" "LOGNAME=${NB_USER}" \
+            "PATH=${_SCIDESKTOP_USER_PATH}" \
+            /usr/bin/setpriv "${setpriv_args[@]}" -- "${cmd[@]}"
     fi
 
 # The container didn't start as the root user, so we will have to act as the
 # user we started as.
 else
     # Warn about misconfiguration of: granting sudo rights
-    if [[ "${GRANT_SUDO}" == "1" || "${GRANT_SUDO}" == "yes" ]]; then
-        _log_warn "container must be started as root to grant sudo permissions!"
+    if [[ "${GRANT_SUDO:-}" == "1" || "${GRANT_SUDO:-}" == "yes" ]]; then
+        _log_warn "GRANT_SUDO is ignored: sudo is omitted from scidesktop for security hardening."
     fi
 
     JOVYAN_UID="$(id -u jovyan 2>/dev/null)" # The default UID for the jovyan user
@@ -210,11 +214,12 @@ else
             _log_info "Renaming old jovyan user to nayvoj ($(id -u jovyan):$(id -g jovyan))"
 
             # We cannot use "sed --in-place" since sed tries to create a temp file in
-            # /etc/ and we may not have write access. Apply sed on our own temp file:
-            sed --expression="s/^jovyan:/nayvoj:/" /etc/passwd >/tmp/passwd
-            echo "${NB_USER}:x:$(id -u):$(id -g):,,,:/home/jovyan:/bin/bash" >>/tmp/passwd
-            cat /tmp/passwd >/etc/passwd
-            rm /tmp/passwd
+            # /etc/ and we may not have write access. Apply sed on a private temp file:
+            tmp_passwd="$(/usr/bin/mktemp)"
+            sed --expression="s/^jovyan:/nayvoj:/" /etc/passwd >"${tmp_passwd}"
+            echo "${NB_USER}:x:$(/usr/bin/id -u):$(/usr/bin/id -g):,,,:/home/jovyan:/bin/bash" >>"${tmp_passwd}"
+            cat "${tmp_passwd}" >/etc/passwd
+            rm -f "${tmp_passwd}"
 
             _log_info "Added new ${NB_USER} user ($(id -u):$(id -g)). Fixed UID!"
 
@@ -251,5 +256,5 @@ else
     unset_explicit_env_vars
 
     _log_info "Executing the command:" "${cmd[@]}"
-    exec "${cmd[@]}"
+    exec /usr/bin/setpriv --no-new-privs --inh-caps -all --ambient-caps -all -- "${cmd[@]}"
 fi

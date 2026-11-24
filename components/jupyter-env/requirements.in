@@ -1,4 +1,12 @@
-# Jupyter extensions only published on PyPI. Installed without dependencies:
+# Jupyter extensions installed from PyPI without dependencies:
 # everything they need must be in environment.yml (jupyterlmod: jupyter-core,
-# jupyter-server). Run ./lock after changing a pin.
+# jupyter-server; bash_kernel: ipykernel, pexpect — installed via PyPI so
+# conda-forge's bash package does not shadow /bin/bash and bypass /etc/bash.bashrc).
+# Run ./lock after changing a pin.
 jupyterlmod==5.3.2
+bash-kernel==0.10.0
+filetype==1.2.0
+# Security patch over conda-forge's 3.4.7 (GHSA-7xgj-8392-5q4r, fixed in 3.4.10);
+# jupyter-server-mcp 0.3.0 requires fastmcp<4,>=3.4.4.
+fastmcp==3.4.11
+fastmcp-slim==3.4.11

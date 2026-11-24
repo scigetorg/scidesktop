@@ -5,4 +5,4 @@
 command -v sciget >/dev/null 2>&1 || exit 0
 dir=$(sciget config get module_dir 2>/dev/null) || exit 0
 [ -n "${dir}" ] || exit 0
-sciget catalog list 2>/dev/null | awk -F '\t' -v dir="${dir}" '$2 == "1" { print dir "/" $1 }'
+sciget catalog list 2>/dev/null | awk -F '\t' -v dir="${dir}" '$2 ~ /^[0-9]+$/ { print dir "/" $1 }'

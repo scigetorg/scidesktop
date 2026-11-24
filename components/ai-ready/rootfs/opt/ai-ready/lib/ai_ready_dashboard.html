@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Ready Workshop</title>
+<style>
+  html { color-scheme: light dark; }
+  body {
+    background: Canvas;
+    color: CanvasText;
+    font: 1rem/1.5 system-ui, sans-serif;
+    margin: 0;
+  }
+  main { max-width: 64rem; margin: auto; padding: clamp(1.5rem, 6vw, 5rem); }
+  h1 { font-size: clamp(2rem, 6vw, 3.5rem); line-height: 1.12; margin: 0; }
+  p { margin: .75rem 0 2rem; }
+  nav { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+  a { border: 1px solid GrayText; border-radius: .75rem; color: inherit; padding: 1.25rem; text-decoration: none; }
+  a:is(:hover, :focus-visible) { outline: 2px solid LinkText; outline-offset: 2px; }
+  a strong { color: LinkText; display: block; font-size: 1.25rem; margin-bottom: .25rem; text-decoration: underline; }
+</style>
+<main>
+  <h1>AI Ready Workshop</h1>
+  <p>Tools open in a new browser tab. Airflow and MLflow need about half a minute after the session starts.</p>
+  <nav aria-label="Workshop tools">
+    <a href="{{ base_url }}lab/tree/ai-ready/notebooks" target="_blank" rel="noopener"><strong>JupyterLab</strong>Open the workshop notebooks and datasets.</a>
+    <a href="{{ base_url }}airflow/" target="_blank" rel="noopener"><strong>Airflow</strong>Run and monitor workshop pipelines.</a>
+    <a href="{{ base_url }}mlflow/" target="_blank" rel="noopener"><strong>MLflow</strong>Compare experiment runs and model results.</a>
+    <a href="{{ base_url }}desktop/" target="_blank" rel="noopener"><strong>Desktop</strong>Use graphical applications in a Linux desktop.</a>
+  </nav>
+</main>
+</html>

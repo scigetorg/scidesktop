@@ -4,7 +4,6 @@ ca-certificates
 curl
 locales
 netbase
-sudo
 tini
 dbus-user-session
 procps

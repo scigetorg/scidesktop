@@ -3,3 +3,4 @@
 secret*
 vars.env
 build_and_push.sh
+__pycache__/

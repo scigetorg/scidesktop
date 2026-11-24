@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=GNU Octave (EESSI)
+Comment=Numerical computing IDE via EESSI
+Exec=/usr/local/bin/eessi-launch Octave octave --gui
+Terminal=false
+Categories=Science;Math;

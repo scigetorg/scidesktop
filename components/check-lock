@@ -1,16 +1,28 @@
 #!/bin/bash
 # Fails when a lockfile is older than the pins it was generated from: every
-# exact pin (name==version) in the input must appear in the lock.
+# exact pin (name==version) and conda prefix pin (name=version) in the input
+# must appear in each lock. A conda environment has one lock per architecture;
+# pass them all, so a lock left behind fails the build on every architecture.
 #
-#   check-lock <input> <lock>
+#   check-lock <input> <lock>...
 set -euo pipefail
-input="$1"; lock="$2"
+input="$1"; shift
 status=0
-while read -r name version; do
-    if grep -qiE "(/|^)${name}-${version}-[^/]*\.(conda|tar\.bz2)|^${name}==${version}( |$)" "${lock}"; then
-        continue
-    fi
-    echo "check-lock: ${input} pins ${name}==${version} but ${lock} does not; run ./lock" >&2
-    status=1
-done < <(sed -e 's/#.*//' "${input}" | grep -oE '[A-Za-z0-9_.-]+==[0-9][^ ]*' | sed 's/==/ /')
+escape_ere() { printf '%s' "$1" | sed -e 's/[][(){}.+*?^$|\\]/\\&/g'; }
+for lock in "$@"; do
+    while read -r name op version; do
+        ename="$(escape_ere "${name}")"
+        eversion="$(escape_ere "${version}")"
+        if [ "${op}" = "==" ]; then
+            pattern="(/|^)${ename}-${eversion}-[^/]*\.(conda|tar\.bz2)|^${ename}==${eversion}( |$)"
+        else
+            pattern="(/|^)${ename}-${eversion}(\.[^-/]*)?-[^/]*\.(conda|tar\.bz2)"
+        fi
+        if grep -qiE "${pattern}" "${lock}"; then
+            continue
+        fi
+        echo "check-lock: ${input} pins ${name}${op}${version} but ${lock} does not; run ./lock" >&2
+        status=1
+    done < <(sed -e 's/#.*//' "${input}" | grep -oE '[A-Za-z0-9_.-]+==?[0-9][^ ,;]*' | sed -E 's/(==?)/ \1 /')
+done
 exit "${status}"

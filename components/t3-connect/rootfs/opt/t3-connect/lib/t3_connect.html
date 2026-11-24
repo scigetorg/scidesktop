@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T3 Connect</title>
+<style>
+  body { font: 1rem/1.5 system-ui, sans-serif; margin: 2.5rem auto; max-width: 40rem; padding: 0 1rem; color: #1b1b1b; }
+  h1 { font-size: 1.5rem; }
+  #code { display: block; font: 600 1.9rem ui-monospace, monospace; letter-spacing: .2rem; margin: 1rem 0; }
+  #actions { display: flex; gap: .75rem; margin-top: 1.25rem; }
+  button { font: inherit; padding: .4rem .9rem; }
+  .note { color: #555; font-size: .9rem; }
+  @media (prefers-color-scheme: dark) { body { background: #1e1e1e; color: #e6e6e6; } .note { color: #aaa; } a { color: #8ab4f8; } }
+</style>
+<h1>T3 Connect</h1>
+<p>Use this session's T3 Code from the T3 desktop or mobile app. Approving the
+link gives your T3 account remote access to this session, through T3's relay,
+for as long as T3 Code runs here. It is off until you set it up.</p>
+<p id="status" role="status" aria-live="polite">Checking.</p>
+<strong id="code" aria-live="polite"></strong>
+<p id="expiry"></p>
+<p><a id="authorize" hidden target="_blank" rel="noopener noreferrer" href="https://accounts.t3.codes/device">Open https://accounts.t3.codes/device to approve this code</a></p>
+<p><a id="connections" hidden target="_blank" rel="noopener noreferrer" href="https://app.t3.codes/settings/general">Manage your T3 connections at https://app.t3.codes/settings/general</a></p>
+<div id="actions"></div>
+<p class="note">The link is saved in your home folder (<code>~/.t3</code>). Disconnect removes it.
+The T3 app reaches this session only while T3 Code is running in it; opening the
+scigent.ai tile starts it.</p>
+<script>
+(() => {
+  const base = __BASE_URL__;
+  const xsrf = __XSRF__;
+  const api = base + 't3-connect/api';
+  const element = id => document.getElementById(id);
+  const titles = { link: 'Set up T3 Connect', retry: 'Retry', cancel: 'Cancel setup', disconnect: 'Disconnect' };
+  const buttons = {};
+  let pending = false;
+  let timer;
+  for (const [action, title] of Object.entries(titles)) {
+    const button = document.createElement('button');
+    button.textContent = title;
+    button.hidden = true;
+    button.onclick = () => request(action);
+    buttons[action] = button;
+    element('actions').append(button);
+  }
+  function render(value) {
+    // Server text is shown as text, never as markup or a link target.
+    element('status').textContent = value.message;
+    element('code').textContent = value.code || '';
+    element('expiry').textContent = value.expires_at
+      ? 'The code expires at ' + new Date(value.expires_at * 1000).toLocaleTimeString() + '.' : '';
+    element('authorize').hidden = !value.code || value.verification_url !== 'https://accounts.t3.codes/device';
+    element('connections').hidden = value.connections_url !== 'https://app.t3.codes/settings/general';
+    const busy = ['starting', 'authorizing', 'waiting_idle', 'restarting', 'connecting', 'disconnecting'].includes(value.state);
+    buttons.link.hidden = value.state !== 'idle' || value.linked;
+    buttons.retry.hidden = !['error', 'expired', 'cancelled'].includes(value.state);
+    buttons.cancel.hidden = !busy || value.state === 'disconnecting';
+    // Also after an error, an expired code or a cancelled setup: the approval may have arrived late.
+    buttons.disconnect.hidden = busy || (!value.linked && value.state === 'idle');
+    // T3 Code opens the tunnel, and Jupyter starts T3 Code when it is asked for a page.
+    if (value.needs_server && value.state !== 'ready') {
+      fetch(base + 't3-code/api/auth/session', { credentials: 'same-origin' }).catch(() => {});
+    }
+  }
+  async function request(action) {
+    if (pending) return;
+    pending = true;
+    clearTimeout(timer);
+    for (const button of Object.values(buttons)) button.disabled = true;
+    try {
+      const response = await fetch(api, action ? {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-XSRFToken': xsrf },
+        body: JSON.stringify({ action })
+      } : { credentials: 'same-origin' });
+      if (!response.ok) throw new Error(response.status === 409
+        ? 'Another setup request is still running.' : 'Could not reach the session. Check your connection and retry.');
+      render(await response.json());
+    } catch (error) {
+      element('status').textContent = error.message;
+      buttons.retry.hidden = false;
+    } finally {
+      pending = false;
+      for (const button of Object.values(buttons)) button.disabled = false;
+      timer = setTimeout(() => request(), 2000);
+    }
+  }
+  request();
+})();
+</script>
+</html>

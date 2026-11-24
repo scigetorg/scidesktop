@@ -9,17 +9,29 @@ set -u
 
 [ "${SCIDESKTOP_SCIGET_REFRESH:-yes}" = yes ] || exit 0
 
-if [ "$(id -u)" -eq 0 ]; then
+if [ "$(/usr/bin/id -u)" -eq 0 ]; then
     user="${NB_USER:-jovyan}"
-    home="$(getent passwd "${user}" | cut -d: -f6)"
-    as_user() { runuser -u "${user}" -- env HOME="${home}" "$@"; }
+    home="$(/usr/bin/getent passwd "${user}" | cut -d: -f6)"
 else
     home="${HOME}"
-    as_user() { "$@"; }
 fi
 
-# The log is opened by the user's shell, so root never owns it.
-as_user bash -c 'mkdir -p "$1" && exec timeout 300 sciget refresh >"$1/refresh.log" 2>&1' \
-    _ "${home}/.cache/sciget" </dev/null &
+# Run via run-as-user (or setpriv fallback in standalone component tests) so
+# the background refresh inherits NoNewPrivs=1 and zero capabilities, and the
+# log is opened by the notebook user so root never owns it.
+if [ -x /opt/scidesktop/run-as-user ]; then
+    /opt/scidesktop/run-as-user bash -c 'mkdir -p "$1" && exec timeout 300 sciget refresh >"$1/refresh.log" 2>&1' \
+        _ "${home}/.cache/sciget" </dev/null &
+elif [ "$(/usr/bin/id -u)" -eq 0 ]; then
+    /usr/bin/env "HOME=${home}" "USER=${user}" /usr/bin/setpriv \
+        --reuid "$(/usr/bin/id -u "${user}")" --regid "$(/usr/bin/id -g "${user}")" \
+        --init-groups --no-new-privs --inh-caps -all --ambient-caps -all -- \
+        bash -c 'mkdir -p "$1" && exec timeout 300 sciget refresh >"$1/refresh.log" 2>&1' \
+        _ "${home}/.cache/sciget" </dev/null &
+else
+    /usr/bin/setpriv --no-new-privs --inh-caps -all --ambient-caps -all -- \
+        bash -c 'mkdir -p "$1" && exec timeout 300 sciget refresh >"$1/refresh.log" 2>&1' \
+        _ "${home}/.cache/sciget" </dev/null &
+fi
 echo "[sciget] refreshing catalogs in the background"
 exit 0

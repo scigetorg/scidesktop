@@ -9,3 +9,6 @@ libglx0
 libva2
 libva-drm2
 libva-x11-2
+# glxinfo / glxgears and GLU for GPU and VirtualGL diagnostics
+libglu1-mesa
+mesa-utils

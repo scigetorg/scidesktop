@@ -1,0 +1,8 @@
+#!/bin/sh
+# The Agent Client Protocol adapter for Codex, which Jupyter AI starts for
+# its Codex persona. The adapter is installed without the copy of the agent
+# its package would bring: it runs the image's own (components/coding-agents),
+# unless CODEX_PATH names another.
+: "${CODEX_PATH:=/opt/coding-agents/bin/codex}"
+export CODEX_PATH
+exec /opt/code-server/lib/node /opt/acp-adapters/lib/node_modules/@agentclientprotocol/codex-acp/dist/index.js "$@"

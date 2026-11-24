@@ -12,7 +12,11 @@ export CONDA_DEFAULT_ENV=base
 export CONDA_SHLVL=1
 export CONDA_PYTHON_EXE="${CONDA_PREFIX}/bin/python"
 
-for _activate_script in "${CONDA_PREFIX}/etc/conda/activate.d/"*.sh; do
-    [ -r "${_activate_script}" ] && . "${_activate_script}"
-done
-unset _activate_script
+# Do not source user-writable conda activate.d scripts while running as root
+# (before start.sh drops privileges); non-root startup sources them directly.
+if [ "$(/usr/bin/id -u)" -ne 0 ]; then
+    for _activate_script in "${CONDA_PREFIX}/etc/conda/activate.d/"*.sh; do
+        [ -r "${_activate_script}" ] && . "${_activate_script}"
+    done
+    unset _activate_script
+fi

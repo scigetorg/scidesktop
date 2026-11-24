@@ -1,0 +1,12 @@
+#!/bin/bash
+# Regenerates package-lock.json, which the build installs without resolving:
+# every package of the adapters with its version and integrity hash, for
+# every platform (npm's lock is one file for all).
+#
+#   ./lock
+#
+# Run after changing a version in package.json. It needs npm.
+set -euo pipefail
+cd "$(dirname "$0")"
+npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+echo "package-lock.json: $(grep -c '"resolved"' package-lock.json) packages"

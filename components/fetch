@@ -1,0 +1,13 @@
+#!/bin/bash
+# Downloads a release file and refuses it unless its SHA-256 checksum matches.
+# Mounted into component build stages from context `components` (like
+# `target-arch` and `check-lock`).
+#
+#   fetch <url> <sha256> <dest>
+set -euo pipefail
+url="${1:?usage: fetch <url> <sha256> <dest>}"
+sha256="${2:?}"
+dest="${3:?}"
+curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "${dest}" "${url}"
+echo "${sha256}  ${dest}" | sha256sum -c - >/dev/null \
+    || { echo "fetch: ${url}: checksum mismatch, got $(sha256sum "${dest}" | cut -d ' ' -f 1)" >&2; exit 1; }

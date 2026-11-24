@@ -1,0 +1,68 @@
+---
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Shell, Python and workflow checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Contract (static)
+        run: python3 test/contract.py static
+
+      - name: ShellCheck
+        run: |
+          mapfile -t scripts < <(
+            find components test .github/scripts -type f \( -name '*.sh' -o -perm /111 \) \
+              ! -path 'components/startup/rootfs/usr/local/bin/start*' \
+              ! -path 'components/startup/rootfs/usr/local/bin/before-notebook.d/10activate*' \
+              -print0 \
+              | xargs -0 -r grep -lE '^#! */(usr/)?bin/(env )?(ba)?sh'
+          )
+          shellcheck --severity=warning -e SC1090,SC1091 "${scripts[@]}"
+
+      - name: Ruff (Python)
+        run: |
+          pipx run ruff check --select E9,F63,F7,F82,F401,F841 components test
+
+      - name: Actionlint (workflows)
+        run: |
+          ver="1.7.12"
+          sha="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+          curl -fsSL -o /tmp/actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${ver}/actionlint_${ver}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "${sha}" /tmp/actionlint.tar.gz | sha256sum -c -
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          /tmp/actionlint
+
+      - name: Security audit (Python & npm locks)
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/pip-audit-venv
+          /tmp/pip-audit-venv/bin/pip install --quiet --no-deps --require-hashes \
+            -r .github/requirements/pip-audit.txt
+          for lock in components/*/*requirements.lock; do
+            echo "=== pip-audit ${lock} ==="
+            /tmp/pip-audit-venv/bin/pip-audit -r "${lock}" --no-deps --disable-pip
+          done
+          rm -rf /tmp/pip-audit-venv
+          for pkg in components/acp-adapters components/jupyterlab-neuroglancer/labextension; do
+            echo "=== npm audit ${pkg} ==="
+            npm --prefix "${pkg}" audit --omit=dev --audit-level=moderate
+          done

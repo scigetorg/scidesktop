@@ -1,0 +1,5 @@
+  [base / HPC (EESSI/2025.06, amd64 + arm64)]
+    Visualization & IDEs: ParaView, Octave, gnuplot, VTK
+    Languages:            R, Julia, IJulia
+    HPC & simulation:     GROMACS, LAMMPS, OpenFOAM, QuantumESPRESSO, FEniCS-DOLFINx, WRF
+    Geospatial & bio:     GDAL, NCO, SAMtools, BCFtools, BLAST+, Bowtie2, HMMER, IQ-TREE

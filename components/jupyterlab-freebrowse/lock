@@ -1,0 +1,24 @@
+#!/bin/bash
+# Regenerates yarn.lock for the FreeBrowse JupyterLab extension from the pinned
+# FREEBROWSE_COMMIT in docker-bake.hcl using jupyter-env's jlpm.
+# Requires a locally built scidesktop:latest image (`docker buildx bake scidesktop`).
+#
+#   ./lock
+set -euo pipefail
+cd "$(dirname "$0")"
+commit=$(sed -n 's/^variable "FREEBROWSE_COMMIT" { default = "\(.*\)" }$/\1/p' ../../docker-bake.hcl)
+[ -n "${commit}" ] || { echo "FREEBROWSE_COMMIT not found in docker-bake.hcl" >&2; exit 1; }
+tmp=$(mktemp -d)
+trap 'rm -rf "${tmp}"' EXIT
+git clone -q https://github.com/neurodesk/freebrowse.git "${tmp}/freebrowse"
+git -C "${tmp}/freebrowse" checkout -q "${commit}"
+docker run --rm --entrypoint bash \
+    -v "${tmp}/freebrowse/jupyter:/work" \
+    scidesktop:latest -c '
+    set -euo pipefail
+    export PATH="/opt/code-server/lib:/opt/conda/bin:${PATH}"
+    cd /work
+    YARN_ENABLE_IMMUTABLE_INSTALLS=0 jlpm install --mode=update-lockfile
+'
+install -m 0644 "${tmp}/freebrowse/jupyter/yarn.lock" yarn.lock
+echo "jupyterlab-freebrowse: updated yarn.lock for freebrowse@${commit}"

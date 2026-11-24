@@ -1,0 +1,4 @@
+# Snakemake and its Slurm executor plugin pinned for /opt/workflow-engines/snakemake.
+# Run ./lock after changing a pin.
+snakemake==9.27.2
+snakemake-executor-plugin-slurm==2.8.0

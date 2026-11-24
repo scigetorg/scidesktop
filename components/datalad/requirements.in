@@ -1,0 +1,7 @@
+# DataLad, its container & OSF extensions, and git-annex as its upstream's wheel
+# (a self-contained build for amd64 and arm64; conda-forge has no arm64 one).
+datalad==1.8.0
+datalad-container==1.2.6
+datalad-osf==0.3.0
+osfclient==0.0.5
+git-annex==10.20261026

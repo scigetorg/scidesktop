@@ -1,0 +1,3 @@
+  [microscopy / bioimaging (EESSI/2025.06, amd64 + arm64)]
+    Interactive viewers:  napari, ParaView, VTK
+    Image & bio analysis: scikit-image, imageio, zarr, dask, xarray, R-bundle-Bioconductor

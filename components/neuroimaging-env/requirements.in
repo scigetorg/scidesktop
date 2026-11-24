@@ -1,0 +1,15 @@
+# Neuroimaging analysis libraries and notebook widgets for /opt/neuroimaging-env.
+# Run ./lock after changing a pin.
+nibabel==5.5.0
+nipype==1.12.0
+niwrap==1.1.0
+pydra==1.0a12
+nipoppy==0.4.8
+ipyniivue==2.4.4
+datalad==1.8.0
+datalad-container==1.2.6
+datalad-osf==0.3.0
+osfclient==0.0.5
+watermark==2.6.0
+xnat==0.8.1
+nf-core==4.2.2

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Julia (EESSI)
+Comment=Interactive Julia REPL via EESSI
+Exec=/usr/local/bin/eessi-launch Julia xfce4-terminal --disable-server --title="Julia (EESSI)" -e julia
+Terminal=false
+Categories=Science;Development;

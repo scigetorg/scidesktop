@@ -36,8 +36,15 @@ RUN printf '#!/bin/bash\necho hook-ran\n' > /usr/local/bin/before-notebook.d/10-
     && out=$(start.sh id -un 2>&1) && echo "${out}" \
     && echo "${out}" | grep -q hook-ran \
     && echo "${out}" | tail -1 | grep -qx "${NB_USER}" \
+    && start.sh grep -qx 'NoNewPrivs:[[:space:]]*1' /proc/self/status \
+    && start.sh grep -qx 'CapBnd:[[:space:]]*0000000000000000' /proc/self/status \
+    && start.sh grep -qx 'CapAmb:[[:space:]]*0000000000000000' /proc/self/status \
+    && start.sh grep -qx 'CapInh:[[:space:]]*0000000000000000' /proc/self/status \
     && out=$(runuser -u "${NB_USER}" -- start.sh id -un 2>&1) && echo "${out}" \
+    && echo "${out}" | grep -q hook-ran \
     && echo "${out}" | tail -1 | grep -qx "${NB_USER}" \
+    && runuser -u "${NB_USER}" -- start.sh grep -qx 'NoNewPrivs:[[:space:]]*1' /proc/self/status \
+    && runuser -u "${NB_USER}" -- env _START_SH_EXECUTED=1 start.sh grep -qx 'NoNewPrivs:[[:space:]]*1' /proc/self/status \
     && bash -n /usr/local/bin/run-hooks.sh \
     # Resource limits from a cgroup: whole CPUs, memory, thread counts.
     && mkdir -p /tmp/cg && echo "150000 100000" > /tmp/cg/cpu.max && echo 2147483648 > /tmp/cg/memory.max \
@@ -56,5 +63,18 @@ RUN printf '#!/bin/bash\necho hook-ran\n' > /usr/local/bin/before-notebook.d/10-
     && [ "$(stat -c %U "/home/${NB_USER}/.probe")" = "${NB_USER}" ] \
     && printf 'mine\n' > "/home/${NB_USER}/.probe" && start.sh true >/dev/null 2>&1 \
     && [ "$(cat "/home/${NB_USER}/.probe")" = mine ] \
+    # /data symlink hook: links /data into ~/data when /data exists, without clobbering existing targets.
+    && mkdir -p /data && start.sh true >/dev/null 2>&1 \
+    && [ "$(readlink "/home/${NB_USER}/data")" = /data ] \
+    && rm -f "/home/${NB_USER}/data" && rmdir /data \
+    # Root-started session with renamed NB_USER resolves MPLCONFIGDIR to the renamed home.
+    && useradd -m -u 22222 -g "${NB_GID}" alice \
+    && out=$(env -u MPLCONFIGDIR HOME=/home/jovyan NB_USER=alice bash -ec \
+        '. /usr/local/bin/before-notebook.d/05-resource-limits.sh >/dev/null; echo "$MPLCONFIGDIR"') \
+    && [ "${out}" = "/home/alice/.config/matplotlib-mpldir" ] \
+    && userdel -r alice \
+    && [ "$(/opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
+    && [ "$(runuser -u "${NB_USER}" -- /opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
+    && test -r /opt/scidesktop/stop_supervisor.py \
     # The OS layer has no Python; the smoke test parses these with Jupyter's.
     && test -x /usr/local/bin/start-notebook.py && test -x /usr/local/bin/start-singleuser.py

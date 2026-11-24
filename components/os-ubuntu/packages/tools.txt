@@ -1,10 +1,35 @@
-# Command-line tools that base components call, or that break when run from a
-# container. Anything else a user runs is delivered through sciget.
+# Command-line tools, remote-storage clients, and runtime utilities that base
+# components or interactive workflows rely on across all desktops.
 # git, with ssh for remotes and an editor for commit messages: jupyterlab-git
 git
+gh
 openssh-client
 nano
-# tar -J calls xz
+vim-tiny
+less
+# tar -J calls xz; zip/unzip for archive interchange
 xz-utils
-# a containerised session manager would start shells in its own image
+zip
+unzip
+# session managers and system inspection
 tmux
+screen
+htop
+tree
+bc
+jq
+# data transfer and remote filesystem mounts (generic across all domains)
+rsync
+rclone
+aria2
+sshfs
+davfs2
+s3fs
+# networking, desktop URL opening, graph rendering, legacy csh scripts
+iputils-ping
+dnsutils
+xdg-utils
+graphviz
+tcsh
+# headless Java runtime for workflow engines (Nextflow, nf-test)
+openjdk-21-jre-headless

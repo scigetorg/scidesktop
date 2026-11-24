@@ -15,8 +15,24 @@
   ],
   "pip_requirements": {
     "managerFilePatterns": [
-      "/^components/selkies/requirements\\.in$/"
+      "/^components/jupyter-env/requirements\\.in$/",
+      "/^components/selkies/requirements\\.in$/",
+      "/^components/ai-ready/requirements\\.in$/",
+      "/^components/ai-ready/airflow-requirements\\.in$/",
+      "/^components/datalad/requirements\\.in$/",
+      "/^components/workflow-engines/requirements\\.in$/",
+      "/^components/microscopy-env/requirements\\.in$/",
+      "/^components/datascience-env/requirements\\.in$/",
+      "/^components/neuroimaging-env/requirements\\.in$/"
     ]
+  },
+  "customDatasources": {
+    "open-vsx": {
+      "defaultRegistryUrlTemplate": "https://open-vsx.org/api/{{packageName}}",
+      "transformTemplates": [
+        "{\"releases\": $map($keys(allVersions)[$ != \"latest\"], function($v) { {\"version\": $v} })}"
+      ]
+    }
   },
   "packageRules": [
     {
@@ -67,6 +83,16 @@
       "groupName": "component os-ubuntu",
       "addLabels": [
         "component:os-ubuntu"
+      ]
+    },
+    {
+      "description": "Component eessi-cvmfs: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/eessi-cvmfs/**"
+      ],
+      "groupName": "component eessi-cvmfs",
+      "addLabels": [
+        "component:eessi-cvmfs"
       ]
     },
     {
@@ -140,7 +166,92 @@
       ]
     },
     {
-      "description": "Component os-ubuntu: its versions in docker-bake.hcl join the component's group.",
+      "description": "Component ai-ready: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/ai-ready/**"
+      ],
+      "groupName": "component ai-ready",
+      "addLabels": [
+        "component:ai-ready"
+      ]
+    },
+    {
+      "description": "Component coding-agents: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/coding-agents/**"
+      ],
+      "groupName": "component coding-agents",
+      "addLabels": [
+        "component:coding-agents"
+      ]
+    },
+    {
+      "description": "Component t3-code: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/t3-code/**"
+      ],
+      "groupName": "component t3-code",
+      "addLabels": [
+        "component:t3-code"
+      ]
+    },
+    {
+      "description": "Component code-server: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/code-server/**"
+      ],
+      "groupName": "component code-server",
+      "addLabels": [
+        "component:code-server"
+      ]
+    },
+    {
+      "description": "Component datalad: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/datalad/**"
+      ],
+      "groupName": "component datalad",
+      "addLabels": [
+        "component:datalad"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-niivue: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/jupyterlab-niivue/**"
+      ],
+      "groupName": "component jupyterlab-niivue",
+      "addLabels": [
+        "component:jupyterlab-niivue"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-freebrowse: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/jupyterlab-freebrowse/**"
+      ],
+      "groupName": "component jupyterlab-freebrowse",
+      "addLabels": [
+        "component:jupyterlab-freebrowse"
+      ]
+    },
+    {
+      "description": "AI Ready: Airflow's constraints are per Python minor, and a PostgreSQL major cannot open the data directory an earlier one created in a user's home.",
+      "matchFileNames": [
+        "components/ai-ready/environment.yml"
+      ],
+      "matchDepNames": [
+        "python",
+        "postgresql"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Component os-ubuntu: its versions in docker-bake.hcl join the component's group. A cvmfs bump needs all CVMFS_*_SHA256 variables updated.",
       "matchFileNames": [
         "docker-bake.hcl"
       ],
@@ -151,6 +262,19 @@
       "groupName": "component os-ubuntu",
       "addLabels": [
         "component:os-ubuntu"
+      ]
+    },
+    {
+      "description": "Component eessi-cvmfs: EESSI CVMFS config tarball version in docker-bake.hcl. A version bump needs EESSI_CVMFS_CONFIG_SHA256 updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "EESSI/filesystem-layer"
+      ],
+      "groupName": "component eessi-cvmfs",
+      "addLabels": [
+        "component:eessi-cvmfs"
       ]
     },
     {
@@ -167,7 +291,7 @@
       ]
     },
     {
-      "description": "Component apptainer: its versions in docker-bake.hcl join the component's group.",
+      "description": "Component apptainer: its versions in docker-bake.hcl join the component's group. An apptainer bump needs APPTAINER_SHA256 updated.",
       "matchFileNames": [
         "docker-bake.hcl"
       ],
@@ -175,7 +299,10 @@
         "apptainer/apptainer",
         "apptainer-go",
         "google.golang.org/grpc",
-        "golang.org/x/crypto"
+        "golang.org/x/crypto",
+        "github.com/go-jose/go-jose/v4",
+        "github.com/klauspost/compress",
+        "github.com/moby/go-archive"
       ],
       "groupName": "component apptainer",
       "addLabels": [
@@ -208,6 +335,301 @@
       "addLabels": [
         "component:sciget"
       ]
+    },
+    {
+      "description": "Component ai-ready: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "ai-ready-containers"
+      ],
+      "groupName": "component ai-ready",
+      "addLabels": [
+        "component:ai-ready"
+      ]
+    },
+    {
+      "description": "Component coding-agents: its versions in docker-bake.hcl join the component's group. Each bump needs both *_SHA256 variables of that agent updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "openai/codex",
+        "claude-code",
+        "opencode"
+      ],
+      "groupName": "component coding-agents",
+      "addLabels": [
+        "component:coding-agents"
+      ]
+    },
+    {
+      "description": "Component t3-code: a bump needs both T3_CODE_SHA256 variables updated, and its test fails if the web client moved an anchor the base-path adapter rewrites (docs/coding-agents.md).",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "pingdotgg/t3code"
+      ],
+      "groupName": "component t3-code",
+      "addLabels": [
+        "component:t3-code"
+      ]
+    },
+    {
+      "description": "Component code-server: a bump needs both CODE_SERVER_SHA256 variables updated, from the release's sha256 digests of code-server-<version>-linux-{amd64,arm64}.tar.gz.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "coder/code-server"
+      ],
+      "groupName": "component code-server",
+      "addLabels": [
+        "component:code-server"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-niivue: a bump needs JUPYTERLAB_NIIVUE_SHA256 updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "jupyterlab-niivue"
+      ],
+      "groupName": "component jupyterlab-niivue",
+      "addLabels": [
+        "component:jupyterlab-niivue"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-freebrowse: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "freebrowse"
+      ],
+      "groupName": "component jupyterlab-freebrowse",
+      "addLabels": [
+        "component:jupyterlab-freebrowse"
+      ]
+    },
+    {
+      "description": "Component vscode-core: its Open VSX extensions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "github.vscode-pull-request-github",
+        "repreng.csv",
+        "xy-sss.slurm--extension"
+      ],
+      "groupName": "component vscode-core",
+      "addLabels": [
+        "component:vscode-core"
+      ]
+    },
+    {
+      "description": "Component vscode-niivue: its Open VSX extension in docker-bake.hcl joins the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "korbinianeckstein.niivue"
+      ],
+      "groupName": "component vscode-niivue",
+      "addLabels": [
+        "component:vscode-niivue"
+      ]
+    },
+    {
+      "description": "Component vscode-coding-agents: its Open VSX extensions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "anthropic.claude-code",
+        "openai.chatgpt"
+      ],
+      "groupName": "component vscode-coding-agents",
+      "addLabels": [
+        "component:vscode-coding-agents"
+      ]
+    },
+    {
+      "description": "Component t3-connect: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/t3-connect/**"
+      ],
+      "groupName": "component t3-connect",
+      "addLabels": [
+        "component:t3-connect"
+      ]
+    },
+    {
+      "description": "Component t3-connect: a bump needs both T3_CLOUDFLARED_SHA256 variables updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "cloudflare/cloudflared"
+      ],
+      "groupName": "component t3-connect",
+      "addLabels": [
+        "component:t3-connect"
+      ]
+    },
+    {
+      "description": "Component acp-adapters: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/acp-adapters/**"
+      ],
+      "groupName": "component acp-adapters",
+      "addLabels": [
+        "component:acp-adapters"
+      ]
+    },
+    {
+      "description": "Shared Node.js build version (acp-adapters, jupyterlab-freebrowse, jupyterlab-slurm, jupyterlab-neuroglancer).",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "node"
+      ],
+      "groupName": "component acp-adapters",
+      "addLabels": [
+        "component:acp-adapters",
+        "component:jupyterlab-freebrowse",
+        "component:jupyterlab-slurm"
+      ]
+    },
+    {
+      "description": "Component virtualgl: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/virtualgl/**"
+      ],
+      "groupName": "component virtualgl",
+      "addLabels": [
+        "component:virtualgl"
+      ]
+    },
+    {
+      "description": "Component virtualgl: a bump needs both VIRTUALGL_SHA256 variables updated.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "VirtualGL/virtualgl"
+      ],
+      "groupName": "component virtualgl",
+      "addLabels": [
+        "component:virtualgl"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-slurm: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/jupyterlab-slurm/**"
+      ],
+      "groupName": "component jupyterlab-slurm",
+      "addLabels": [
+        "component:jupyterlab-slurm"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-slurm: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "jupyterlab-slurm"
+      ],
+      "groupName": "component jupyterlab-slurm",
+      "addLabels": [
+        "component:jupyterlab-slurm"
+      ]
+    },
+    {
+      "description": "Component workflow-engines: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/workflow-engines/**"
+      ],
+      "groupName": "component workflow-engines",
+      "addLabels": [
+        "component:workflow-engines"
+      ]
+    },
+    {
+      "description": "Component workflow-engines: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "nextflow-io/nextflow",
+        "askimed/nf-test"
+      ],
+      "groupName": "component workflow-engines",
+      "addLabels": [
+        "component:workflow-engines"
+      ]
+    },
+    {
+      "description": "Component microscopy-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/microscopy-env/**"
+      ],
+      "groupName": "component microscopy-env",
+      "addLabels": [
+        "component:microscopy-env"
+      ]
+    },
+    {
+      "description": "Component datascience-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/datascience-env/**"
+      ],
+      "groupName": "component datascience-env",
+      "addLabels": [
+        "component:datascience-env"
+      ]
+    },
+    {
+      "description": "Component neuroimaging-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/neuroimaging-env/**"
+      ],
+      "groupName": "component neuroimaging-env",
+      "addLabels": [
+        "component:neuroimaging-env"
+      ]
+    },
+    {
+      "description": "Component neurodesk-compat: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/neurodesk-compat/**"
+      ],
+      "groupName": "component neurodesk-compat",
+      "addLabels": [
+        "component:neurodesk-compat"
+      ]
+    },
+    {
+      "description": "Component neurodesk-compat: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "nf-neuro-modules"
+      ],
+      "groupName": "component neurodesk-compat",
+      "addLabels": [
+        "component:neurodesk-compat"
+      ]
     }
   ],
   "customManagers": [
@@ -232,6 +654,76 @@
       ],
       "depNameTemplate": "sciget",
       "packageNameTemplate": "https://github.com/scigetorg/sciget",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    },
+    {
+      "description": "AI Ready workshop commit; a bump needs components/ai-ready/lock run before it builds.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"AI_READY_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "ai-ready-containers",
+      "packageNameTemplate": "https://github.com/IntersectAustralia/ai-ready-containers",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    },
+    {
+      "description": "FreeBrowse fork commit; a bump needs components/jupyterlab-freebrowse/lock run if dependencies changed, and the build stops if the patched viewer registration moved.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"FREEBROWSE_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "freebrowse",
+      "packageNameTemplate": "https://github.com/neurodesk/freebrowse",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    },
+    {
+      "description": "Google Neuroglancer standalone web client commit.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"NEUROGLANCER_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "neuroglancer",
+      "packageNameTemplate": "https://github.com/google/neuroglancer",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "master"
+    },
+    {
+      "description": "NERSC jupyterlab-slurm commit; a bump needs components/jupyterlab-slurm/lock run if dependencies changed, and the build stops if the patched identity lookup moved.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"JUPYTERLAB_SLURM_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "jupyterlab-slurm",
+      "packageNameTemplate": "https://github.com/NERSC/jupyterlab-slurm",
+      "datasourceTemplate": "git-refs",
+      "currentValueTemplate": "main"
+    },
+    {
+      "description": "nf-neuro Nextflow modules commit bundled in neurodesk-compat.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"NF_NEURO_MODULES_COMMIT\" \\{ default = \"(?<currentDigest>[0-9a-f]{40})\" \\}"
+      ],
+      "depNameTemplate": "nf-neuro-modules",
+      "packageNameTemplate": "https://github.com/nf-neuro/modules",
       "datasourceTemplate": "git-refs",
       "currentValueTemplate": "main"
     },

@@ -1,0 +1,4 @@
+  [datascience (EESSI/2025.06, amd64 + arm64)]
+    R & statistics:       R, R-bundle-CRAN, R-bundle-Bioconductor, RStudio-Server, arrow-R
+    Tabular & ML:         Arrow, dask, xarray, scikit-learn, statsmodels, Optuna, Seaborn, plotly.py, bokeh
+    Note:                 polars is also available via EESSI/2026.06; PyTorch/TensorFlow/XGBoost/LightGBM via EESSI/2023.06

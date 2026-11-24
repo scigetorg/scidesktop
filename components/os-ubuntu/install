@@ -5,6 +5,8 @@ set -euo pipefail
 HERE=/tmp/os-ubuntu
 : "${APT_SNAPSHOT:?}" "${CVMFS_VERSION:?}" "${CVMFS_CONFIG_VERSION:?}"
 : "${TARGETARCH:?}" "${NB_USER:?}" "${NB_UID:?}" "${NB_GID:?}"
+# First, so an unsupported architecture stops before anything is downloaded.
+deb_arch="$(target-arch deb)"
 
 echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries
 # The build caches /var/cache/apt; the image's docker-clean hook would empty it.
@@ -15,11 +17,9 @@ rm -f /etc/apt/apt.conf.d/docker-clean
 # live archive.
 sources=/etc/apt/sources.list.d/ubuntu.sources
 cp "${sources}" "${sources}.live"
-case "${TARGETARCH}" in
-    amd64) archive=ubuntu ;;
-    *) echo "os-ubuntu: no snapshot mapping for ${TARGETARCH}" >&2; exit 1 ;;
-esac
-sed -i -E "s|^URIs: https?://(archive\|security)\.ubuntu\.com/ubuntu/?|URIs: https://snapshot.ubuntu.com/${archive}/${APT_SNAPSHOT}|" "${sources}"
+# The snapshot service has every architecture under /ubuntu, including the
+# ones the live archive serves from ports.ubuntu.com/ubuntu-ports.
+sed -i -E "s#^URIs: https?://((archive|security)\.ubuntu\.com/ubuntu|ports\.ubuntu\.com/ubuntu-ports)/?#URIs: https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT}#" "${sources}"
 grep -q "snapshot.ubuntu.com" "${sources}"
 
 apt_get() { apt-get -o Acquire::https::CAInfo=/tmp/bootstrap-ca.crt "$@"; }
@@ -31,17 +31,34 @@ apt_get upgrade --yes
 apt_get install --yes --no-install-recommends \
     $(sed -e 's/#.*//' "${HERE}"/packages/*.txt | tr -s '[:space:]' ' ')
 
-# CVMFS client from CERN's packages for this release and architecture.
+# CVMFS client from CERN's packages for this release and architecture,
+# SHA-256 verified before installation.
 . /etc/os-release
+arch_upper="${TARGETARCH^^}"
 cvmfs_tmp=$(mktemp -d)
 for p in cvmfs cvmfs-libs cvmfs-fuse3; do
-    curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "${cvmfs_tmp}/${p}.deb" \
-        "https://ecsft.cern.ch/dist/cvmfs/cvmfs-${CVMFS_VERSION}/${p}_${CVMFS_VERSION}+ubuntu${VERSION_ID}_${TARGETARCH}.deb"
+    case "${p}" in
+        cvmfs)       sha_var="CVMFS_SHA256_${arch_upper}" ;;
+        cvmfs-libs)  sha_var="CVMFS_LIBS_SHA256_${arch_upper}" ;;
+        cvmfs-fuse3) sha_var="CVMFS_FUSE3_SHA256_${arch_upper}" ;;
+    esac
+    fetch \
+        "https://ecsft.cern.ch/dist/cvmfs/cvmfs-${CVMFS_VERSION}/${p}_${CVMFS_VERSION}+ubuntu${VERSION_ID}_${deb_arch}.deb" \
+        "${!sha_var:?missing ${sha_var}}" \
+        "${cvmfs_tmp}/${p}.deb"
 done
-curl -fsSL --retry 5 --retry-delay 5 --retry-connrefused -o "${cvmfs_tmp}/cvmfs-config-none.deb" \
-    "https://ecsft.cern.ch/dist/cvmfs/cvmfs-config/cvmfs-config-none_${CVMFS_CONFIG_VERSION}_all.deb"
+fetch \
+    "https://ecsft.cern.ch/dist/cvmfs/cvmfs-config/cvmfs-config-none_${CVMFS_CONFIG_VERSION}_all.deb" \
+    "${CVMFS_CONFIG_NONE_SHA256:?}" \
+    "${cvmfs_tmp}/cvmfs-config-none.deb"
 apt_get install --yes --no-install-recommends "${cvmfs_tmp}"/*.deb
 rm -rf "${cvmfs_tmp}"
+# Debug-instrumented CVMFS libraries (~32 MB) are unused at runtime.
+rm -f /usr/lib/libcvmfs_*_debug.so*
+# vim-tiny installs /usr/bin/vim.tiny and registers vi; provide vim as well.
+if [ -x /usr/bin/vim.tiny ] && [ ! -e /usr/bin/vim ]; then
+    ln -s /usr/bin/vim.tiny /usr/bin/vim
+fi
 cvmfs2 --version
 
 # Locales, as docker-stacks generates them.
@@ -55,12 +72,20 @@ if id -un "${NB_UID}" >/dev/null 2>&1; then
     userdel --remove "$(id -un "${NB_UID}")"
 fi
 echo "auth requisite pam_deny.so" >> /etc/pam.d/su
-sed -i -e 's/^%admin/#%admin/' -e 's/^%sudo/#%sudo/' /etc/sudoers
 sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc
 useradd --no-log-init --create-home --shell /bin/bash --uid "${NB_UID}" \
     --gid "${NB_GID}" --no-user-group "${NB_USER}"
-# start.sh rewrites /etc/passwd when the container runs as an unknown UID.
+# start.sh registers unknown UIDs in /etc/passwd under Kubernetes foreign-UID
+# deployments (--user <uid>:0, required by PostgreSQL initdb in aidesktop).
+# Safe because every SUID/SGID bit and POSIX file capability is stripped below
+# and start.sh locks NoNewPrivs=1.
 chmod g+w /etc/passwd
+find / -xdev \( -perm -4000 -o -perm -2000 \) -type f -exec chmod u-s,g-s {} +
+while IFS= read -r -d '' f; do
+    if getfattr -n security.capability --only-values "${f}" >/dev/null 2>&1; then
+        setfattr -x security.capability "${f}"
+    fi
+done < <(find / -xdev -type f -perm /111 -print0)
 install -d -o "${NB_UID}" -g "${NB_GID}" "/home/${NB_USER}/.cache" "/home/${NB_USER}/work"
 
 # Interactive bash sources drop-in snippets from components (Lmod, mamba).
@@ -72,5 +97,5 @@ printf '%s\n' '' '# Drop-in snippets from image components.' \
 # This layer's entry in the image's version manifest.
 install -d -m 0755 /opt/scidesktop/manifest.d
 printf '{"id": "%s", "version": "%s", "arch": "%s", "package_snapshot": "%s", "cvmfs": "%s"}\n' \
-    "${ID}" "${VERSION_ID}" "$(uname -m)" "${APT_SNAPSHOT}" "${CVMFS_VERSION}" \
+    "${ID}" "${VERSION_ID}" "$(target-arch uname)" "${APT_SNAPSHOT}" "${CVMFS_VERSION}" \
     > /opt/scidesktop/manifest.d/os-ubuntu.json
