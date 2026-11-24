@@ -307,7 +307,7 @@ def static():
     # components/<component>/needs (one name per line), and every image that
     # holds it holds what it needs, so moving a component between images
     # cannot leave it without, say, the Node.js it runs on.
-    names = set(component_names())
+    names = set(component_names()) - {OS_COMPONENT}
     needs = {}
     for f in sorted(COMPONENTS.glob("*/needs")):
         u = f.parent.name

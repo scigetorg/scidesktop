@@ -1,0 +1,5 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+jupyter-env  # its kernel, server proxy entries and dashboard run in the Jupyter server
+startup  # uses run-as-user and stop_supervisor
+eessi-cvmfs  # its catalog drop-in is read by eessi-catalog

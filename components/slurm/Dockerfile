@@ -38,14 +38,17 @@ RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     && cd /tmp/slurm \
     # Optional features are found only when their development files are
     # installed: here libjwt, json-c and Lua.
-    && ./configure --prefix=/opt/slurm --sysconfdir=/etc/slurm --disable-debug \
+    && { ./configure --prefix=/opt/slurm --sysconfdir=/etc/slurm --disable-debug \
         --without-munge --disable-pam --disable-x11 \
         LDFLAGS="-Wl,-rpath,/opt/slurm/lib/deps" >/tmp/configure.log \
+        || { tail -n 50 /tmp/configure.log >&2; exit 1; }; } \
     && grep -q '^#define HAVE_JWT' config.h \
     && grep -q '^#define HAVE_JSON' config.h \
     && grep -q '^#define HAVE_LUA' config.h \
-    && make -j"$(nproc)" >/tmp/make.log \
-    && make install >/tmp/install.log \
+    && { make -j"$(nproc)" >/tmp/make.log \
+        || { tail -n 50 /tmp/make.log >&2; exit 1; }; } \
+    && { make install >/tmp/install.log \
+        || { tail -n 50 /tmp/install.log >&2; exit 1; }; } \
     && rm -rf /opt/slurm/include /opt/slurm/share \
     && install -d -m 0755 /opt/slurm/lib/deps \
     && cp -L /usr/lib/*/libjwt.so.2 /usr/lib/*/libjansson.so.4 /usr/lib/*/libb64.so.0d /opt/slurm/lib/deps/ \

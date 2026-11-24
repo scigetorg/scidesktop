@@ -24,6 +24,7 @@ echo "os-contract: $(. /etc/os-release && echo "${PRETTY_NAME}") $(uname -m)"
 for b in bash curl setpriv tini usermod groupmod useradd locale-gen; do check "core: ${b}" has "${b}"; done
 check "core: sudo omitted" bash -c '! command -v sudo'
 check "core: CA bundle" test -s /etc/ssl/certs/ca-certificates.crt
+for l in libjson-c.so libssl.so; do check "core: ${l}" lib "${l}"; done
 
 # locale
 check "locale: C.UTF-8" bash -c 'LC_ALL=C.UTF-8 locale 2>&1 | grep -qv "Cannot set"'

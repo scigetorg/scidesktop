@@ -1,0 +1,5 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+lmod  # local modulepath drop-in
+apptainer  # sets APPTAINER_BINDPATH and APPTAINERENV_SUBJECTS_DIR
+startup  # before-notebook.d hook, run-as-user and home-defaults seeding

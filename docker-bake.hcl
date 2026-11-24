@@ -977,8 +977,6 @@ target "workflow-engines-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: microscopy Python analysis kernel (numpy, scipy, scikit-image,
-
 # rclone from conda-forge in /opt/rclone, on PATH. Part of the base image.
 target "rclone" {
   inherits = ["_component"]
@@ -1031,6 +1029,7 @@ target "tcsh-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: microscopy Python analysis kernel (numpy, scipy, scikit-image,
 # tifffile, imagecodecs, zarr, ome-zarr, bioio, dask, xarray). Copied by microdesktop.
 target "microscopy-env" {
   inherits = ["_component"]

@@ -1,5 +1,5 @@
 # Components this one needs in the same image at runtime
-# (test/contract.py S8).
+# (test/contract.py S9).
 jupyter-env  # its Python
 lmod  # the site package for cite
 slurm  # check slurm

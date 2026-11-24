@@ -36,7 +36,11 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     && chmod 0755 /opt/workflow-engines/bin/nextflow \
     # Temurin names the architectures x64 and aarch64, and the files after the
     # release with _ for +.
-    && case "${TARGETARCH}" in amd64) jre_arch=x64 ;; arm64) jre_arch=aarch64 ;; esac \
+    && case "${TARGETARCH}" in \
+        amd64) jre_arch=x64 ;; \
+        arm64) jre_arch=aarch64 ;; \
+        *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
     && jre_sha256="TEMURIN_JRE_SHA256_${TARGETARCH^^}" \
     && jre_file="OpenJDK21U-jre_${jre_arch}_linux_hotspot_${TEMURIN_JRE_VERSION//+/_}.tar.gz" \
     && fetch "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${TEMURIN_JRE_VERSION//+/%2B}/${jre_file}" \
@@ -59,8 +63,8 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     && ln -s /opt/workflow-engines/snakemake/bin/snakemake /out/usr/local/bin/snakemake \
     && smk="$(/opt/workflow-engines/snakemake/bin/python -c 'import importlib.metadata as m; print(m.version("snakemake"))')" \
     && smk_slurm="$(/opt/workflow-engines/snakemake/bin/python -c 'import importlib.metadata as m; print(m.version("snakemake-executor-plugin-slurm"))')" \
-    && printf '{"nextflow": "%s", "nf-test": "%s", "snakemake": "%s", "snakemake-executor-plugin-slurm": "%s"}\n' \
-        "${NEXTFLOW_VERSION}" "${NF_TEST_VERSION}" "${smk}" "${smk_slurm}" \
+    && printf '{"nextflow": "%s", "nf-test": "%s", "temurin-jre": "%s", "snakemake": "%s", "snakemake-executor-plugin-slurm": "%s"}\n' \
+        "${NEXTFLOW_VERSION}" "${NF_TEST_VERSION}" "${TEMURIN_JRE_VERSION}" "${smk}" "${smk_slurm}" \
         > /out/opt/scidesktop/manifest.d/workflow-engines.json \
     && chmod -R a+rX,go-w /opt/workflow-engines /out
 

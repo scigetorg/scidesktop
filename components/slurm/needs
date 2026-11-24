@@ -1,0 +1,4 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+startup  # uses run-as-user and stop_supervisor
+jupyter-env  # shutdown hook registered in the Jupyter server
