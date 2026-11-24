@@ -333,11 +333,177 @@ cat >"${tmp}/bad-desc.eessi.json" <<'EOF'
 EOF
 assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/bad-desc.eessi.json" /usr/local/bin/eessi-catalog sync
 
-# 5) non-HTTPS URL
+# 5) embedded NUL in description or app label (must never cross field boundaries)
+cat >"${tmp}/bad-nul-desc.eessi.json" <<'EOF'
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06"],
+  "tools": {
+    "paraview": {
+      "package": "ParaView",
+      "categories": ["visualization"],
+      "description": "ok\u0000injected",
+      "apps": {
+        "ParaView": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "ParaView/6.0.1-foss-2025b",
+          "exec": ["paraview"],
+          "show_in_menu": true
+        }
+      }
+    }
+  }
+}
+EOF
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/bad-nul-desc.eessi.json" /usr/local/bin/eessi-catalog sync
+
+cat >"${tmp}/bad-nul-label.eessi.json" <<'EOF'
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06"],
+  "tools": {
+    "paraview": {
+      "package": "ParaView",
+      "categories": ["visualization"],
+      "description": "3D visualization",
+      "apps": {
+        "ParaView\u0000Evil": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "ParaView/6.0.1-foss-2025b",
+          "exec": ["paraview"],
+          "show_in_menu": true
+        }
+      }
+    }
+  }
+}
+EOF
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/bad-nul-label.eessi.json" /usr/local/bin/eessi-catalog sync
+
+# 6) non-HTTPS URL
 assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_URLS="http://example.org/eessi.json" /usr/local/bin/eessi-catalog sync
+
+# No abandoned .staging.* directories remain after failed syncs.
+[ -z "$(find "${cache}" -type d -name '.staging.*')" ]
 
 # Previously synced cache remains intact after all rejected sync attempts.
 test -f "${apps_dir}/eessi-paraview.desktop"
+
+# Relative EESSI_CATALOG_FILES paths resolve against cwd so two directories
+# with identically named catalog.json files get distinct cache namespaces.
+mkdir -p "${tmp}/rel-a" "${tmp}/rel-b"
+cp "${tmp}/neuro.eessi.json" "${tmp}/rel-a/catalog.json"
+cp "${tmp}/data.eessi.json" "${tmp}/rel-b/catalog.json"
+(cd "${tmp}/rel-a" && EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="catalog.json" /usr/local/bin/eessi-catalog sync)
+(cd "${tmp}/rel-b" && EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="catalog.json" /usr/local/bin/eessi-catalog sync)
+rel_a_dir="$(cd "${tmp}/rel-a" && EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="catalog.json" /usr/local/bin/eessi-catalog apps-dir)"
+rel_b_dir="$(cd "${tmp}/rel-b" && EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="catalog.json" /usr/local/bin/eessi-catalog apps-dir)"
+[ "${rel_a_dir}" != "${rel_b_dir}" ]
+test -f "${rel_a_dir}/eessi-r-bioconductor.desktop"
+[ ! -e "${rel_a_dir}/eessi-r-cran.desktop" ]
+test -f "${rel_b_dir}/eessi-r-cran.desktop"
+[ ! -e "${rel_b_dir}/eessi-r-bioconductor.desktop" ]
+
+# Immutable snapshot apps-dir: a subsequent same-source refresh that removes a
+# tool updates apps-dir to a new snapshot while keeping the previously registered
+# snapshot intact for already-running Jupyter sessions; a later malformed sync
+# on the same source preserves the current snapshot and leaves no staging dir.
+cp "${tmp}/neuro.eessi.json" "${tmp}/mutable.eessi.json"
+EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/mutable.eessi.json" /usr/local/bin/eessi-catalog sync
+snap1_dir="$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/mutable.eessi.json" /usr/local/bin/eessi-catalog apps-dir)"
+case "${snap1_dir}" in
+    */snapshots/sync-*/applications) ;;
+    *) echo "FAIL: expected immutable snapshot path, got ${snap1_dir}" >&2; exit 1 ;;
+esac
+test -f "${snap1_dir}/eessi-r-bioconductor.desktop"
+cp "${tmp}/data.eessi.json" "${tmp}/mutable.eessi.json"
+EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/mutable.eessi.json" /usr/local/bin/eessi-catalog sync
+snap2_dir="$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/mutable.eessi.json" /usr/local/bin/eessi-catalog apps-dir)"
+[ "${snap1_dir}" != "${snap2_dir}" ]
+test -f "${snap1_dir}/eessi-r-bioconductor.desktop"
+test -f "${snap2_dir}/eessi-r-cran.desktop"
+[ ! -e "${snap2_dir}/eessi-r-bioconductor.desktop" ]
+cp "${tmp}/bad-nul-desc.eessi.json" "${tmp}/mutable.eessi.json"
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/mutable.eessi.json" /usr/local/bin/eessi-catalog sync
+[ "$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/mutable.eessi.json" /usr/local/bin/eessi-catalog apps-dir)" = "${snap2_dir}" ]
+[ -z "$(find "${cache}" -type d -name '.staging.*')" ]
+
+# Concurrent same-source syncs serialize cleanly without snapshot collisions.
+cp "${tmp}/data.eessi.json" "${tmp}/mutable.eessi.json"
+pids=()
+for _ in 1 2 3 4 5 6; do
+    EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/mutable.eessi.json" /usr/local/bin/eessi-catalog sync &
+    pids+=("$!")
+done
+for pid in "${pids[@]}"; do
+    wait "${pid}"
+done
+snap_conc_dir="$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/mutable.eessi.json" /usr/local/bin/eessi-catalog apps-dir)"
+test -f "${snap_conc_dir}/eessi-paraview.desktop"
+test -f "${snap_conc_dir}/eessi-r-cran.desktop"
+[ -z "$(find "${cache}" -type d -name '.staging.*')" ]
+
+# Secondary launcher filenames never overwrite another tool's canonical filename.
+cat >"${tmp}/collision.eessi.json" <<'EOF'
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06", "2023.06"],
+  "tools": {
+    "foo": {
+      "package": "Foo",
+      "categories": ["programming"],
+      "description": "Primary Foo",
+      "apps": {
+        "Foo 2.0 (EESSI/2025.06)": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "Foo/2.0",
+          "exec": ["foo"],
+          "show_in_menu": true
+        },
+        "Foo 1.0 (EESSI/2023.06)": {
+          "backend": "eessi",
+          "stack": "2023.06",
+          "module": "Foo/1.0",
+          "exec": ["foo"],
+          "show_in_menu": true
+        }
+      }
+    },
+    "foo-2023-06-1": {
+      "package": "FooLegacy",
+      "categories": ["programming"],
+      "description": "Distinct tool whose canonical slug matches Foo's first secondary candidate",
+      "apps": {
+        "FooLegacy 1.0 (EESSI/2025.06)": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "FooLegacy/1.0",
+          "exec": ["foolegacy"],
+          "show_in_menu": true
+        }
+      }
+    }
+  }
+}
+EOF
+EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/collision.eessi.json" /usr/local/bin/eessi-catalog sync
+coll_dir="$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/collision.eessi.json" /usr/local/bin/eessi-catalog apps-dir)"
+[ "$(find "${coll_dir}" -maxdepth 1 -name '*.desktop' | wc -l)" -eq 3 ]
+grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- Foo/2\.0 foo$' "${coll_dir}/eessi-foo.desktop"
+grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- FooLegacy/1\.0 foolegacy$' "${coll_dir}/eessi-foo-2023-06-1.desktop"
+grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2023\.06 -- Foo/1\.0 foo$' "${coll_dir}/eessi-foo-2023-06-2.desktop"
 
 # 32-eessi-apps.sh selects the live synced dir when mounted (dropping privileges
 # for both sync and apps-dir when invoked as root), and falls back on error.
