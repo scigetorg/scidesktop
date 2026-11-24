@@ -4,6 +4,13 @@
 set -euo pipefail
 repository=software.eessi.io
 
+assert_fails() {
+    if "$@" >/dev/null 2>&1; then
+        echo "FAIL: expected failure: $*" >&2
+        exit 1
+    fi
+}
+
 # CVMFS client resolves software.eessi.io to EESSI's mirrors and key.
 config="$(cvmfs_config showconfig "${repository}")"
 grep -q '^CVMFS_KEYS_DIR=/etc/cvmfs/keys/eessi\.io ' <<<"${config}"
@@ -28,13 +35,15 @@ test -x /usr/local/bin/before-notebook.d/20-cvmfs
 app_hook=/usr/local/bin/before-notebook.d/32-eessi-apps.sh
 [ -z "$(env -u SCIDESKTOP_APP_DIRS bash -c ". ${app_hook}; echo \"\${SCIDESKTOP_APP_DIRS:-}\"")" ]
 
-# Helpers parse cleanly and reject bad arguments.
+# Helpers parse cleanly and reject bad arguments (including empty --stack).
 bash -n "${hook}" "${app_hook}" /etc/scidesktop/modulepath.d/65-eessi /usr/local/bin/eessi-launch /usr/local/bin/eessi-catalog
-! /usr/local/bin/eessi-launch >/dev/null 2>&1
-! /usr/local/bin/eessi-launch ParaView paraview >/dev/null 2>&1
-! /usr/local/bin/eessi-launch --stack bad ParaView paraview >/dev/null 2>&1
-! /usr/local/bin/eessi-launch --stack 2025.06 'ParaView;id' paraview >/dev/null 2>&1
-! /usr/local/bin/eessi-launch --bogus ParaView paraview >/dev/null 2>&1
+assert_fails /usr/local/bin/eessi-launch
+assert_fails /usr/local/bin/eessi-launch ParaView paraview
+assert_fails /usr/local/bin/eessi-launch --stack bad ParaView paraview
+assert_fails /usr/local/bin/eessi-launch --stack "" ParaView paraview
+assert_fails /usr/local/bin/eessi-launch --stack= ParaView paraview
+assert_fails /usr/local/bin/eessi-launch --stack 2025.06 'ParaView;id' paraview
+assert_fails /usr/local/bin/eessi-launch --bogus ParaView paraview
 
 # eessi-launch honors --stack, exact module names, and fallback to package name.
 tmp="$(mktemp -d)"
@@ -66,9 +75,9 @@ grep -q 'falling back to ParaView' "${tmp}/launch.err"
 
 # Explicit --stack fails instead of silently substituting another stack.
 : >"${tmp}/lmod.log"
-! MOCK_LMOD_LOG="${tmp}/lmod.log" MOCK_LMOD_FAIL="EESSI/2023.06" \
+assert_fails env MOCK_LMOD_LOG="${tmp}/lmod.log" MOCK_LMOD_FAIL="EESSI/2023.06" \
     EESSI_MODULE_ROOT="${tmp}/modroot" EESSI_LMOD_INIT="${tmp}/mock-lmod.sh" \
-    /usr/local/bin/eessi-launch --stack 2023.06 -- ParaView echo nope >/dev/null 2>&1
+    /usr/local/bin/eessi-launch --stack 2023.06 -- ParaView echo nope
 
 # Built-in fallback output when no synced cache exists.
 out="$(EESSI_CACHE_DIR="${tmp}/empty-cache" /usr/local/bin/eessi-catalog)"
@@ -206,29 +215,40 @@ EOF
 cache="${tmp}/cache"
 files="${tmp}/neuro.eessi.json:${tmp}/data.eessi.json"
 EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${files}" /usr/local/bin/eessi-catalog sync
+apps_dir="$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${files}" /usr/local/bin/eessi-catalog apps-dir)"
 
 # Canonical desktop filenames exist, newest stack wins eessi-paraview.desktop,
 # and library-only Biopython creates no launcher.
-test -f "${cache}/current/applications/eessi-paraview.desktop"
-test -f "${cache}/current/applications/eessi-r-cran.desktop"
-test -f "${cache}/current/applications/eessi-r-bioconductor.desktop"
-! test -e "${cache}/current/applications/eessi-biopython.desktop"
-grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- ParaView/6\.0\.1-foss-2025b paraview$' "${cache}/current/applications/eessi-paraview.desktop"
-grep -q '^X-Scidesktop-Category=EESSI$' "${cache}/current/applications/eessi-paraview.desktop"
-grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- R-bundle-CRAN/2025\.11-foss-2025b xfce4-terminal --disable-server --title="R + CRAN 2025\.11 (EESSI/2025\.06)" -x R$' "${cache}/current/applications/eessi-r-cran.desktop"
-grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- R-bundle-Bioconductor/3\.22-foss-2025b-R-4\.5\.2 xfce4-terminal --disable-server --title="R + Bioconductor 3\.22 (EESSI/2025\.06)" -x R$' "${cache}/current/applications/eessi-r-bioconductor.desktop"
+test -f "${apps_dir}/eessi-paraview.desktop"
+test -f "${apps_dir}/eessi-r-cran.desktop"
+test -f "${apps_dir}/eessi-r-bioconductor.desktop"
+[ ! -e "${apps_dir}/eessi-biopython.desktop" ]
+grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- ParaView/6\.0\.1-foss-2025b paraview$' "${apps_dir}/eessi-paraview.desktop"
+grep -q '^X-Scidesktop-Category=EESSI$' "${apps_dir}/eessi-paraview.desktop"
+grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- R-bundle-CRAN/2025\.11-foss-2025b xfce4-terminal --disable-server --title="R + CRAN 2025\.11 (EESSI/2025\.06)" -x R$' "${apps_dir}/eessi-r-cran.desktop"
+grep -q '^Exec=/usr/local/bin/eessi-launch --stack 2025\.06 -- R-bundle-Bioconductor/3\.22-foss-2025b-R-4\.5\.2 xfce4-terminal --disable-server --title="R + Bioconductor 3\.22 (EESSI/2025\.06)" -x R$' "${apps_dir}/eessi-r-bioconductor.desktop"
+[ "$(find "${apps_dir}" -maxdepth 1 -name '*.desktop' | wc -l)" -eq 4 ]
 
-# Exactly 4 launchers generated (ParaView 2025.06 deduplicated, ParaView 2023.06, R+CRAN, R+Bioconductor).
-[ "$(find "${cache}/current/applications" -maxdepth 1 -name '*.desktop' | wc -l)" -eq 4 ]
+# Shared-home isolation: syncing a different source set into the same cache
+# keeps the first source set's launchers intact.
+EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/data.eessi.json" /usr/local/bin/eessi-catalog sync
+data_apps_dir="$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/data.eessi.json" /usr/local/bin/eessi-catalog apps-dir)"
+[ "${data_apps_dir}" != "${apps_dir}" ]
+test -f "${apps_dir}/eessi-r-bioconductor.desktop"
+test -f "${data_apps_dir}/eessi-r-cran.desktop"
+[ ! -e "${data_apps_dir}/eessi-r-bioconductor.desktop" ]
+
+# Unsynced source set falls back to static /etc/scidesktop/eessi-apps.d.
+[ "$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/neuro.eessi.json" /usr/local/bin/eessi-catalog apps-dir)" = "/etc/scidesktop/eessi-apps.d" ]
 
 # Live catalog output uses the synced JSON.
 synced_out="$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${files}" /usr/local/bin/eessi-catalog)"
 grep -q 'ParaView 6\.0\.1 (EESSI/2025\.06)' <<<"${synced_out}"
 grep -q 'Biopython \[2025\.06\]: Biopython/1\.86-gfbf-2025b' <<<"${synced_out}"
 
-# Malformed catalog JSON (unsafe exec arg, missing explicitSelectionRequired, non-HTTPS URL)
-# is rejected and preserves the previously synced valid snapshot.
-cat >"${tmp}/bad.eessi.json" <<'EOF'
+# Malformed catalog inputs are strictly rejected and preserve existing caches:
+# 1) unsafe exec arg
+cat >"${tmp}/bad-exec.eessi.json" <<'EOF'
 {
   "schemaVersion": 1,
   "backend": "eessi",
@@ -252,24 +272,84 @@ cat >"${tmp}/bad.eessi.json" <<'EOF'
   }
 }
 EOF
-! EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/bad.eessi.json" /usr/local/bin/eessi-catalog sync 2>/dev/null
-! EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_URLS="http://example.org/eessi.json" /usr/local/bin/eessi-catalog sync 2>/dev/null
-test -f "${cache}/current/applications/eessi-paraview.desktop"
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/bad-exec.eessi.json" /usr/local/bin/eessi-catalog sync
 
-# Source mismatch falls back to static /etc/scidesktop/eessi-apps.d instead of stale cache.
-[ "$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/neuro.eessi.json" /usr/local/bin/eessi-catalog apps-dir)" = "/etc/scidesktop/eessi-apps.d" ]
-[ "$(EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${files}" /usr/local/bin/eessi-catalog apps-dir)" = "${cache}/current/applications" ]
+# 2) multi-document stream (invalid JSON object followed by valid one)
+cat "${tmp}/bad-exec.eessi.json" "${tmp}/data.eessi.json" >"${tmp}/multi-doc.eessi.json"
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/multi-doc.eessi.json" /usr/local/bin/eessi-catalog sync
+
+# 3) trailing newline in exec argument (Oniguruma $ vs \z regression)
+cat >"${tmp}/bad-newline.eessi.json" <<'EOF'
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06"],
+  "tools": {
+    "evil": {
+      "package": "Evil",
+      "categories": ["programming"],
+      "apps": {
+        "Evil": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "Evil/1.0",
+          "exec": ["paraview\n"],
+          "show_in_menu": true
+        }
+      }
+    }
+  }
+}
+EOF
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/bad-newline.eessi.json" /usr/local/bin/eessi-catalog sync
+
+# 4) numeric description (must be rejected upfront, never partial render)
+cat >"${tmp}/bad-desc.eessi.json" <<'EOF'
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06"],
+  "tools": {
+    "paraview": {
+      "package": "ParaView",
+      "categories": ["visualization"],
+      "description": 123,
+      "apps": {
+        "ParaView": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "ParaView/6.0.1-foss-2025b",
+          "exec": ["paraview"],
+          "show_in_menu": true
+        }
+      }
+    }
+  }
+}
+EOF
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/bad-desc.eessi.json" /usr/local/bin/eessi-catalog sync
+
+# 5) non-HTTPS URL
+assert_fails env EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_URLS="http://example.org/eessi.json" /usr/local/bin/eessi-catalog sync
+
+# Previously synced cache remains intact after all rejected sync attempts.
+test -f "${apps_dir}/eessi-paraview.desktop"
 
 # 32-eessi-apps.sh selects the live synced dir when mounted (dropping privileges
-# when invoked as root), and falls back when refresh fails.
+# for both sync and apps-dir when invoked as root), and falls back on error.
 chmod 0755 "${tmp}"
 chmod 0644 "${tmp}/neuro.eessi.json" "${tmp}/data.eessi.json"
 install -d -m 0755 -o jovyan "${tmp}/hook-cache"
 mounted_dirs="$(env -u SCIDESKTOP_APP_DIRS EESSI_MODULE_ROOT="${tmp}/modroot" \
     EESSI_CACHE_DIR="${tmp}/hook-cache" EESSI_CATALOG_FILES="${files}" \
     bash -c ". ${app_hook}; echo \"\${SCIDESKTOP_APP_DIRS}\"")"
-[ "${mounted_dirs}" = "/opt/sciget/applications:${tmp}/hook-cache/current/applications" ]
-[ "$(stat -c '%U' "${tmp}/hook-cache/current/applications/eessi-paraview.desktop")" = "jovyan" ]
+expected_hook_dir="$(EESSI_CACHE_DIR="${tmp}/hook-cache" EESSI_CATALOG_FILES="${files}" /usr/local/bin/eessi-catalog apps-dir)"
+[ "${mounted_dirs}" = "/opt/sciget/applications:${expected_hook_dir}" ]
+[ "$(stat -c '%U' "${expected_hook_dir}/eessi-paraview.desktop")" = "jovyan" ]
 
 install -d -m 0755 -o jovyan "${tmp}/fail-cache"
 fallback_dirs="$(env -u SCIDESKTOP_APP_DIRS EESSI_MODULE_ROOT="${tmp}/modroot" \

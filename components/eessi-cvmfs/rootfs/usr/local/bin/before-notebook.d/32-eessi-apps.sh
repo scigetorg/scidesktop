@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by start.sh after 20-cvmfs and before Jupyter starts:
 # refreshes curated EESSI catalog launchers (fail-soft) and exposes EESSI
 # desktop launchers (live-synced cache or built-in /etc/scidesktop/eessi-apps.d
@@ -15,37 +16,42 @@ if [ "${SCIDESKTOP_CVMFS_MODE:-external}" != disabled ] \
         _eessi_home="${HOME}"
     fi
     _eessi_cache="${EESSI_CACHE_DIR:-${_eessi_home}/.cache/scidesktop/eessi}"
+    _eessi_static_dir="${EESSI_STATIC_APPS_DIR:-/etc/scidesktop/eessi-apps.d}"
     _eessi_env=("EESSI_CACHE_DIR=${_eessi_cache}")
     [ -n "${EESSI_CATALOG_FILES:-}" ] && _eessi_env+=("EESSI_CATALOG_FILES=${EESSI_CATALOG_FILES}")
     [ -n "${EESSI_CATALOG_URLS:-}" ] && _eessi_env+=("EESSI_CATALOG_URLS=${EESSI_CATALOG_URLS}")
     [ -n "${SCIGET_CATALOGS_FILE:-}" ] && _eessi_env+=("SCIGET_CATALOGS_FILE=${SCIGET_CATALOGS_FILE}")
     [ -n "${EESSI_STATIC_APPS_DIR:-}" ] && _eessi_env+=("EESSI_STATIC_APPS_DIR=${EESSI_STATIC_APPS_DIR}")
 
-    if [ "${SCIDESKTOP_EESSI_CATALOG_REFRESH:-yes}" = yes ] && [ -x /usr/local/bin/eessi-catalog ]; then
-        if [ "$(/usr/bin/id -u)" -eq 0 ]; then
-            if [ -x /opt/scidesktop/run-as-user ]; then
-                /opt/scidesktop/run-as-user /usr/bin/env "${_eessi_env[@]}" \
-                    timeout 10 /usr/local/bin/eessi-catalog sync \
-                    || echo "[eessi] catalog refresh failed; using cached or built-in launchers" >&2
-            else
-                /usr/bin/env "HOME=${_eessi_home}" "USER=${_eessi_user}" "${_eessi_env[@]}" \
-                    /usr/bin/setpriv \
-                    --reuid "$(/usr/bin/id -u "${_eessi_user}")" --regid "$(/usr/bin/id -g "${_eessi_user}")" \
-                    --init-groups --no-new-privs --inh-caps -all --ambient-caps -all -- \
-                    timeout 10 /usr/local/bin/eessi-catalog sync \
-                    || echo "[eessi] catalog refresh failed; using cached or built-in launchers" >&2
-            fi
+    # Helper runner that drops privileges to NB_USER when sourced as root so
+    # root never reads or writes user-controlled cache paths.
+    _eessi_run_cmd=()
+    if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+        if [ -x /opt/scidesktop/run-as-user ]; then
+            _eessi_run_cmd=(/opt/scidesktop/run-as-user /usr/bin/env "${_eessi_env[@]}")
         else
-            /usr/bin/env "${_eessi_env[@]}" timeout 10 /usr/local/bin/eessi-catalog sync \
-                || echo "[eessi] catalog refresh failed; using cached or built-in launchers" >&2
+            _eessi_run_cmd=(
+                /usr/bin/env "HOME=${_eessi_home}" "USER=${_eessi_user}" "${_eessi_env[@]}"
+                /usr/bin/setpriv
+                --reuid "$(/usr/bin/id -u "${_eessi_user}")" --regid "$(/usr/bin/id -g "${_eessi_user}")"
+                --init-groups --no-new-privs --inh-caps -all --ambient-caps -all --
+            )
         fi
+    else
+        _eessi_run_cmd=(/usr/bin/env "${_eessi_env[@]}")
+    fi
+
+    if [ "${SCIDESKTOP_EESSI_CATALOG_REFRESH:-yes}" = yes ] && [ -x /usr/local/bin/eessi-catalog ]; then
+        "${_eessi_run_cmd[@]}" timeout 10 /usr/local/bin/eessi-catalog sync \
+            || echo "[eessi] catalog refresh failed; using cached or built-in launchers" >&2
     fi
 
     _eessi_selected_dir=""
     if [ -x /usr/local/bin/eessi-catalog ]; then
-        _eessi_selected_dir="$(/usr/bin/env "${_eessi_env[@]}" /usr/local/bin/eessi-catalog apps-dir 2>/dev/null || true)"
-    elif [ -d "${EESSI_STATIC_APPS_DIR:-/etc/scidesktop/eessi-apps.d}" ]; then
-        _eessi_selected_dir="${EESSI_STATIC_APPS_DIR:-/etc/scidesktop/eessi-apps.d}"
+        _eessi_selected_dir="$("${_eessi_run_cmd[@]}" timeout 5 /usr/local/bin/eessi-catalog apps-dir 2>/dev/null || true)"
+    fi
+    if [ -z "${_eessi_selected_dir}" ] && [ -d "${_eessi_static_dir}" ]; then
+        _eessi_selected_dir="${_eessi_static_dir}"
     fi
 
     if [ -n "${_eessi_selected_dir}" ] && [ -d "${_eessi_selected_dir}" ]; then
@@ -56,5 +62,5 @@ if [ "${SCIDESKTOP_CVMFS_MODE:-external}" != disabled ] \
         esac
         export SCIDESKTOP_APP_DIRS="${_eessi_app_dirs}"
     fi
-    unset _eessi_user _eessi_home _eessi_cache _eessi_env _eessi_selected_dir _eessi_app_dirs
+    unset _eessi_user _eessi_home _eessi_cache _eessi_static_dir _eessi_env _eessi_run_cmd _eessi_selected_dir _eessi_app_dirs
 fi
