@@ -33,5 +33,6 @@ COPY --from=build /out/ /
 FROM os AS test
 COPY --from=component / /
 USER ${NB_UID}
-RUN rclone version | head -1 | grep -q "rclone v" \
+RUN out="$(rclone version)" \
+    && grep -q "^rclone v" <<<"${out}" \
     && test -r /opt/scidesktop/manifest.d/rclone.json

@@ -36,7 +36,8 @@ COPY --from=build /out/ /
 FROM os AS test
 COPY --from=component / /
 USER ${NB_UID}
-RUN aria2c --version | head -1 | grep -q "aria2 version" \
+RUN out="$(aria2c --version)" \
+    && grep -q "^aria2 version" <<<"${out}" \
     && [ "$(readlink -f /opt/aria2/ssl/cert.pem)" = /etc/ssl/certs/ca-certificates.crt ] \
     && test -s /opt/aria2/ssl/cert.pem \
     && test -r /opt/scidesktop/manifest.d/aria2.json

@@ -33,5 +33,6 @@ COPY --from=build /out/ /
 FROM os AS test
 COPY --from=component / /
 USER ${NB_UID}
-RUN gh --version | head -1 | grep -q "gh version" \
+RUN out="$(gh --version)" \
+    && grep -q "^gh version" <<<"${out}" \
     && test -r /opt/scidesktop/manifest.d/gh.json

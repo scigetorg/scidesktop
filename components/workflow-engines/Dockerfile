@@ -48,7 +48,8 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     && install -d -m 0755 /opt/workflow-engines/jre \
     && tar -xzf /tmp/jre.tar.gz -C /opt/workflow-engines/jre --strip-components=1 \
     && rm -f /tmp/jre.tar.gz \
-    && /opt/workflow-engines/jre/bin/java -version 2>&1 | grep -q '"21\.' \
+    && java_ver="$(/opt/workflow-engines/jre/bin/java -version 2>&1)" \
+    && grep -q '"21\.' <<<"${java_ver}" \
     && for t in java keytool rmiregistry; do ln -s "/opt/workflow-engines/jre/bin/${t}" "/out/usr/local/bin/${t}"; done \
     && fetch "https://github.com/askimed/nf-test/releases/download/v${NF_TEST_VERSION:?}/nf-test-${NF_TEST_VERSION}.tar.gz" \
         "${NF_TEST_SHA256:?}" /tmp/nf-test.tar.gz \
@@ -101,8 +102,8 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     set -eu \
     && HOME="$(mktemp -d)" && export HOME \
     && [ "$(readlink -f "$(command -v java)")" = /opt/workflow-engines/jre/bin/java ] \
-    && nextflow -version | grep -q "version" \
-    && nf-test version | grep -qi "nf-test" \
+    && nf_ver="$(nextflow -version)" && grep -q "version" <<<"${nf_ver}" \
+    && nft_ver="$(nf-test version)" && grep -qi "nf-test" <<<"${nft_ver}" \
     && snakemake --version \
     && snakemake --executor slurm --help >/dev/null \
     && printf 'rule all:\n    output: "done.txt"\n    shell: "echo smk-ok > {output}"\n' > "${HOME}/Snakefile" \
