@@ -7,6 +7,7 @@ reach T3 itself. T3 listens on loopback only. Everything it keeps is in its
 data directory, ~/.t3 unless T3CODE_HOME says otherwise.
 """
 
+import copy
 import json
 import os
 import subprocess
@@ -52,14 +53,91 @@ def add_defaults(settings, defaults):
     added = False
     for key, value in defaults.items():
         if key not in settings:
-            settings[key] = value
+            settings[key] = copy.deepcopy(value)
             added = True
         elif isinstance(settings[key], dict) and isinstance(value, dict):
             added = add_defaults(settings[key], value) or added
     return added
 
 
+def _provider_instance_user_owned(instance_id, seed, instances, providers):
+    """True when the user already owns this provider instance or driver."""
+    driver = seed.get("driver")
+    if instance_id in instances:
+        return True
+    if any(instance.get("driver") == driver for instance in instances.values()):
+        return True
+    if driver not in providers:
+        return False
+    legacy = providers[driver]
+    # T3 writes {"enabled": false} under providers.<driver> for drivers it ships
+    # disabled by default; treat that bookkeeping (and an empty dict) as inert
+    # when a seed explicitly enables the driver.
+    if seed.get("enabled") is True and legacy in ({}, {"enabled": False}):
+        return False
+    # Earlier images wrote only {"binaryPath": ...} under providers.codex.
+    seed_config = seed.get("config")
+    if (
+        driver == "codex"
+        and isinstance(seed_config, dict)
+        and isinstance(seed_config.get("binaryPath"), str)
+        and legacy == {"binaryPath": seed_config["binaryPath"]}
+    ):
+        return False
+    return True
+
+
+def _prepare_provider_instance(instance_id, seed, instances, providers):
+    """Return an instance dict to write for `instance_id`, or None to skip."""
+    if not isinstance(seed, dict) or not isinstance(seed.get("driver"), str):
+        return None
+    driver = seed["driver"]
+    seed_config = seed.get("config")
+    # Upgrade an earlier bundled Codex instance that only recorded binaryPath in
+    # place so T3 0.1.5 probes the installed CLI instead of switching to managed
+    # mode, while keeping explicit setup modes and custom instances untouched.
+    if (
+        isinstance(seed_config, dict)
+        and isinstance(seed_config.get("setupMode"), str)
+        and isinstance(instances.get(instance_id), dict)
+    ):
+        current = instances[instance_id]
+        base_config = {k: v for k, v in seed_config.items() if k != "setupMode"}
+        previous = {"driver": driver, "config": base_config}
+        if current.get("enabled") is True:
+            previous["enabled"] = True
+        if current == previous:
+            return {**current, **copy.deepcopy(seed)}
+    if _provider_instance_user_owned(instance_id, seed, instances, providers):
+        return None
+    return copy.deepcopy(seed)
+
+
+def apply_provider_instance_defaults(settings, seeds):
+    """Seed `providerInstances` entries without overwriting user configuration."""
+    if not isinstance(seeds, dict):
+        return False
+    instances = settings.get("providerInstances", {})
+    providers = settings.get("providers", {})
+    if not (
+        isinstance(instances, dict)
+        and isinstance(providers, dict)
+        and all(isinstance(instance, dict) for instance in instances.values())
+    ):
+        return False
+    seeded = {}
+    for instance_id, seed in seeds.items():
+        prepared = _prepare_provider_instance(instance_id, seed, instances, providers)
+        if prepared is not None:
+            seeded[instance_id] = prepared
+    if not seeded:
+        return False
+    settings["providerInstances"] = {**instances, **seeded}
+    return True
+
+
 def apply_settings_defaults(base, defaults_dir=SETTINGS_DEFAULTS):
+    base.mkdir(mode=0o700, parents=True, exist_ok=True)
     userdata = base / "userdata"
     userdata.mkdir(mode=0o700, exist_ok=True)
     file = userdata / "settings.json"
@@ -79,7 +157,12 @@ def apply_settings_defaults(base, defaults_dir=SETTINGS_DEFAULTS):
             log(f"ignoring {defaults_file}: {error}")
             continue
         if isinstance(defaults, dict):
-            added = add_defaults(settings, defaults) or added
+            top_level = {k: v for k, v in defaults.items() if k != "providerInstances"}
+            added = add_defaults(settings, top_level) or added
+            if "providerInstances" in defaults:
+                added = apply_provider_instance_defaults(
+                    settings, defaults["providerInstances"]
+                ) or added
     if added:
         write_private(file, json.dumps(settings, indent=2) + "\n")
 
