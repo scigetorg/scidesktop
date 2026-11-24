@@ -97,6 +97,7 @@ RUN set -e \
     # The server settings are loaded, not just installed.
     && cfg=$(jupyter server --show-config 2>/dev/null) \
     && grep -q 'allow_hidden = True' <<<"${cfg}" \
+    && grep -q 'kernel_info_timeout = 180' <<<"${cfg}" \
     && grep -q "terminado_settings = {'shell_command': \['/bin/bash', '-l'\]}" <<<"${cfg}" \
     && grep -q 'check_for_updates_class = .*NeverCheckForUpdate' <<<"${cfg}" \
     && test ! -d /opt/conda/pkgs -o -z "$(ls -A /opt/conda/pkgs 2>/dev/null | grep -v -E '^(cache|urls|urls.txt)$')" \

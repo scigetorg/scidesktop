@@ -2,6 +2,9 @@
   "FileContentsManager": {
     "allow_hidden": true
   },
+  "MappingKernelManager": {
+    "kernel_info_timeout": 180
+  },
   "ServerApp": {
     "terminado_settings": {
       "shell_command": ["/bin/bash", "-l"]
