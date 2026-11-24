@@ -19,6 +19,9 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
     micromamba create --yes --root-prefix /tmp/mamba-root --prefix /opt/aria2 \
         --file "/tmp/$(target-arch conda).lock" \
     && rm -rf /tmp/mamba-root /opt/aria2/conda-meta/history /opt/aria2/share/man /opt/aria2/share/doc \
+    # Point conda-forge's OpenSSL bundle at the OS trust store so institutional
+    # CAs added through update-ca-certificates reach aria2c.
+    && ln -sf /etc/ssl/certs/ca-certificates.crt /opt/aria2/ssl/cacert.pem \
     && install -d -m 0755 /out/usr/local/bin /out/opt/scidesktop/manifest.d \
     && ln -s /opt/aria2/bin/aria2c /out/usr/local/bin/aria2c \
     && version="$(ls /opt/aria2/conda-meta | sed -n 's/^aria2-\([^-]*\)-.*\.json$/\1/p')" \
@@ -34,4 +37,6 @@ FROM os AS test
 COPY --from=component / /
 USER ${NB_UID}
 RUN aria2c --version | head -1 | grep -q "aria2 version" \
+    && [ "$(readlink -f /opt/aria2/ssl/cert.pem)" = /etc/ssl/certs/ca-certificates.crt ] \
+    && test -s /opt/aria2/ssl/cert.pem \
     && test -r /opt/scidesktop/manifest.d/aria2.json

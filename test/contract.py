@@ -297,7 +297,7 @@ def static():
             if copied_in_built.count(u) != 1:
                 fail("S6", f"{rel(df)}: component {u} is a context of the {name} target but copied "
                            f"{copied_in_built.count(u)} times in the built stage")
-            # S8: a component brings its own Jupyter registration.
+        # S8: a component brings its own Jupyter registration.
         for ins, text in instructions(df):
             if ins == "ENV" and JUPYTER_ENV.search(text):
                 fail("S8", f"{rel(df)}: sets a Jupyter path; a component registers itself through "
