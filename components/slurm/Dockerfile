@@ -52,10 +52,16 @@ RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     && { make install >/tmp/install.log \
         || { tail -n 50 /tmp/install.log >&2; exit 1; }; } \
     && rm -rf /opt/slurm/include /opt/slurm/share \
-    && install -d -m 0755 /opt/slurm/share/licenses/slurm \
+    && install -d -m 0755 /opt/slurm/share/licenses/slurm /opt/slurm/lib/deps \
     && install -m 0644 /tmp/slurm/COPYING /tmp/slurm/LICENSE.OpenSSL /opt/slurm/share/licenses/slurm/ \
-    && install -d -m 0755 /opt/slurm/lib/deps \
-    && cp -L /usr/lib/*/libjwt.so.2 /usr/lib/*/libjansson.so.4 /usr/lib/*/libb64.so.0d /usr/lib/*/libmunge.so.2 /opt/slurm/lib/deps/ \
+    && for lib in /usr/lib/*/libjwt.so.2 /usr/lib/*/libjansson.so.4 /usr/lib/*/libb64.so.0d /usr/lib/*/libmunge.so.2; do \
+        cp -L "${lib}" /opt/slurm/lib/deps/; \
+        pkg="$({ dpkg-query -S "$(readlink -f "${lib}")" 2>/dev/null || dpkg-query -S "${lib}"; } | head -n 1)"; \
+        pkg="${pkg%%:*}"; \
+        [ -n "${pkg}" ]; \
+        install -d -m 0755 "/opt/slurm/share/licenses/${pkg}"; \
+        install -m 0644 "/usr/share/doc/${pkg}/copyright" "/opt/slurm/share/licenses/${pkg}/copyright"; \
+    done \
     && patchelf --set-rpath '$ORIGIN' /opt/slurm/lib/deps/libjwt.so.2 \
     && find /opt/slurm \( -name '*.a' -o -name '*.la' \) -delete \
     && { find /opt/slurm -type f \( -perm -u+x -o -name '*.so*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true; } \

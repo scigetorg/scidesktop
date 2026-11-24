@@ -120,5 +120,6 @@ docker buildx bake slurm-test
 
 Slurm is GPL-2.0-or-later, built from unmodified upstream source (`SLURM_TAG`
 in `docker-bake.hcl`), with its upstream notices (`COPYING`, `LICENSE.OpenSSL`)
-installed under `/opt/slurm/share/licenses/slurm/`. The start logic and the
-preloaded library are this repository's.
+and the copyright notices for its bundled libraries (`libjwt`, `jansson`,
+`libb64`, `libmunge`) installed under `/opt/slurm/share/licenses/`. The start
+logic and the preloaded library are this repository's.

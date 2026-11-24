@@ -72,6 +72,9 @@ test -r /opt/slurm/lib/slurm/auth_munge.so
 test -r /opt/slurm/lib/slurm/cred_munge.so
 test -r /opt/slurm/share/licenses/slurm/COPYING
 test -r /opt/slurm/share/licenses/slurm/LICENSE.OpenSSL
+for pkg in libjwt libjansson libb64 libmunge; do
+    compgen -G "/opt/slurm/share/licenses/${pkg}*/copyright" >/dev/null
+done
 munge_conf="$(mktemp)"
 cat > "${munge_conf}" <<'CONF'
 ClusterName=external
@@ -83,7 +86,7 @@ PartitionName=p1 Nodes=n1 Default=YES State=UP
 CONF
 munge_err="$(SLURM_CONF="${munge_conf}" sinfo 2>&1 || true)"
 rm -f "${munge_conf}"
-if grep -qiE "unable to (find|load) plugin|cannot open shared object" <<<"${munge_err}"; then
+if grep -qiE "unable to (find|load) plugin|cannot (find|load) .*plugin|cannot open shared object|undefined symbol|plugin_load_and_link" <<<"${munge_err}"; then
     echo "MUNGE plugin failed to load: ${munge_err}" >&2
     exit 1
 fi
