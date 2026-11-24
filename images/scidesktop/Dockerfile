@@ -38,6 +38,7 @@ COPY --link --from=acp-adapters / /
 COPY --link --from=antigravity-acp / /
 COPY --link --from=t3-code / /
 COPY --link --from=t3-connect / /
+COPY --link --from=rclone / /
 
 LABEL maintainer="Sciget project <sciget.org>" \
       org.opencontainers.image.title="scidesktop" \

@@ -1,0 +1,7 @@
+# rclone from conda-forge, in its own prefix (/opt/rclone). Regenerate the locks
+# with ./lock after changing the pin.
+name: rclone
+channels:
+  - conda-forge
+dependencies:
+  - rclone==1.76.0

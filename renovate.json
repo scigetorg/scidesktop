@@ -633,6 +633,16 @@
       ]
     },
     {
+      "description": "Component rclone: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/rclone/**"
+      ],
+      "groupName": "component rclone",
+      "addLabels": [
+        "component:rclone"
+      ]
+    },
+    {
       "description": "Component slurm: its updates arrive together and run its own test.",
       "matchFileNames": [
         "components/slurm/**"

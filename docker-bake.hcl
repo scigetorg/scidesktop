@@ -271,6 +271,7 @@ group "test" {
     "datascience-env-test",
     "neuroimaging-env-test",
     "neurodesk-compat-test",
+    "rclone-test",
   ]
 }
 
@@ -974,6 +975,20 @@ target "workflow-engines-test" {
 }
 
 # Optional: microscopy Python analysis kernel (numpy, scipy, scikit-image,
+
+# rclone from conda-forge in /opt/rclone, on PATH. Part of the base image.
+target "rclone" {
+  inherits = ["_component"]
+  context  = "components/rclone"
+  target   = "component"
+}
+
+target "rclone-test" {
+  inherits = ["rclone"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # tifffile, imagecodecs, zarr, ome-zarr, bioio, dask, xarray). Copied by microdesktop.
 target "microscopy-env" {
   inherits = ["_component"]
@@ -1069,6 +1084,7 @@ target "scidesktop" {
     antigravity-acp       = "target:antigravity-acp"
     t3-code               = "target:t3-code"
     t3-connect            = "target:t3-connect"
+    rclone                = "target:rclone"
   }
   tags   = [IMAGE]
   output = ["type=docker"]
