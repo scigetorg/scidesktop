@@ -15,10 +15,12 @@ once in its bundle. The component's test runs it over the installed client, so
 a T3 release that moves an anchor fails the build, not a session.
 """
 
+import errno
 import json
 import logging
 import os
 import re
+import select
 import signal
 import sys
 import time
@@ -256,28 +258,70 @@ def redact_tickets():
     logging.setLogRecordFactory(record_factory)
 
 
-def _find_t3_pids(base):
-    """Return PIDs of running `t3 serve` processes for `base`."""
+def _proc_state_and_ppid(pid):
+    """Return `(state, ppid)` from `/proc/<pid>/stat`, or `(None, None)`."""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()
+        return fields[0], int(fields[1])
+    except (OSError, IndexError, ValueError):
+        return None, None
+
+
+def _matches_t3_serve(pid, target_base, executable):
+    """True when `pid` is a `t3 serve` process for `target_base`."""
+    try:
+        argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+    except OSError:
+        return False
+    if len(argv) < 4 or argv[0] != executable or argv[1] != b"serve":
+        return False
+    return any(
+        argv[i] == b"--base-dir" and argv[i + 1] == target_base
+        for i in range(2, len(argv) - 1)
+    )
+
+
+def _open_own_t3_children(base, executable=b"/opt/t3-code/app/t3"):
+    """Pin direct child `t3 serve` processes of this process for `base`.
+
+    Only children whose PPID is `os.getpid()` are matched, so another process
+    loading this config (such as `jupyter server --show-config`) never signals
+    a live T3 server started by the notebook server. Where supported, each
+    child is pinned with `os.pidfd_open` before re-verifying `/proc` so a
+    recycled PID cannot be signaled.
+    """
+    my_pid = os.getpid()
     target = str(base).encode()
-    pids = []
+    if isinstance(executable, str):
+        executable = executable.encode()
+    pinned = []
     for entry in Path("/proc").iterdir():
         if not entry.name.isdigit():
             continue
-        try:
-            argv = (entry / "cmdline").read_bytes().split(b"\0")
-        except OSError:
+        pid = int(entry.name)
+        state, ppid = _proc_state_and_ppid(pid)
+        if ppid != my_pid or state in (None, "Z"):
             continue
-        if len(argv) < 4 or argv[0] != b"/opt/t3-code/app/t3" or argv[1] != b"serve":
+        pidfd = None
+        if hasattr(os, "pidfd_open"):
+            try:
+                pidfd = os.pidfd_open(pid, 0)
+            except OSError as error:
+                if error.errno not in (errno.ENOSYS, errno.EPERM):
+                    continue
+        # Re-verify after pinning the pidfd so a PID recycled before pidfd_open
+        # is discarded immediately.
+        state, ppid = _proc_state_and_ppid(pid)
+        if ppid != my_pid or state in (None, "Z") or not _matches_t3_serve(pid, target, executable):
+            if pidfd is not None:
+                os.close(pidfd)
             continue
-        for i in range(2, len(argv) - 1):
-            if argv[i] == b"--base-dir" and argv[i + 1] == target:
-                pids.append(int(entry.name))
-                break
-    return pids
+        pinned.append((pid, pidfd))
+    return pinned
 
 
-def stop_server(seconds=20):
-    """Stop this session's T3 Code server and wait for it to close its state.
+def stop_server(seconds=20, base=None, executable=b"/opt/t3-code/app/t3"):
+    """Stop this process's child T3 Code server and wait for it to close its state.
 
     Registered with atexit by jupyter_server_config.d/t3-code.py: simpervisor
     forwards SIGTERM without waiting, and the container ends as soon as the
@@ -285,27 +329,43 @@ def stop_server(seconds=20):
     stopping child provider servers (such as opencode serve) and checkpointing
     its SQLite WAL.
     """
-    pids = _find_t3_pids(base_dir())
-    if not pids:
+    pinned = _open_own_t3_children(base_dir() if base is None else base, executable=executable)
+    if not pinned:
         return
-    for pid in pids:
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except OSError:
-            pass
-    deadline = time.monotonic() + seconds
-    while pids and time.monotonic() < deadline:
-        alive = []
-        for pid in pids:
+    try:
+        for pid, pidfd in pinned:
             try:
-                state = Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()[0]
+                if pidfd is not None and hasattr(signal, "pidfd_send_signal"):
+                    signal.pidfd_send_signal(pidfd, signal.SIGTERM)
+                else:
+                    os.kill(pid, signal.SIGTERM)
             except OSError:
-                continue
-            if state != "Z":
-                alive.append(pid)
-        pids = alive
-        if pids:
-            time.sleep(0.1)
+                pass
+        deadline = time.monotonic() + seconds
+        pidfd_list = [fd for _, fd in pinned if fd is not None]
+        fallback_pids = [pid for pid, fd in pinned if fd is None]
+        while (pidfd_list or fallback_pids) and time.monotonic() < deadline:
+            remaining = max(0.0, deadline - time.monotonic())
+            if pidfd_list:
+                timeout = min(remaining, 0.1) if fallback_pids else remaining
+                ready, _, _ = select.select(pidfd_list, [], [], timeout)
+                if ready:
+                    ready_set = set(ready)
+                    pidfd_list = [fd for fd in pidfd_list if fd not in ready_set]
+            elif fallback_pids:
+                time.sleep(min(remaining, 0.1))
+            if fallback_pids:
+                fallback_pids = [
+                    pid for pid in fallback_pids
+                    if _proc_state_and_ppid(pid)[0] not in (None, "Z")
+                ]
+    finally:
+        for _, pidfd in pinned:
+            if pidfd is not None:
+                try:
+                    os.close(pidfd)
+                except OSError:
+                    pass
 
 
 def server_entry():

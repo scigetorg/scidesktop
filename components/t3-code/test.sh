@@ -264,14 +264,90 @@ if grep -q 'wsTicket=[^[]' "${work}/jupyter.log"; then
     exit 1
 fi
 
-# When the notebook server stops, T3 stops with it and closes its database.
+# Running a separate Jupyter CLI command that loads this config while T3 is live
+# must not signal or stop the active T3 server.
+"${python}" -m jupyter server --show-config >/dev/null 2>&1
+if [ ! -e "/proc/${t3_pid}" ] || [ ! -s "${HOME}/.t3/userdata/server-runtime.json" ]; then
+    echo "jupyter server --show-config stopped the live T3 Code server (PID ${t3_pid})" >&2
+    exit 1
+fi
+echo "separate jupyter CLI process left live T3 Code untouched"
+
+# stop_server() waits for a slow direct child of this process and leaves an
+# unrelated process with the same --base-dir untouched (e.g. a sibling
+# `jupyter server --show-config` exiting while T3 is live).
+PYTHONPATH="${lib}" "${python}" - "${work}" <<'PYTHON'
+import json, os, pathlib, signal, subprocess, sys, time
+import t3_code_proxy as proxy
+
+work = pathlib.Path(sys.argv[1])
+base = work / "stop-base"
+base.mkdir()
+serve_script = work / "serve"
+serve_script.write_text(
+    "import pathlib, signal, sys, time\n"
+    "marker = pathlib.Path(sys.argv[-1])\n"
+    "ready = pathlib.Path(sys.argv[-2])\n"
+    "done = False\n"
+    "def on_term(*_):\n"
+    "    global done\n"
+    "    time.sleep(0.4)\n"
+    "    marker.write_text('CLEAN')\n"
+    "    done = True\n"
+    "signal.signal(signal.SIGTERM, on_term)\n"
+    "ready.write_text('READY')\n"
+    "while not done:\n"
+    "    time.sleep(0.05)\n"
+)
+
+own_ready, own_done = work / "own.ready", work / "own.done"
+other_ready, other_done = work / "other.ready", work / "other.done"
+own_cmd = [sys.executable, "serve", "--base-dir", str(base), str(own_ready), str(own_done)]
+other_cmd = [sys.executable, "serve", "--base-dir", str(base), str(other_ready), str(other_done)]
+
+own = subprocess.Popen(own_cmd, cwd=work)
+# Spawn the unrelated process through an intermediate parent that exits so its
+# PPID is not os.getpid(), simulating a live T3 owned by another Jupyter process.
+launcher = subprocess.run(
+    [sys.executable, "-c",
+     "import json, subprocess, sys; p = subprocess.Popen(json.loads(sys.argv[1]), cwd=sys.argv[2], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); print(p.pid)",
+     json.dumps(other_cmd), str(work)],
+    check=True, capture_output=True, text=True,
+)
+other_pid = int(launcher.stdout.strip())
+try:
+    for r in (own_ready, other_ready):
+        for _ in range(100):
+            if r.exists():
+                break
+            time.sleep(0.05)
+        assert r.exists(), f"{r} did not start"
+
+    started = time.monotonic()
+    proxy.stop_server(seconds=5, base=base, executable=sys.executable.encode())
+    elapsed = time.monotonic() - started
+    assert own_done.read_text() == "CLEAN", "stop_server returned before direct child finished cleanup"
+    assert elapsed >= 0.35, f"stop_server did not wait for slow child ({elapsed:.2f}s)"
+    assert own.wait(timeout=1) == 0
+    # Unrelated process with the same --base-dir must still be running.
+    os.kill(other_pid, 0)
+    assert not other_done.exists(), "stop_server signaled an unrelated process with the same --base-dir"
+    print(f"stop_server waited {elapsed:.2f}s for own child and spared unrelated same-base process")
+finally:
+    if own.poll() is None:
+        own.kill()
+        own.wait()
+    try:
+        os.kill(other_pid, signal.SIGKILL)
+    except OSError:
+        pass
+PYTHON
+
+# When the notebook server stops, Jupyter waits for T3 to finish exiting and
+# close its database before exiting itself (no post-exit grace period needed).
 kill -TERM "${server}"
 wait "${server}" || true
 server=""
-for _ in $(seq 30); do
-    [ -e "/proc/${t3_pid}" ] || break
-    sleep 1
-done
 if [ -e "/proc/${t3_pid}" ]; then
     echo "T3 Code (PID ${t3_pid}, port ${t3_port}) outlived the notebook server" >&2
     exit 1
