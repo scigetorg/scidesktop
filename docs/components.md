@@ -211,6 +211,15 @@ component without what it needs, so a component can move between images
 safely. The core every image holds (`jupyter-env`, `lmod`, `sciget`) is listed
 too where it is used, so the file says what the component relies on.
 
+### Each component is tested once
+
+`test/image-smoke.sh <image>` runs the smoke test of each component the image
+adds to the image it is `FROM` (`python3 test/contract.py added <image>`):
+the base tests its components, a domain image only its own, since it holds
+the base's layers unchanged. Every image also runs the base's session checks
+(`test/smoke.sh`) and its notebook and sciget checks.
+`SMOKE_ALL_COMPONENTS=1` tests every component an image holds.
+
 ### Order and layers
 
 The assembly copies components from least to most frequently changed. Each `COPY

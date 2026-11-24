@@ -5,6 +5,8 @@
     python3 test/contract.py layers          # after building: what each component writes
     python3 test/contract.py image <image> [ref]
                                              # a built image: the components it holds
+    python3 test/contract.py added <image>   # the components the image adds to
+                                             # the image it is FROM (all, for the base)
 
 Exit status is non-zero when any rule is broken; each violation is printed
 with the rule it breaks.
@@ -466,6 +468,17 @@ def main():
         layers()
     elif mode == "image" and len(sys.argv) in (3, 4) and sys.argv[2] in image_names():
         image(sys.argv[2], sys.argv[-1])
+    elif mode == "added" and len(sys.argv) == 3 and sys.argv[2] in image_names():
+        # For test/image-smoke.sh, which tests each component in the first
+        # image that adds it: the images it is FROM test the rest.
+        targets = bake_print()["target"]
+        name = sys.argv[2]
+        parent = next((source.removeprefix("target:")
+                       for context, source in targets[name].get("contexts", {}).items()
+                       if context == f"{source.removeprefix('target:')}-base"), None)
+        own = image_components(targets, name) - (image_components(targets, parent) if parent else set())
+        print("\n".join(sorted(own)))
+        sys.exit(0)
     else:
         sys.exit(__doc__)
     for p in problems:
