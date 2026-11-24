@@ -65,6 +65,29 @@ hook=/usr/local/bin/before-notebook.d/50-slurm.sh
 [ -z "$(SCIDESKTOP_SLURM=no bash -c ". ${hook}; echo \"\${SCIDESKTOP_SLURM_SUPERVISOR_PID:-}\"")" ]
 SLURM_CONF=/etc/hpc/slurm.conf bash -c ". ${hook}" | grep -q "using that cluster"
 
+# External-cluster MUNGE client plugins are compiled in and loadable when
+# SLURM_CONF points at a MUNGE-authenticated site cluster, even without a
+# local munged daemon.
+test -r /opt/slurm/lib/slurm/auth_munge.so
+test -r /opt/slurm/lib/slurm/cred_munge.so
+test -r /opt/slurm/share/licenses/slurm/COPYING
+test -r /opt/slurm/share/licenses/slurm/LICENSE.OpenSSL
+munge_conf="$(mktemp)"
+cat > "${munge_conf}" <<'CONF'
+ClusterName=external
+SlurmctldHost=127.0.0.1
+AuthType=auth/munge
+CredType=cred/munge
+NodeName=n1
+PartitionName=p1 Nodes=n1 Default=YES State=UP
+CONF
+munge_err="$(SLURM_CONF="${munge_conf}" sinfo 2>&1 || true)"
+rm -f "${munge_conf}"
+if grep -qiE "unable to (find|load) plugin|cannot open shared object" <<<"${munge_err}"; then
+    echo "MUNGE plugin failed to load: ${munge_err}" >&2
+    exit 1
+fi
+
 # Nothing root-owned is writable by group or others.
 if find /opt/slurm /etc/slurm /usr/local/bin/before-notebook.d/50-slurm.sh /etc/scidesktop/jupyter_server_config.d/slurm.py ! -type l -perm /022 -print | grep .; then
     echo "bad permissions on the files above" >&2

@@ -193,6 +193,25 @@ if grep -q '"app-eessi-r-bioconductor"' <<<"${servers}"; then
 else
     fail "JupyterLab launcher registers app-eessi-r-bioconductor when EESSI is mounted"
 fi
+bad_execs="$(docker exec "${NAME}" bash -c '
+    for f in /etc/scidesktop/eessi-apps.d/*.desktop; do
+        [ -f "${f}" ] || continue
+        exec_line="$(sed -n "s/^Exec=//p" "${f}" | head -n 1)"
+        case "${exec_line}" in
+            *xfce4-terminal*)
+                case "${exec_line}" in
+                    *--disable-server*) ;;
+                    *) echo "${f}: ${exec_line}" ;;
+                esac
+                ;;
+        esac
+    done
+' 2>&1)"
+if [ -z "${bad_execs}" ]; then
+    pass "all xfce4-terminal EESSI desktop launchers pass --disable-server"
+else
+    fail "all xfce4-terminal EESSI desktop launchers pass --disable-server (${bad_execs})"
+fi
 
 echo
 if [ "${FAILED}" -eq 0 ]; then

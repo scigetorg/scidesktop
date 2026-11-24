@@ -580,14 +580,14 @@
       ]
     },
     {
-      "description": "Temurin 21 releases use 3- or 4-part versions with a +build number (e.g. 21.0.13+7, 21.0.13.1+2).",
+      "description": "Temurin 21 releases use 3- or 4-part versions with a +build number (e.g. 21.0.13+7, 21.0.13.1+2). Anchor the constant 21. prefix so optional 4th segment maps to patch (defaulting to 0) and +N always maps to build.",
       "matchFileNames": [
         "docker-bake.hcl"
       ],
       "matchDepNames": [
         "adoptium/temurin21-binaries"
       ],
-      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:\\.(?<build>\\d+))?\\+(?<revision>\\d+)$"
+      "versioning": "regex:^21\\.(?<major>\\d+)\\.(?<minor>\\d+)(?:\\.(?<patch>\\d+))?\\+(?<build>\\d+)$"
     },
     {
       "description": "Component microscopy-env: its updates arrive together and run its own test.",

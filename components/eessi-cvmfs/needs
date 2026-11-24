@@ -2,3 +2,5 @@
 # (test/contract.py S9).
 lmod  # EESSI modules
 sciget
+startup  # runs the EESSI start hooks
+selkies  # registers EESSI desktop entries as launcher tiles

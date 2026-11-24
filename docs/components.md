@@ -61,7 +61,9 @@ components/<component>/
   version to report.
 - **`test/<component>-smoke.sh` (optional):** end-to-end checks of the
   component in an assembled image, taking the image as its argument.
-  `test/image-smoke.sh` runs it on every image that holds the component.
+  `test/image-smoke.sh` runs it on each image that adds the component to the
+  image it is `FROM` (`SMOKE_ALL_COMPONENTS=1` runs it on every image that
+  holds the component).
 - **Manifest entry (L4):** the component writes `/opt/scidesktop/manifest.d/<component>.json`
   with its versions, detected from what was built.
 - **Build `FROM ${UBUNTU_IMAGE}`** (plain Ubuntu of the OS layer's release) and

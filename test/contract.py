@@ -242,23 +242,27 @@ def static():
         if not df.is_file():
             fail("S6", f"{name}: no Dockerfile at {rel(df)}")
             continue
-        # (stage name, FROM image) per stage; follow the built stage back
-        # through earlier stages to the image it starts from.
+        # (stage name, FROM image, instructions) per stage; follow the built
+        # stage back through earlier stages to the image it starts from.
         stages = []
         for ins, text in instructions(df):
             if ins == "FROM":
                 words = [w for w in text.split()[1:] if not w.startswith("--")]
-                stages.append((words[2].lower() if len(words) > 2 and words[1].lower() == "as" else None, words[0]))
-        names = [s for s, _ in stages]
+                stages.append((words[2].lower() if len(words) > 2 and words[1].lower() == "as" else None, words[0], []))
+            elif stages:
+                stages[-1][2].append((ins, text))
+        stage_names = [s for s, _, _ in stages]
         i = len(stages) - 1
         if t.get("target"):
-            i = names.index(t["target"].lower()) if t["target"].lower() in names else -1
+            i = stage_names.index(t["target"].lower()) if t["target"].lower() in stage_names else -1
         if i < 0:
             fail("S6", f"{name}: {rel(df)} has no stage {t.get('target')}")
             continue
+        built_stages = [i]
         base = stages[i][1]
-        while base.lower() in names[:i]:
-            i = names.index(base.lower())
+        while base.lower() in stage_names[:i]:
+            i = stage_names.index(base.lower())
+            built_stages.append(i)
             base = stages[i][1]
         parent = base[:-len("-base")] if base.endswith("-base") else None
         if parent not in images or parent == name:
@@ -266,18 +270,33 @@ def static():
         elif t.get("contexts", {}).get(base) != f"target:{parent}":
             fail("S6", f"{name}: FROM {base} needs `contexts = {{ {base} = \"target:{parent}\" }}` in its bake target")
         # A domain image adds a component the way the assembly does: whole,
-        # as a linked layer, built in the same bake run.
-        for ins, text in instructions(df):
-            m = re.match(r"COPY\b.*--from=(\S+)", text) if ins == "COPY" else None
-            if not m or m.group(1) not in component_names():
-                continue
-            u = m.group(1)
-            if text != f"COPY --link --from={u} / /":
-                fail("S6", f"{rel(df)}: a component is copied whole, as `COPY --link --from={u} / /`: {text}")
-            if t.get("contexts", {}).get(u) != f"target:{u}":
-                fail("S6", f"{name}: copying {u} needs `{u} = \"target:{u}\"` in its bake target's contexts")
-            if u in image_components(targets, parent):
-                fail("S6", f"{rel(df)}: copies {u}, which {parent} already holds; remove the COPY and the context")
+        # as a linked layer, built in the same bake run. Every component
+        # context the bake target declares must be copied into the built stage
+        # exactly once, so S9 and `added` match what the image actually holds.
+        all_components = set(component_names()) - {OS_COMPONENT}
+        copied_in_built = []
+        for stage_idx, (_, _, stage_ins) in enumerate(stages):
+            for ins, text in stage_ins:
+                m = re.match(r"COPY\b.*--from=(\S+)", text) if ins == "COPY" else None
+                if not m or m.group(1) not in all_components:
+                    continue
+                u = m.group(1)
+                if text != f"COPY --link --from={u} / /":
+                    fail("S6", f"{rel(df)}: a component is copied whole, as `COPY --link --from={u} / /`: {text}")
+                if t.get("contexts", {}).get(u) != f"target:{u}":
+                    fail("S6", f"{name}: copying {u} needs `{u} = \"target:{u}\"` in its bake target's contexts")
+                if parent in images and u in image_components(targets, parent):
+                    fail("S6", f"{rel(df)}: copies {u}, which {parent} already holds; remove the COPY and the context")
+                if stage_idx in built_stages:
+                    copied_in_built.append(u)
+        declared_contexts = sorted(
+            ctx for ctx, src in t.get("contexts", {}).items()
+            if ctx in all_components and src == f"target:{ctx}"
+        )
+        for u in declared_contexts:
+            if copied_in_built.count(u) != 1:
+                fail("S6", f"{rel(df)}: component {u} is a context of the {name} target but copied "
+                           f"{copied_in_built.count(u)} times in the built stage")
             # S8: a component brings its own Jupyter registration.
         for ins, text in instructions(df):
             if ins == "ENV" and JUPYTER_ENV.search(text):

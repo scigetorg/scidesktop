@@ -2,3 +2,4 @@
 # (test/contract.py S9).
 coding-agents  # the agents it configures
 jupyter-env
+startup  # runs the OpenCode configuration hook and seeds home defaults

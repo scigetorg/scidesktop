@@ -2,11 +2,13 @@
 # A Slurm queue for one session: a controller and a worker for this container
 # alone, started beside the notebook server as the notebook user
 # (/opt/slurm/bin/slurm-session). Slurm is built from source into /opt/slurm,
-# with only what the session's configuration uses: its own authentication
-# (auth/slurm, which needs libjwt; no munge), JSON output and Lua (scrun and
-# Lua plugins, on the OS layer's Lua 5.4), without cgroups, PAM, an
-# accounting database or hwloc. libjwt and its jansson and libb64,
-# which the OS layer lacks, ship in /opt/slurm/lib/deps. Commands and daemons are linked
+# with what the session's configuration and external HPC clients use: Slurm's
+# own authentication (auth/slurm, via libjwt; no local munged daemon), MUNGE
+# client plugins (auth/munge, cred/munge, via libmunge) for connecting to an
+# external site cluster when SLURM_CONF is set, JSON output and Lua (scrun and
+# Lua plugins, on the OS layer's Lua 5.4), without cgroups, PAM, an accounting
+# database or hwloc. libjwt (with jansson and libb64) and libmunge, which the
+# OS layer lacks, ship in /opt/slurm/lib/deps. Commands and daemons are linked
 # into /usr/local/bin and /usr/local/sbin.
 # The component also carries the configuration links, the start hook, and a
 # small library that keeps the daemons on loopback.
@@ -27,7 +29,7 @@ RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
         gcc libc6-dev make pkg-config python3 binutils curl ca-certificates \
-        libjwt-dev libjson-c-dev liblua5.4-dev patchelf
+        libjwt-dev libjson-c-dev liblua5.4-dev libmunge-dev patchelf
 RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${SLURM_TAG:?}" "${SLURM_SHA256:?}" \
     # Tag slurm-25-11-9-1 is release 25.11.9.
@@ -37,9 +39,9 @@ RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     && mkdir -p /tmp/slurm && tar -xzf /tmp/slurm.tar.gz -C /tmp/slurm --strip-components=1 \
     && cd /tmp/slurm \
     # Optional features are found only when their development files are
-    # installed: here libjwt, json-c and Lua.
+    # installed: here libjwt, libmunge (for external site clusters), json-c and Lua.
     && { ./configure --prefix=/opt/slurm --sysconfdir=/etc/slurm --disable-debug \
-        --without-munge --disable-pam --disable-x11 \
+        --disable-pam --disable-x11 \
         LDFLAGS="-Wl,-rpath,/opt/slurm/lib/deps" >/tmp/configure.log \
         || { tail -n 50 /tmp/configure.log >&2; exit 1; }; } \
     && grep -q '^#define HAVE_JWT' config.h \
@@ -50,13 +52,17 @@ RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     && { make install >/tmp/install.log \
         || { tail -n 50 /tmp/install.log >&2; exit 1; }; } \
     && rm -rf /opt/slurm/include /opt/slurm/share \
+    && install -d -m 0755 /opt/slurm/share/licenses/slurm \
+    && install -m 0644 /tmp/slurm/COPYING /tmp/slurm/LICENSE.OpenSSL /opt/slurm/share/licenses/slurm/ \
     && install -d -m 0755 /opt/slurm/lib/deps \
-    && cp -L /usr/lib/*/libjwt.so.2 /usr/lib/*/libjansson.so.4 /usr/lib/*/libb64.so.0d /opt/slurm/lib/deps/ \
+    && cp -L /usr/lib/*/libjwt.so.2 /usr/lib/*/libjansson.so.4 /usr/lib/*/libb64.so.0d /usr/lib/*/libmunge.so.2 /opt/slurm/lib/deps/ \
     && patchelf --set-rpath '$ORIGIN' /opt/slurm/lib/deps/libjwt.so.2 \
     && find /opt/slurm \( -name '*.a' -o -name '*.la' \) -delete \
     && { find /opt/slurm -type f \( -perm -u+x -o -name '*.so*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true; } \
     && /opt/slurm/sbin/slurmctld -V | grep -qx "slurm ${version}" \
     && test -r /opt/slurm/lib/slurm/auth_slurm.so \
+    && test -r /opt/slurm/lib/slurm/auth_munge.so \
+    && test -r /opt/slurm/lib/slurm/cred_munge.so \
     && test -r /opt/slurm/lib/slurm/select_cons_tres.so \
     && test -r /opt/slurm/lib/slurm/sched_backfill.so \
     && test -x /opt/slurm/bin/scrun \

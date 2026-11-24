@@ -79,6 +79,23 @@ COPY --from=build /out/ /
 
 FROM os AS test
 COPY --from=component / /
+# System CA integration: an institutional CA added through Ubuntu's
+# update-ca-certificates reaches the bundled Temurin JRE trust store and is
+# removed again cleanly.
+RUN set -eu \
+    && /opt/workflow-engines/jre/bin/keytool -genkeypair -noprompt -alias testca \
+        -keyalg RSA -keysize 2048 -dname "CN=Scidesktop Test CA" -ext bc:c \
+        -keystore /tmp/test-ca.p12 -storepass changeit >/dev/null 2>&1 \
+    && /opt/workflow-engines/jre/bin/keytool -exportcert -rfc -alias testca \
+        -keystore /tmp/test-ca.p12 -storepass changeit \
+        -file /usr/local/share/ca-certificates/scidesktop-test-ca.crt >/dev/null 2>&1 \
+    && update-ca-certificates >/dev/null \
+    && alias="system-ca:$(printf '%s' /etc/ssl/certs/scidesktop-test-ca.pem | sha256sum | cut -c1-16)" \
+    && /opt/workflow-engines/jre/bin/keytool -list -cacerts -storepass changeit -alias "${alias}" >/dev/null \
+    && rm -f /usr/local/share/ca-certificates/scidesktop-test-ca.crt /tmp/test-ca.p12 \
+    && update-ca-certificates --fresh >/dev/null \
+    && ! /opt/workflow-engines/jre/bin/keytool -list -cacerts -storepass changeit -alias "${alias}" >/dev/null 2>&1 \
+    && [ "$(/opt/workflow-engines/jre/bin/keytool -list -cacerts -storepass changeit | grep -c ', trustedCertEntry,')" -ge 50 ]
 USER ${NB_UID}
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     set -eu \

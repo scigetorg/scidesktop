@@ -194,10 +194,13 @@ A component it copies must be copied whole and be a bake context of the image.
 
 1. `test/contract.py image`: the image holds its components and nothing of any
    other (rule I1).
-2. `test/smoke.sh`: the base's checks, which every image must still pass.
-3. `test/<component>-smoke.sh` for each component in the image that has one.
-   The list is read from the image's `/opt/scidesktop/manifest.d`, so it is
-   what the image contains, not what a file says it should.
+2. `test/smoke.sh`, `test/notebook-and-sciget-smoke.sh`, and `test/hpc-smoke.sh`:
+   the base's checks, notebook/sciget checks, and foreign-UID startup checks,
+   which every image must still pass.
+3. `test/<component>-smoke.sh` for each component the image adds to the image
+   it is `FROM` (`test/contract.py added`), when it has one. Set
+   `SMOKE_ALL_COMPONENTS=1` to run the smoke test of every component the image
+   holds (read from `/opt/scidesktop/manifest.d`).
 4. `images/<image>/smoke.sh`, when the image has checks of its own.
 
 An image therefore lists no smoke tests. Copying `ai-ready` into an image is
