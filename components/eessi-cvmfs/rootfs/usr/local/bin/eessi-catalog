@@ -146,7 +146,9 @@ active_apps_dir_for_sources() {
 
 active_apps_dir() {
     local expected=""
-    expected="$(resolve_sources 2>/dev/null || true)"
+    if ! expected="$(resolve_sources 2>/dev/null)"; then
+        expected=""
+    fi
     active_apps_dir_for_sources "${expected}"
 }
 
@@ -564,7 +566,9 @@ show_catalog() {
     echo "  eessi-catalog sync    # refresh curated catalog & JupyterLab launchers"
 
     local expected="" apps_dir
-    expected="$(resolve_sources 2>/dev/null || true)"
+    if ! expected="$(resolve_sources 2>/dev/null)"; then
+        expected=""
+    fi
     apps_dir="$(active_apps_dir_for_sources "${expected}")"
     if [ -n "${apps_dir}" ] && [ -d "${apps_dir}" ]; then
         echo
