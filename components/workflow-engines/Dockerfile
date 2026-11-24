@@ -4,6 +4,8 @@
 #   - Nextflow (Apache-2.0): offline fat distribution executable
 #   - nf-test (MIT): test runner JAR for Nextflow pipelines
 #   - Snakemake (MIT): isolated locked venv backed by jupyter-env's Python 3.13
+#   - Java for both Nextflow and nf-test: the Eclipse Temurin 21 runtime at
+#     /opt/workflow-engines/jre, also linked as /usr/local/bin/java
 
 ARG UBUNTU_IMAGE
 FROM ${UBUNTU_IMAGE} AS build
@@ -13,6 +15,9 @@ ARG NEXTFLOW_VERSION
 ARG NEXTFLOW_SHA256
 ARG NF_TEST_VERSION
 ARG NF_TEST_SHA256
+ARG TEMURIN_JRE_VERSION
+ARG TEMURIN_JRE_SHA256_AMD64
+ARG TEMURIN_JRE_SHA256_ARM64
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
@@ -29,6 +34,18 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     && fetch "https://github.com/nextflow-io/nextflow/releases/download/v${NEXTFLOW_VERSION:?}/nextflow-${NEXTFLOW_VERSION}-dist" \
         "${NEXTFLOW_SHA256:?}" /opt/workflow-engines/bin/nextflow \
     && chmod 0755 /opt/workflow-engines/bin/nextflow \
+    # Temurin names the architectures x64 and aarch64, and the files after the
+    # release with _ for +.
+    && case "${TARGETARCH}" in amd64) jre_arch=x64 ;; arm64) jre_arch=aarch64 ;; esac \
+    && jre_sha256="TEMURIN_JRE_SHA256_${TARGETARCH^^}" \
+    && jre_file="OpenJDK21U-jre_${jre_arch}_linux_hotspot_${TEMURIN_JRE_VERSION//+/_}.tar.gz" \
+    && fetch "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-${TEMURIN_JRE_VERSION//+/%2B}/${jre_file}" \
+        "${!jre_sha256:?}" /tmp/jre.tar.gz \
+    && install -d -m 0755 /opt/workflow-engines/jre \
+    && tar -xzf /tmp/jre.tar.gz -C /opt/workflow-engines/jre --strip-components=1 \
+    && rm -f /tmp/jre.tar.gz \
+    && /opt/workflow-engines/jre/bin/java -version 2>&1 | grep -q '"21\.' \
+    && ln -s /opt/workflow-engines/jre/bin/java /out/usr/local/bin/java \
     && fetch "https://github.com/askimed/nf-test/releases/download/v${NF_TEST_VERSION:?}/nf-test-${NF_TEST_VERSION}.tar.gz" \
         "${NF_TEST_SHA256:?}" /tmp/nf-test.tar.gz \
     && tar -xzf /tmp/nf-test.tar.gz -C /opt/workflow-engines/nf-test \
@@ -62,6 +79,7 @@ USER ${NB_UID}
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     set -eu \
     && HOME="$(mktemp -d)" && export HOME \
+    && [ "$(readlink -f "$(command -v java)")" = /opt/workflow-engines/jre/bin/java ] \
     && nextflow -version | grep -q "version" \
     && nf-test version | grep -qi "nf-test" \
     && snakemake --version \

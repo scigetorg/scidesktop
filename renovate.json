@@ -571,7 +571,8 @@
       ],
       "matchDepNames": [
         "nextflow-io/nextflow",
-        "askimed/nf-test"
+        "askimed/nf-test",
+        "adoptium/temurin21-binaries"
       ],
       "groupName": "component workflow-engines",
       "addLabels": [

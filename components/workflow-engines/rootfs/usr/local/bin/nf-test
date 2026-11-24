@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 export NF_TEST_HOME="${NF_TEST_HOME:-/opt/workflow-engines/nf-test}"
-java_bin="java"
+java_bin="/opt/workflow-engines/jre/bin/java"
 if [ -n "${NXF_JAVA_HOME:-}" ] && [ -x "${NXF_JAVA_HOME}/bin/java" ]; then
     java_bin="${NXF_JAVA_HOME}/bin/java"
 elif [ -n "${JAVA_HOME:-}" ] && [ -x "${JAVA_HOME}/bin/java" ]; then

@@ -165,6 +165,12 @@ variable "VIRTUALGL_SHA256_ARM64" { default = "9ac238e8a18c06d84ef65444a591a7a5b
 
 # Scientific workflow engines (components/workflow-engines): Nextflow
 # (offline fat executable) and nf-test (JAR). Snakemake is locked via conda/pip.
+# Java for Nextflow and nf-test, inside workflow-engines.
+# renovate: datasource=github-releases depName=adoptium/temurin21-binaries extractVersion=^jdk-(?<version>.*)$
+variable "TEMURIN_JRE_VERSION" { default = "21.0.13.1+2" }
+variable "TEMURIN_JRE_SHA256_AMD64" { default = "18f44fab9065217f3ba61d0eef8a7b5f3c3713aa7293001b0d4ac10ede3850f0" }
+variable "TEMURIN_JRE_SHA256_ARM64" { default = "52bc58323d9266538a6361a3cf8365fc1186dd9510d7f33f623681c4aabb7e72" }
+
 # renovate: datasource=github-releases depName=nextflow-io/nextflow extractVersion=^v(?<version>.*)$
 variable "NEXTFLOW_VERSION" { default = "26.10.7" }
 variable "NEXTFLOW_SHA256" { default = "c54cd4b7be058e8954180b378a8efa6d61085bc433d7d9b06ec2cad2ad6580a6" }
@@ -951,6 +957,9 @@ target "workflow-engines" {
   target   = "component"
   contexts = { jupyter-env = "target:jupyter-env" }
   args = {
+    TEMURIN_JRE_VERSION      = TEMURIN_JRE_VERSION
+    TEMURIN_JRE_SHA256_AMD64 = TEMURIN_JRE_SHA256_AMD64
+    TEMURIN_JRE_SHA256_ARM64 = TEMURIN_JRE_SHA256_ARM64
     NEXTFLOW_VERSION = NEXTFLOW_VERSION
     NEXTFLOW_SHA256  = NEXTFLOW_SHA256
     NF_TEST_VERSION  = NF_TEST_VERSION

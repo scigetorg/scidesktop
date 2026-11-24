@@ -31,5 +31,3 @@ dnsutils
 xdg-utils
 graphviz
 tcsh
-# headless Java runtime for workflow engines (Nextflow, nf-test)
-openjdk-21-jre-headless
