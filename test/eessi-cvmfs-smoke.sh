@@ -56,7 +56,7 @@ grep -q '^\[cvmfs\] /cvmfs is empty' <<<"${out}" \
     && pass "the default mode mounts nothing" || fail "the default mode mounts nothing"
 grep -q 'ParaView (EESSI)' <<<"${out}" \
     && pass "eessi-catalog lists base EESSI launchers" || fail "eessi-catalog lists base EESSI launchers"
-bad_execs="$(docker run --rm "${IMAGE}" bash -lc '
+bad_execs="$(docker run --rm --entrypoint bash "${IMAGE}" -c '
     for f in /etc/scidesktop/eessi-apps.d/*.desktop; do
         [ -f "${f}" ] || continue
         exec_line="$(sed -n "s/^Exec=//p" "${f}" | head -n 1)"
@@ -161,7 +161,16 @@ term_out="$(as_user '
     eval "$(/usr/bin/dbus-launch --sh-syntax --exit-with-x11)"
     xfce4-terminal -e "sleep 60" >/dev/null 2>&1 &
     term_pid=$!
-    sleep 2
+    dbus_ready=0
+    for _ in $(seq 1 50); do
+        if dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply \
+            /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q "org.xfce.Terminal"; then
+            dbus_ready=1
+            break
+        fi
+        sleep 0.2
+    done
+    [ "${dbus_ready}" -eq 1 ] || { echo "ordinary xfce4-terminal did not claim D-Bus name" >&2; exit 1; }
     exec_line="$(sed -n "s/^Exec=//p" /etc/scidesktop/eessi-apps.d/eessi-r.desktop | head -n 1)"
     case "${exec_line}" in
         *--disable-server*) ;;
