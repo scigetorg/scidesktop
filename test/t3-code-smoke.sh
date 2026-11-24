@@ -88,6 +88,19 @@ in_session "[ -s ${STATE}/statev2.sqlite ] && [ -s ${STATE}/settings.json ] \
     && [ \"\$(stat -c %a \${HOME}/.t3/jupyter-proxy-session.json)\" = 600 ]" \
     && pass "T3 Code keeps its state in the home, private to the user" \
     || fail "T3 Code keeps its state in the home, private to the user"
+if in_session "test -r /etc/scidesktop/t3-code/settings.d/20-coding-agents.json"; then
+    in_session '/opt/conda/bin/python -c "
+import json, pathlib
+s = json.loads((pathlib.Path.home() / \".t3/userdata/settings.json\").read_text())
+pi = s.get(\"providerInstances\", {})
+assert pi.get(\"codex\", {}).get(\"config\", {}).get(\"binaryPath\") == \"/opt/coding-agents/bin/codex\", pi
+assert pi.get(\"codex\", {}).get(\"config\", {}).get(\"setupMode\") == \"existing\", pi
+assert pi.get(\"opencode\", {}).get(\"enabled\") is True, pi
+assert pi.get(\"opencode\", {}).get(\"config\", {}).get(\"binaryPath\") == \"/opt/coding-agents/bin/opencode\", pi
+"' \
+        && pass "T3 Code seeds bundled Codex (existing CLI mode) and OpenCode" \
+        || fail "T3 Code seeds bundled Codex (existing CLI mode) and OpenCode"
+fi
 environment=$(in_session "cat ${STATE}/environment-id")
 
 # A stop ends T3 Code cleanly: it removes its runtime file and closes its

@@ -31,6 +31,17 @@ if grep -rilE 'api[_-]?key|base_?url|"model"|token' "${defaults}/.codex" "${defa
     exit 1
 fi
 
+# T3 Code provider defaults point at the bundled binaries and keep Codex in
+# existing-CLI mode without presetting any credential or model.
+t3_defaults=/etc/scidesktop/t3-code/settings.d/20-coding-agents.json
+grep -q '"/opt/coding-agents/bin/codex"' "${t3_defaults}"
+grep -q '"setupMode": "existing"' "${t3_defaults}"
+grep -q '"/opt/coding-agents/bin/opencode"' "${t3_defaults}"
+if grep -iE 'api[_-]?key|base_?url|"model"|token' "${t3_defaults}"; then
+    echo "T3 Code defaults above preset a credential or model" >&2
+    exit 1
+fi
+
 # Every binary comes with its licence or notice.
 for notice in codex-LICENSE codex-NOTICE claude-code-LICENSE.md opencode-LICENSE; do
     test -s "/opt/coding-agents/licenses/${notice}"
@@ -38,6 +49,7 @@ done
 
 # Nothing root-owned is writable by group or others, and the user can read it all.
 if find /opt/coding-agents "${defaults}/.codex" "${defaults}/.claude" "${defaults}/.config/opencode" \
+        "${t3_defaults}" \
         ! -type l \( -perm /022 -o ! -readable \) -print | grep .; then
     echo "bad permissions on the files above" >&2
     exit 1

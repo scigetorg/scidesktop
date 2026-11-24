@@ -100,7 +100,125 @@ work = pathlib.Path(sys.argv[1])
 serve.apply_settings_defaults(work / "t3", work / "defaults")
 settings = json.loads((work / "t3/userdata/settings.json").read_text())
 assert settings == {"a": 5, "nested": {"x": 7, "y": 2}, "mine": True}, settings
-print("settings defaults merge")
+
+# Driver-aware providerInstances seeding: seeds fresh homes, migrates bundled
+# Codex defaults in place to add setupMode: "existing", ignores T3's inert
+# default-off bookkeeping, and preserves every user-owned configuration.
+provider_defaults = work / "provider-defaults"
+provider_defaults.mkdir()
+(provider_defaults / "10-base.json").write_text(json.dumps({"enableProviderUpdateChecks": False}))
+(provider_defaults / "20-agents.json").write_text(json.dumps({
+    "providerInstances": {
+        "codex": {
+            "driver": "codex",
+            "config": {"binaryPath": "/opt/coding-agents/bin/codex", "setupMode": "existing"},
+        },
+        "opencode": {
+            "driver": "opencode",
+            "enabled": True,
+            "config": {"binaryPath": "/opt/coding-agents/bin/opencode"},
+        },
+    }
+}))
+
+# 1. Fresh profile gets both seeds and is idempotent on repeat runs.
+fresh = work / "fresh"
+serve.apply_settings_defaults(fresh, provider_defaults)
+fresh_file = fresh / "userdata/settings.json"
+expected_fresh = {
+    "enableProviderUpdateChecks": False,
+    "providerInstances": {
+        "codex": {
+            "driver": "codex",
+            "config": {"binaryPath": "/opt/coding-agents/bin/codex", "setupMode": "existing"},
+        },
+        "opencode": {
+            "driver": "opencode",
+            "enabled": True,
+            "config": {"binaryPath": "/opt/coding-agents/bin/opencode"},
+        },
+    },
+}
+assert json.loads(fresh_file.read_text()) == expected_fresh
+mtime = fresh_file.stat().st_mtime_ns
+serve.apply_settings_defaults(fresh, provider_defaults)
+assert fresh_file.stat().st_mtime_ns == mtime
+
+# 2. Earlier bundled Codex instance (with or without enabled: true) migrates in place.
+for idx, extra in enumerate(({}, {"enabled": True})):
+    mig = work / f"migrate-{idx}"
+    (mig / "userdata").mkdir(parents=True)
+    second = {"driver": "codex", "config": {"binaryPath": "/custom/codex"}}
+    (mig / "userdata/settings.json").write_text(json.dumps({
+        "providerInstances": {
+            "codex": {"driver": "codex", "config": {"binaryPath": "/opt/coding-agents/bin/codex"}, **extra},
+            "work": second,
+        }
+    }))
+    serve.apply_settings_defaults(mig, provider_defaults)
+    instances = json.loads((mig / "userdata/settings.json").read_text())["providerInstances"]
+    assert instances["codex"] == {
+        "driver": "codex",
+        "config": {"binaryPath": "/opt/coding-agents/bin/codex", "setupMode": "existing"},
+        **extra,
+    }, instances
+    assert instances["work"] == second
+
+# 3. Explicit setupMode, custom paths, disabled instances, and custom ids stay untouched.
+for idx, (inst_id, envelope, extra_cfg) in enumerate((
+    ("codex", {}, {"setupMode": "managed"}),
+    ("codex", {}, {"homePath": "/custom/home"}),
+    ("codex", {}, {"binaryPath": "/custom/codex"}),
+    ("codex", {"enabled": False}, {}),
+    ("work", {}, {}),
+)):
+    keep = work / f"keep-{idx}"
+    (keep / "userdata").mkdir(parents=True)
+    original = {
+        "driver": "codex",
+        "config": {"binaryPath": "/opt/coding-agents/bin/codex", **extra_cfg},
+        **envelope,
+    }
+    (keep / "userdata/settings.json").write_text(json.dumps({"providerInstances": {inst_id: original}}))
+    serve.apply_settings_defaults(keep, provider_defaults)
+    instances = json.loads((keep / "userdata/settings.json").read_text())["providerInstances"]
+    codex_instances = {k: v for k, v in instances.items() if v.get("driver") == "codex"}
+    assert codex_instances == {inst_id: original}, codex_instances
+
+# 4. Inert T3 bookkeeping (providers.opencode: {"enabled": false}) and legacy codex default allow seeding;
+#    real user providers.<driver> entries block seeding.
+inert = work / "inert"
+(inert / "userdata").mkdir(parents=True)
+(inert / "userdata/settings.json").write_text(json.dumps({
+    "providers": {
+        "opencode": {"enabled": False},
+        "codex": {"binaryPath": "/opt/coding-agents/bin/codex"},
+    }
+}))
+serve.apply_settings_defaults(inert, provider_defaults)
+assert set(json.loads((inert / "userdata/settings.json").read_text())["providerInstances"]) == {"codex", "opencode"}
+
+user_legacy = work / "user-legacy"
+(user_legacy / "userdata").mkdir(parents=True)
+(user_legacy / "userdata/settings.json").write_text(json.dumps({
+    "providers": {
+        "opencode": {"binaryPath": "/custom/opencode"},
+        "codex": {"binaryPath": "/custom/codex"},
+    }
+}))
+serve.apply_settings_defaults(user_legacy, provider_defaults)
+assert "providerInstances" not in json.loads((user_legacy / "userdata/settings.json").read_text())
+
+# 5. Malformed providerInstances still applies top-level defaults.
+malformed = work / "malformed"
+(malformed / "userdata").mkdir(parents=True)
+(malformed / "userdata/settings.json").write_text(json.dumps({"providerInstances": []}))
+serve.apply_settings_defaults(malformed, provider_defaults)
+assert json.loads((malformed / "userdata/settings.json").read_text()) == {
+    "providerInstances": [],
+    "enableProviderUpdateChecks": False,
+}
+print("settings defaults merge and provider seeding")
 PYTHON
 for file in /etc/scidesktop/t3-code/settings.d/*.json; do "${python}" -m json.tool "${file}" >/dev/null; done
 
