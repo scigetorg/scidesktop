@@ -27,13 +27,13 @@ variable "UBUNTU" { default = "26.04@sha256:065aa8626841f16057b78b027b464cd59c4f
 # Ubuntu archive snapshot; moved weekly by .github/workflows/apt-snapshot.yml.
 variable "APT_SNAPSHOT" { default = "20261123T000000Z" }
 # renovate: datasource=github-releases depName=cvmfs/cvmfs extractVersion=^cvmfs-(?<version>.*)$
-variable "CVMFS_VERSION" { default = "2.13.3" }
-variable "CVMFS_SHA256_AMD64" { default = "1bcd2417752d2560fa554618317b02ecf4ce3a0e1bac66bb0322ebf78451ef37" }
-variable "CVMFS_SHA256_ARM64" { default = "9bc91c372c48ee38b7fb206b9151115877118df636a3259be196d1725b910103" }
-variable "CVMFS_LIBS_SHA256_AMD64" { default = "b7aa7690030b0844969e80e0ce52f1ecabb0875bf817bfdd2436910238115eb0" }
-variable "CVMFS_LIBS_SHA256_ARM64" { default = "23b12aa8092cacfe134fd9d7e3b20e1a4b66b4fd458dab47bc96be3a6b1a9875" }
-variable "CVMFS_FUSE3_SHA256_AMD64" { default = "684bf3d2a71bd9eedfdedb6e472523368dcfa0a9b33135f813672ec101833d8c" }
-variable "CVMFS_FUSE3_SHA256_ARM64" { default = "f902cfa715f1b9345a178dd9b87e97e17ee00a4262ee634ad61fe135b00cf476" }
+variable "CVMFS_VERSION" { default = "2.14.1" }
+variable "CVMFS_SHA256_AMD64" { default = "79d7389e6e0db786919c688b51c910ff3a57168d8bd8fd696af67feca69146c9" }
+variable "CVMFS_SHA256_ARM64" { default = "d398b315c245813535d4c589146358527a39808a3b2e21cab3493533a3373943" }
+variable "CVMFS_LIBS_SHA256_AMD64" { default = "efe323b297f8cd44c54787e58f9d7796f17a4cb399909dc0f921917bdddddccf" }
+variable "CVMFS_LIBS_SHA256_ARM64" { default = "d67756bf0dc101d0356dcc7dc3780401da8c3490b8d5c28b97dff5a7f08aef9e" }
+variable "CVMFS_FUSE3_SHA256_AMD64" { default = "560a7e6ded3322642ee5bc75057031f270191a6d8bfdaa54987fb92f418126dd" }
+variable "CVMFS_FUSE3_SHA256_ARM64" { default = "75fc4f76dc40c8776d925ce6e742c95800cb6a4311429cb4f715d69e32fa442b" }
 variable "CVMFS_CONFIG_VERSION" { default = "1.1-0" }
 variable "CVMFS_CONFIG_NONE_SHA256" { default = "b475d2ef4300040ebce400135c5dde1a2f58702d90c62544a22743cf2f720c7f" }
 # renovate: datasource=github-releases depName=EESSI/filesystem-layer extractVersion=^v(?<version>.+)$

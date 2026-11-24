@@ -1,0 +1,18 @@
+{
+  "providerInstances": {
+    "codex": {
+      "driver": "codex",
+      "config": {
+        "binaryPath": "/opt/coding-agents/bin/codex",
+        "setupMode": "existing"
+      }
+    },
+    "opencode": {
+      "driver": "opencode",
+      "enabled": true,
+      "config": {
+        "binaryPath": "/opt/coding-agents/bin/opencode"
+      }
+    }
+  }
+}

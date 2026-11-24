@@ -36,9 +36,12 @@ T3 Code starts when it is first opened, not with the session. The first page
 appears after about four seconds and shows "T3 Code is starting" until then.
 A session that never opens the tile runs no T3 process.
 
-T3 Code drives the agents installed in the image. Sign in to an agent in a
-terminal first, or in T3 Code's provider settings, where each agent can also
-be turned on or off.
+T3 Code drives the agents installed in the image. When `coding-agents` is
+installed, T3 starts with bundled provider defaults for Codex
+(`config.setupMode: "existing"`, reusing the CLI's login under `~/.codex`) and
+OpenCode (`enabled: true`), without overwriting any explicit user provider
+configuration. Sign in to an agent in a terminal first, or in T3 Code's
+provider settings, where each agent can also be turned on or off.
 
 **T3 Connect** (using this session's T3 Code from the T3 desktop or mobile
 app, through T3's relay) is the `t3-connect` component, also included in
