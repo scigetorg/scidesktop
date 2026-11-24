@@ -2,27 +2,86 @@
 # Launch a command from an EESSI module cleanly, auto-loading the EESSI stack
 # first. Used by EESSI .desktop launchers and directly from terminals:
 #
-#   eessi-launch <module> <command> [args...]
+#   eessi-launch [--stack <YYYY.MM>] [--] <module> <command> [args...]
 #
-# Set EESSI_DEFAULT_VERSION (default: 2025.06) to choose a specific EESSI stack.
+# Set EESSI_DEFAULT_VERSION (default: 2025.06) to choose the default EESSI stack
+# when --stack is not passed.
 set -euo pipefail
 
+usage() {
+    echo "usage: eessi-launch [--stack <YYYY.MM>] [--] <module> <command> [args...]" >&2
+}
+
+stack_override=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --stack)
+            if [ "$#" -lt 2 ]; then
+                echo "eessi-launch: --stack requires a YYYY.MM value" >&2
+                usage
+                exit 2
+            fi
+            stack_override="$2"
+            shift 2
+            ;;
+        --stack=*)
+            stack_override="${1#--stack=}"
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "eessi-launch: unknown option: $1" >&2
+            usage
+            exit 2
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 if [ "$#" -lt 2 ]; then
-    echo "usage: eessi-launch <module> <command> [args...]" >&2
+    usage
     exit 2
 fi
 
 mod="$1"
 shift
 
+if [ -z "$1" ]; then
+    echo "eessi-launch: command must not be empty" >&2
+    usage
+    exit 2
+fi
+
+stack_re='^[0-9]{4}\.[0-9]{2}$'
+mod_re='^[A-Za-z0-9][A-Za-z0-9._+-]*(/[A-Za-z0-9][A-Za-z0-9._+-]*)?$'
+
+if [ -n "${stack_override}" ] && [[ ! "${stack_override}" =~ ${stack_re} ]]; then
+    echo "eessi-launch: invalid EESSI stack '${stack_override}' (expected YYYY.MM)" >&2
+    exit 2
+fi
+
+if [[ ! "${mod}" =~ ${mod_re} ]]; then
+    echo "eessi-launch: invalid module name '${mod}'" >&2
+    exit 2
+fi
+
 eessi_modroot="${EESSI_MODULE_ROOT:-/cvmfs/software.eessi.io/init/modules}"
 if [ ! -d "${eessi_modroot}" ]; then
-    echo "eessi-launch: EESSI is not mounted at /cvmfs/software.eessi.io." >&2
+    echo "eessi-launch: EESSI is not mounted at ${eessi_modroot}." >&2
     echo "Mount software.eessi.io externally or run with SCIDESKTOP_CVMFS_MODE=internal." >&2
     exit 1
 fi
 
-lmod_init="/opt/apps/lmod/lmod/init/bash"
+lmod_init="${EESSI_LMOD_INIT:-/opt/apps/lmod/lmod/init/bash}"
 if [ ! -r "${lmod_init}" ]; then
     echo "eessi-launch: Lmod init script not found at ${lmod_init}" >&2
     exit 1
@@ -38,11 +97,29 @@ case ":${MODULEPATH:-}:" in
 esac
 
 export EESSI_MODULE_QUIET_LOAD=1
-stack="EESSI/${EESSI_DEFAULT_VERSION:-2025.06}"
-if ! module load "${stack}" >/dev/null 2>&1; then
-    echo "eessi-launch: warning: failed to load ${stack}; falling back to default EESSI module" >&2
-    module load EESSI >/dev/null
+if [ -n "${stack_override}" ]; then
+    module load "EESSI/${stack_override}" >/dev/null
+else
+    default_stack="${EESSI_DEFAULT_VERSION:-2025.06}"
+    if [[ ! "${default_stack}" =~ ${stack_re} ]]; then
+        echo "eessi-launch: invalid EESSI_DEFAULT_VERSION '${default_stack}' (expected YYYY.MM)" >&2
+        exit 2
+    fi
+    stack="EESSI/${default_stack}"
+    if ! module load "${stack}" >/dev/null 2>&1; then
+        echo "eessi-launch: warning: failed to load ${stack}; falling back to default EESSI module" >&2
+        module load EESSI >/dev/null
+    fi
 fi
 
-module load "${mod}" >/dev/null
+if ! module load "${mod}" >/dev/null 2>&1; then
+    if [[ "${mod}" == */* ]]; then
+        pkg="${mod%%/*}"
+        echo "eessi-launch: warning: exact module ${mod} not found; falling back to ${pkg}" >&2
+        module load "${pkg}" >/dev/null
+    else
+        module load "${mod}" >/dev/null
+    fi
+fi
+
 exec "$@"

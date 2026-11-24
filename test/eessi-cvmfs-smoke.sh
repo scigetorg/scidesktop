@@ -131,11 +131,11 @@ else
     printf '%s\n' "${avail}" | head -n 10 | sed 's/^/        /'
 fi
 
-r_out="$(as_user 'eessi-launch R R --version | head -n 1')"
+r_out="$(as_user 'eessi-launch --stack 2025.06 -- R R --version | head -n 1')"
 if grep -q '^R version ' <<<"${r_out}"; then
-    pass "eessi-launch executes EESSI R (${r_out})"
+    pass "eessi-launch --stack 2025.06 executes EESSI R (${r_out})"
 else
-    fail "eessi-launch executes EESSI R"
+    fail "eessi-launch --stack 2025.06 executes EESSI R"
     printf '%s\n' "${r_out}" | tail -n 10 | sed 's/^/        /'
 fi
 
@@ -200,5 +200,10 @@ for tile in app-eessi-paraview app-eessi-octave app-eessi-julia app-eessi-r; do
         fail "JupyterLab launcher registers ${tile}"
     fi
 done
+if jq -e '[.server_processes[] | select(.name | startswith("app-eessi-"))] | length >= 4 and all(.[]; .launcher_entry.category == "EESSI")' <<<"${servers}" >/dev/null 2>&1; then
+    pass "JupyterLab groups EESSI tiles under the explicit EESSI category"
+else
+    fail "JupyterLab groups EESSI tiles under the explicit EESSI category"
+fi
 
 finish

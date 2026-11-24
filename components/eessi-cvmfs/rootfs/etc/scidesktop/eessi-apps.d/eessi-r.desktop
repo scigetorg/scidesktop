@@ -4,4 +4,5 @@ Name=R (EESSI)
 Comment=Interactive R console via EESSI
 Exec=/usr/local/bin/eessi-launch R xfce4-terminal --disable-server --title="R (EESSI)" -e R
 Terminal=false
+X-Scidesktop-Category=EESSI
 Categories=Science;Math;

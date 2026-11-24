@@ -1,39 +1,445 @@
 #!/bin/bash
-# Lists EESSI mount status, curated domain modules, and desktop launchers
-# configured for this image.
+# Manage and inspect EESSI software catalogs and desktop launchers for scidesktop.
+#
+#   eessi-catalog [list]   Show mount status, desktop launchers, and curated tools
+#   eessi-catalog sync     Fetch live <domain>/eessi.json catalogs and generate launchers
+#   eessi-catalog urls     Print resolved EESSI catalog URLs or local files
+#   eessi-catalog apps-dir Print active EESSI .desktop directory for SCIDESKTOP_APP_DIRS
+#   eessi-catalog json     Print merged cached EESSI catalog JSON
+#
+# Environment overrides:
+#   EESSI_CACHE_DIR        Cache directory (default: ${XDG_CACHE_HOME:-$HOME/.cache}/scidesktop/eessi)
+#   EESSI_CATALOG_FILES    Colon-separated local eessi.json files (disables network)
+#   EESSI_CATALOG_URLS     Comma- or space-separated HTTPS eessi.json URLs
+#   SCIGET_CATALOGS_FILE   sciget catalogs.json path (default: /etc/sciget/catalogs.json)
+#   EESSI_MODULE_ROOT      EESSI Lmod root (default: /cvmfs/software.eessi.io/init/modules)
 set -euo pipefail
 
-eessi_modroot="${EESSI_MODULE_ROOT:-/cvmfs/software.eessi.io/init/modules}"
-if [ -d "${eessi_modroot}" ]; then
-    echo "EESSI repository: mounted (/cvmfs/software.eessi.io)"
-    stacks="$(find "${eessi_modroot}/EESSI" -maxdepth 1 -name '*.lua' -printf '%f\n' 2>/dev/null | sed 's/\.lua$//' | sort | tr '\n' ' ' || true)"
-    [ -n "${stacks}" ] && echo "Available stacks: ${stacks}"
-else
-    echo "EESSI repository: not mounted (/cvmfs/software.eessi.io)"
-    echo "Hint: mount /cvmfs/software.eessi.io from the host/cluster or start with SCIDESKTOP_CVMFS_MODE=internal."
-fi
+DEFAULT_EESSI_CATALOG_URL="https://apps-catalog.scigetorg.workers.dev/eessi/catalog.json"
+STATIC_APPS_DIR="${EESSI_STATIC_APPS_DIR:-/etc/scidesktop/eessi-apps.d}"
+STATIC_CATALOG_DIR="${EESSI_STATIC_CATALOG_DIR:-/etc/scidesktop/eessi-catalog.d}"
+CATALOGS_FILE="${SCIGET_CATALOGS_FILE:-/etc/sciget/catalogs.json}"
+CACHE_DIR="${EESSI_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/scidesktop/eessi}"
+CONNECT_TIMEOUT="${EESSI_CATALOG_CONNECT_TIMEOUT:-3}"
+MAX_TIME="${EESSI_CATALOG_TIMEOUT:-6}"
+MAX_BYTES="${EESSI_CATALOG_MAX_BYTES:-5242880}"
 
-echo
-echo "Quick start:"
-echo "  module load EESSI/${EESSI_DEFAULT_VERSION:-2025.06}"
-echo "  module avail"
+usage() {
+    cat >&2 <<'EOF'
+usage: eessi-catalog [list|sync|refresh|urls|apps-dir|json]
+EOF
+}
 
-if [ -d /etc/scidesktop/eessi-apps.d ]; then
-    echo
-    echo "Desktop launchers (shown in JupyterLab when EESSI is mounted):"
-    for f in /etc/scidesktop/eessi-apps.d/*.desktop; do
-        [ -f "${f}" ] || continue
-        name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
-        exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
-        printf '  - %-26s %s\n' "${name}" "${exec_cmd}"
+resolve_sources() {
+    if [ -n "${EESSI_CATALOG_FILES:-}" ]; then
+        local IFS=':'
+        local path
+        for path in ${EESSI_CATALOG_FILES}; do
+            [ -n "${path}" ] && printf 'file:%s\n' "${path}"
+        done | awk '!seen[$0]++'
+        return 0
+    fi
+
+    if [ -n "${EESSI_CATALOG_URLS:-}" ]; then
+        printf '%s\n' "${EESSI_CATALOG_URLS}" \
+            | tr ', \t' '\n' \
+            | awk 'NF && !seen[$0]++ { print "url:" $0 }'
+        return 0
+    fi
+
+    if [ -r "${CATALOGS_FILE}" ]; then
+        local derived
+        derived="$(jq -r '
+            if type == "array" then
+                .[]
+                | select((has("use") | not) or .use == true)
+                | (.url // "")
+                | select(type == "string" and test("^https://[^[:space:]]+/apps\\.json$"))
+                | sub("/apps\\.json$"; "/eessi.json")
+            else
+                empty
+            end
+        ' "${CATALOGS_FILE}" 2>/dev/null | awk 'NF && !seen[$0]++ { print "url:" $0 }')" || true
+        if [ -n "${derived}" ]; then
+            printf '%s\n' "${derived}"
+            return 0
+        fi
+    fi
+
+    printf 'url:%s\n' "${DEFAULT_EESSI_CATALOG_URL}"
+}
+
+cache_matches_sources() {
+    local current_dir="${CACHE_DIR}/current"
+    [ -f "${current_dir}/sources.txt" ] && [ -f "${current_dir}/merged.json" ] || return 1
+    local expected
+    expected="$(resolve_sources)"
+    [ -n "${expected}" ] || return 1
+    [ "$(cat "${current_dir}/sources.txt")" = "${expected}" ]
+}
+
+active_apps_dir() {
+    local cached_apps="${CACHE_DIR}/current/applications"
+    if cache_matches_sources && [ -d "${cached_apps}" ]; then
+        local f
+        for f in "${cached_apps}"/*.desktop; do
+            if [ -f "${f}" ]; then
+                printf '%s\n' "${cached_apps}"
+                return 0
+            fi
+        done
+    fi
+    if [ -d "${STATIC_APPS_DIR}" ]; then
+        printf '%s\n' "${STATIC_APPS_DIR}"
+    fi
+}
+
+validate_catalog_json() {
+    local file="$1"
+    jq -e '
+        type == "object"
+        and .schemaVersion == 1
+        and .backend == "eessi"
+        and .explicitSelectionRequired == true
+        and (.cvmfsRepo | type == "string" and test("^[a-z0-9][a-z0-9.-]*\\.[a-z]{2,}$"))
+        and (.stacks | type == "array" and length > 0 and all(.[]; type == "string" and test("^[0-9]{4}\\.[0-9]{2}$")))
+        and (.tools | type == "object")
+        and ((.tools | keys) | all(.[]; test("^[a-z0-9][a-z0-9._+-]{0,63}$")))
+        and (
+            [.tools | to_entries[] | .value]
+            | all(.[];
+                type == "object"
+                and (.package | type == "string" and length > 0)
+                and (.categories | type == "array")
+                and (.apps | type == "object")
+                and (
+                    [.apps | to_entries[] | .value]
+                    | all(.[];
+                        type == "object"
+                        and .backend == "eessi"
+                        and (.stack | type == "string" and test("^[0-9]{4}\\.[0-9]{2}$"))
+                        and (.module | type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._+-]*/[A-Za-z0-9][A-Za-z0-9._+-]*$"))
+                        and (.exec | type == "array" and all(.[]; type == "string" and test("^[A-Za-z0-9._/@:+=-]{1,128}$")))
+                        and ((.show_in_menu // false) | type == "boolean")
+                        and (if (.show_in_menu // false) then (.exec | length > 0) else true end)
+                    )
+                )
+            )
+        )
+    ' "${file}" >/dev/null 2>&1
+}
+
+desktop_slug() {
+    local id="$1"
+    case "${id}" in
+        r-bundle-cran) printf 'r-cran' ;;
+        r-bundle-bioconductor) printf 'r-bioconductor' ;;
+        *) printf '%s' "${id}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//' ;;
+    esac
+}
+
+sanitize_desktop_value() {
+    printf '%s' "$1" | tr '\r\n\t' '   ' | tr -d '\000-\037\177' | sed -E 's/  +/ /g; s/^ //; s/ $//'
+}
+
+sanitize_terminal_title() {
+    printf '%s' "$1" | tr -cd 'A-Za-z0-9 ._+()/-' | sed -E 's/  +/ /g; s/^ //; s/ $//'
+}
+
+desktop_categories() {
+    local cats_csv="$1"
+    local out="Science;"
+    case ",${cats_csv}," in
+        *,visualization,*|*,image\ segmentation,*) out="${out}Graphics;" ;;
+    esac
+    case ",${cats_csv}," in
+        *,statistics,*) out="${out}Math;" ;;
+    esac
+    case ",${cats_csv}," in
+        *,molecular\ biology,*) out="${out}Biology;" ;;
+    esac
+    case ",${cats_csv}," in
+        *,programming,*) out="${out}Development;" ;;
+    esac
+    printf '%s' "${out}"
+}
+
+sync_catalogs() {
+    local sources
+    sources="$(resolve_sources)"
+    if [ -z "${sources}" ]; then
+        echo "eessi-catalog: no EESSI catalog sources configured" >&2
+        return 1
+    fi
+
+    mkdir -p "${CACHE_DIR}/snapshots"
+    local stage
+    stage="$(mktemp -d "${CACHE_DIR}/snapshots/.staging.XXXXXX")"
+    trap 'rm -rf "${stage:-}"' RETURN
+    chmod 0755 "${stage}"
+    mkdir -p "${stage}/catalogs" "${stage}/applications"
+    chmod 0755 "${stage}/catalogs" "${stage}/applications"
+
+    local idx=0
+    local src kind target dest
+    local -a fetched_files=()
+    while IFS= read -r src; do
+        [ -n "${src}" ] || continue
+        kind="${src%%:*}"
+        target="${src#*:}"
+        idx=$((idx + 1))
+        dest="${stage}/catalogs/$(printf '%02d' "${idx}").json"
+        if [ "${kind}" = "file" ]; then
+            if [ ! -r "${target}" ]; then
+                echo "eessi-catalog: cannot read catalog file: ${target}" >&2
+                return 1
+            fi
+            cp -- "${target}" "${dest}"
+        elif [ "${kind}" = "url" ]; then
+            if [[ ! "${target}" =~ ^https://[^[:space:]]+$ ]]; then
+                echo "eessi-catalog: refusing non-HTTPS catalog URL: ${target}" >&2
+                return 1
+            fi
+            if ! curl -fsSL --proto '=https' --tlsv1.2 \
+                --connect-timeout "${CONNECT_TIMEOUT}" \
+                --max-time "${MAX_TIME}" \
+                --max-filesize "${MAX_BYTES}" \
+                -o "${dest}" "${target}"; then
+                echo "eessi-catalog: failed to fetch ${target}" >&2
+                return 1
+            fi
+        else
+            echo "eessi-catalog: invalid source: ${src}" >&2
+            return 1
+        fi
+        if ! validate_catalog_json "${dest}"; then
+            echo "eessi-catalog: invalid EESSI catalog JSON from ${target}" >&2
+            return 1
+        fi
+        chmod 0644 "${dest}"
+        fetched_files+=("${dest}")
+    done <<<"${sources}"
+
+    if [ "${#fetched_files[@]}" -eq 0 ]; then
+        echo "eessi-catalog: no EESSI catalogs loaded" >&2
+        return 1
+    fi
+
+    printf '%s\n' "${sources}" > "${stage}/sources.txt"
+    chmod 0644 "${stage}/sources.txt"
+
+    # Merge validated catalogs deterministically across all configured domains.
+    jq -s '
+        {
+            schemaVersion: 1,
+            backend: "eessi",
+            explicitSelectionRequired: true,
+            cvmfsRepo: (.[0].cvmfsRepo),
+            stacks: ([.[].stacks[]] | unique | sort | reverse),
+            tools: (
+                reduce .[] as $doc ({};
+                    reduce ($doc.tools | to_entries[]) as $t (.;
+                        .[$t.key] = (
+                            if has($t.key) then
+                                .[$t.key]
+                                | .categories = ((.categories + $t.value.categories) | unique | sort)
+                                | .apps = (.apps * $t.value.apps)
+                            else
+                                $t.value
+                            end
+                        )
+                    )
+                )
+            )
+        }
+    ' "${fetched_files[@]}" > "${stage}/merged.json"
+    chmod 0644 "${stage}/merged.json"
+
+    # Generate .desktop entries for every validated menu launcher (show_in_menu: true).
+    local -A used_slug_counts=()
+    local -A seen_launchers=()
+    local tool_id label stack mod gpu terminal cats desc exec_joined
+    while IFS= read -r -d '' tool_id \
+        && IFS= read -r -d '' label \
+        && IFS= read -r -d '' stack \
+        && IFS= read -r -d '' mod \
+        && IFS= read -r -d '' gpu \
+        && IFS= read -r -d '' terminal \
+        && IFS= read -r -d '' cats \
+        && IFS= read -r -d '' desc \
+        && IFS= read -r -d '' exec_joined; do
+        [ -n "${tool_id}" ] || continue
+        local dedup_key="${tool_id}|${stack}|${mod}|${exec_joined}"
+        if [ -n "${seen_launchers[${dedup_key}]+x}" ]; then
+            continue
+        fi
+        seen_launchers["${dedup_key}"]=1
+
+        local slug count fname
+        slug="$(desktop_slug "${tool_id}")"
+        [ -n "${slug}" ] || continue
+        count="${used_slug_counts[${slug}]:-0}"
+        used_slug_counts["${slug}"]=$((count + 1))
+        if [ "${count}" -eq 0 ]; then
+            fname="eessi-${slug}.desktop"
+        else
+            local suffix="${stack//./-}"
+            [ "${gpu}" = "true" ] && suffix="${suffix}-gpu"
+            fname="eessi-${slug}-${suffix}-${count}.desktop"
+        fi
+
+        local safe_name safe_comment safe_title desktop_cats exec_line
+        safe_name="$(sanitize_desktop_value "${label}")"
+        safe_name="${safe_name:0:128}"
+        [ -n "${safe_name}" ] || continue
+        safe_comment="$(sanitize_desktop_value "${desc}")"
+        safe_comment="${safe_comment:0:200}"
+        [ -n "${safe_comment}" ] || safe_comment="${safe_name} via EESSI/${stack} (explicit selection, no DOI)"
+        desktop_cats="$(desktop_categories "${cats}")"
+
+        if [ "${terminal}" = "true" ]; then
+            safe_title="$(sanitize_terminal_title "${safe_name}")"
+            [ -n "${safe_title}" ] || safe_title="EESSI"
+            exec_line="/usr/local/bin/eessi-launch --stack ${stack} -- ${mod} xfce4-terminal --disable-server --title=\"${safe_title}\" -x ${exec_joined}"
+        else
+            exec_line="/usr/local/bin/eessi-launch --stack ${stack} -- ${mod} ${exec_joined}"
+        fi
+
+        cat > "${stage}/applications/${fname}" <<EOF
+[Desktop Entry]
+Type=Application
+Name=${safe_name}
+Comment=${safe_comment}
+Exec=${exec_line}
+Terminal=false
+X-Scidesktop-Category=EESSI
+Categories=${desktop_cats}
+EOF
+        chmod 0644 "${stage}/applications/${fname}"
+    done < <(jq -j '
+        [
+            .tools | to_entries[] as $t
+            | $t.value.apps | to_entries[] as $a
+            | select(($a.value.show_in_menu // false) == true and (($a.value.exec // []) | length > 0))
+            | {
+                id: $t.key,
+                label: $a.key,
+                stack: $a.value.stack,
+                stack_num: ($a.value.stack | split(".") | map(tonumber) | .[0] * 100 + .[1]),
+                module: $a.value.module,
+                gpu: ($a.value.gpu // false),
+                terminal: ($a.value.terminal // false),
+                cats: (($t.value.categories // []) | join(",")),
+                desc: ($t.value.description // ""),
+                exec: ($a.value.exec | join(" "))
+            }
+        ]
+        | sort_by([.id, -.stack_num, (if .gpu then 1 else 0 end), .label])
+        | .[]
+        | [
+            .id, .label, .stack, .module, (.gpu | tostring),
+            (.terminal | tostring), .cats, .desc, .exec
+          ][]
+        | (. + "\u0000")
+    ' "${stage}/merged.json")
+
+    local snap_name="sync-$$-$(date +%s)"
+    local final_snap="${CACHE_DIR}/snapshots/${snap_name}"
+    mv "${stage}" "${final_snap}"
+    stage=""
+    local tmp_link="${CACHE_DIR}/.current.tmp.$$"
+    ln -s "snapshots/${snap_name}" "${tmp_link}"
+    mv -Tf "${tmp_link}" "${CACHE_DIR}/current"
+
+    # Prune previous snapshots while keeping the active one.
+    local old
+    for old in "${CACHE_DIR}/snapshots"/sync-*; do
+        [ -d "${old}" ] || continue
+        [ "$(basename "${old}")" = "${snap_name}" ] && continue
+        rm -rf "${old}"
     done
-fi
+}
 
-if [ -d /etc/scidesktop/eessi-catalog.d ]; then
+show_catalog() {
+    local eessi_modroot="${EESSI_MODULE_ROOT:-/cvmfs/software.eessi.io/init/modules}"
+    if [ -d "${eessi_modroot}" ]; then
+        echo "EESSI repository: mounted (/cvmfs/software.eessi.io)"
+        local stacks
+        stacks="$(find "${eessi_modroot}/EESSI" -maxdepth 1 -name '*.lua' -printf '%f\n' 2>/dev/null | sed 's/\.lua$//' | sort | tr '\n' ' ' || true)"
+        [ -n "${stacks}" ] && echo "Available stacks: ${stacks}"
+    else
+        echo "EESSI repository: not mounted (/cvmfs/software.eessi.io)"
+        echo "Hint: mount /cvmfs/software.eessi.io from the host/cluster or start with SCIDESKTOP_CVMFS_MODE=internal."
+    fi
+
     echo
-    echo "Curated EESSI modules for this image:"
-    for f in /etc/scidesktop/eessi-catalog.d/*.txt; do
-        [ -f "${f}" ] || continue
-        cat "${f}"
-    done
-fi
+    echo "Quick start:"
+    echo "  module load EESSI/${EESSI_DEFAULT_VERSION:-2025.06}"
+    echo "  module avail"
+    echo "  eessi-catalog sync    # refresh curated catalog & JupyterLab launchers"
+
+    local apps_dir
+    apps_dir="$(active_apps_dir)"
+    if [ -n "${apps_dir}" ] && [ -d "${apps_dir}" ]; then
+        echo
+        echo "Desktop launchers (shown in JupyterLab EESSI section when EESSI is mounted):"
+        local f name exec_cmd
+        for f in "${apps_dir}"/*.desktop; do
+            [ -f "${f}" ] || continue
+            name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
+            exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
+            printf '  - %-32s %s\n' "${name}" "${exec_cmd}"
+        done
+    fi
+
+    if cache_matches_sources; then
+        echo
+        echo "Curated EESSI modules from live catalog (explicit selection; no DOI):"
+        jq -r '
+            .tools | to_entries | sort_by(.key)[]
+            | .value as $t
+            | ($t.apps | to_entries | sort_by(.key)[]
+                | "  - \($t.package) [\(.value.stack)\(if .value.gpu then ", GPU" else "" end)]: \(.value.module)")
+        ' "${CACHE_DIR}/current/merged.json"
+    elif [ -d "${STATIC_CATALOG_DIR}" ]; then
+        echo
+        echo "Curated EESSI modules for this image:"
+        local f
+        for f in "${STATIC_CATALOG_DIR}"/*.txt; do
+            [ -f "${f}" ] || continue
+            cat "${f}"
+        done
+    fi
+}
+
+cmd="${1:-list}"
+case "${cmd}" in
+    list)
+        show_catalog
+        ;;
+    sync|refresh)
+        sync_catalogs
+        ;;
+    urls)
+        resolve_sources
+        ;;
+    apps-dir)
+        active_apps_dir
+        ;;
+    json)
+        if cache_matches_sources; then
+            cat "${CACHE_DIR}/current/merged.json"
+        else
+            echo "eessi-catalog: no synced catalog cache found (run: eessi-catalog sync)" >&2
+            exit 1
+        fi
+        ;;
+    -h|--help|help)
+        usage
+        ;;
+    *)
+        echo "eessi-catalog: unknown command: ${cmd}" >&2
+        usage
+        exit 2
+        ;;
+esac
