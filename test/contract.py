@@ -49,6 +49,7 @@ NOT_RENOVATED = {
     "DATADESKTOP_IMAGE": "output tag",
     "AIDESKTOP_IMAGE": "output tag",
     "NEURODESKTOP_IMAGE": "output tag",
+    "SLURM_TAG": "tracked by its own Renovate rule (github-tags, regex versioning)",
     "SCIGET_COMMIT": "tracked by its own Renovate rule (git-refs on main)",
     "SCIGET_SRC": "built from SCIGET_COMMIT",
     "AI_READY_COMMIT": "tracked by its own Renovate rule (git-refs on main)",

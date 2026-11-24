@@ -65,6 +65,10 @@ variable "APPTAINER_GO_ARCHIVE_VERSION" { default = "0.3.0" }
 variable "LMOD_VERSION" { default = "9.4.5" }
 variable "LMOD_SHA256" { default = "05292b7a1d9285a869129726f1429f86393fe274bf12d311828e16df27cdaaf3" }
 
+# Slurm release tag; tracked by its own Renovate rule (renovate.json).
+variable "SLURM_TAG" { default = "slurm-25-11-9-1" }
+variable "SLURM_SHA256" { default = "c1aa51d19899cd874b0d40c30bd9a1a380ed1643ed1d351d6d3c8b4b33afed06" }
+
 # renovate: datasource=docker depName=sciget-go packageName=golang
 variable "SCIGET_GO_VERSION" { default = "1.27.4-bookworm" }
 
@@ -445,15 +449,17 @@ target "sciget-test" {
   output   = ["type=cacheonly"]
 }
 
-# A Slurm queue for the session, run as the notebook user. Slurm itself is
-# in the OS layer.
+# A Slurm queue for the session, run as the notebook user; Slurm built from
+# source into /opt/slurm.
 target "slurm" {
   inherits = ["_component"]
   context  = "components/slurm"
   target   = "component"
   args = {
-    NB_UID = NB_UID
-    NB_GID = NB_GID
+    NB_UID       = NB_UID
+    NB_GID       = NB_GID
+    SLURM_TAG    = SLURM_TAG
+    SLURM_SHA256 = SLURM_SHA256
   }
 }
 

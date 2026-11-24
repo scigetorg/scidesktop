@@ -13,9 +13,10 @@ squeue                                 # what is queued and running
 srun --pty bash                        # an interactive step
 ```
 
-It is the `slurm` component, part of the base image. Slurm itself is the OS
-layer's packages (`components/os-ubuntu/packages/slurm.txt`); the component
-is what runs it.
+It is the `slurm` component, part of the base image. The component builds
+Slurm from source into `/opt/slurm`, with only what the session's
+configuration uses, and links its commands into `/usr/local/bin`. The release
+is `SLURM_TAG` in `docker-bake.hcl`.
 
 ## What runs
 

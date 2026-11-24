@@ -1,6 +1,0 @@
-# Slurm for the single-node queue of a session (components/slurm): the
-# controller, the worker and the commands. Nothing starts them but that
-# component, as the notebook user.
-slurmctld
-slurmd
-slurm-client

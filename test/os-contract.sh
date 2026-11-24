@@ -25,9 +25,6 @@ for b in bash curl setpriv tini usermod groupmod useradd locale-gen; do check "c
 check "core: sudo omitted" bash -c '! command -v sudo'
 check "core: CA bundle" test -s /etc/ssl/certs/ca-certificates.crt
 
-# batch jobs: Slurm's daemons and commands, for the session's queue
-for b in slurmctld slurmd sbatch srun squeue scancel sinfo scontrol; do check "slurm: ${b}" has "${b}"; done
-
 # locale
 check "locale: C.UTF-8" bash -c 'LC_ALL=C.UTF-8 locale 2>&1 | grep -qv "Cannot set"'
 check "locale: en_US.UTF-8" bash -c 'locale -a | grep -qi "en_US.utf8"'

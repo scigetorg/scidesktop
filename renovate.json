@@ -630,6 +630,29 @@
       "addLabels": [
         "component:neurodesk-compat"
       ]
+    },
+    {
+      "description": "Component slurm: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/slurm/**"
+      ],
+      "groupName": "component slurm",
+      "addLabels": [
+        "component:slurm"
+      ]
+    },
+    {
+      "description": "Component slurm: its versions in docker-bake.hcl join the component's group.",
+      "matchFileNames": [
+        "docker-bake.hcl"
+      ],
+      "matchDepNames": [
+        "slurm"
+      ],
+      "groupName": "component slurm",
+      "addLabels": [
+        "component:slurm"
+      ]
     }
   ],
   "customManagers": [
@@ -738,6 +761,20 @@
       ],
       "packageNameTemplate": "conda-forge/{{depName}}",
       "datasourceTemplate": "conda"
+    },
+    {
+      "description": "Slurm release tag (slurm-<major>-<minor>-<patch>-<build>); a bump needs SLURM_SHA256 updated for the new tag's archive.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"SLURM_TAG\" \\{ default = \"(?<currentValue>slurm-[0-9-]+)\" \\}"
+      ],
+      "depNameTemplate": "slurm",
+      "packageNameTemplate": "SchedMD/slurm",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^slurm-(?<major>\\d+)-(?<minor>\\d+)-(?<patch>\\d+)-(?<build>\\d+)$"
     }
   ],
   "vulnerabilityAlerts": {
