@@ -18,6 +18,7 @@ out=$(docker run --rm "${IMAGE}" bash -lc '
     echo "vgl-eglinfo=$(command -v vgl-eglinfo)"
     echo "glxinfo=$(command -v glxinfo)"
     echo "nvidia_caps=${NVIDIA_DRIVER_CAPABILITIES:-}"
+    test -r /usr/local/bin/before-notebook.d/13-virtualgl-env.sh && echo "env_hook=ok"
     libs="libdlfaker.so libgefaker.so libvglfaker.so libvglfaker-nodl.so"
     if [ "$(dpkg --print-architecture)" = "amd64" ]; then
         libs="${libs} libvglfaker-opencl.so"
@@ -46,6 +47,7 @@ has "glxinfo=/usr/bin/glxinfo" && pass "glxinfo (mesa-utils) on PATH" || fail "g
 has "faker_libs=ok" && pass "VirtualGL faker libraries present in /usr/lib" || fail "VirtualGL faker libraries present in /usr/lib"
 has "ldd=ok" && pass "VirtualGL libraries and glxspheres64 resolve all shared libs" || fail "VirtualGL libraries and glxspheres64 resolve all shared libs"
 has "preload=ok" && pass "vglrun preloads libdlfaker.so and libvglfaker.so cleanly" || fail "vglrun preloads libdlfaker.so and libvglfaker.so cleanly"
+has "env_hook=ok" && pass "VirtualGL EGL startup hook present" || fail "VirtualGL EGL startup hook present"
 printf '%s\n' "${out}" | grep -q '^nvidia_caps=.*graphics' \
     && pass "NVIDIA_DRIVER_CAPABILITIES exposes graphics" \
     || fail "NVIDIA_DRIVER_CAPABILITIES exposes graphics"
