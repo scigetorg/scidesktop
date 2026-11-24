@@ -193,6 +193,7 @@ variable "PLATFORM" { default = "" }
 variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
 variable "DATADESKTOP_IMAGE" { default = "datadesktop:latest" }
+variable "DERMDESKTOP_IMAGE" { default = "dermdesktop:latest" }
 variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
 variable "NEURODESKTOP_IMAGE" { default = "neurodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
@@ -228,7 +229,7 @@ variable "NF_NEURO_MODULES_SRC" { default = "https://github.com/nf-neuro/modules
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop", "datadesktop", "aidesktop", "neurodesktop"]
+  targets = ["scidesktop", "microdesktop", "datadesktop", "dermdesktop", "aidesktop", "neurodesktop"]
 }
 
 group "test" {
@@ -245,6 +246,7 @@ group "test" {
     "sciget-neuroimaging-test",
     "sciget-microscopy-test",
     "sciget-datascience-test",
+    "sciget-dermatology-test",
     "eessi-cvmfs-test",
     "jupyterlab-niivue-test",
     "jupyterlab-freebrowse-test",
@@ -269,6 +271,7 @@ group "test" {
     "workflow-engines-test",
     "microscopy-env-test",
     "datascience-env-test",
+    "dermatology-env-test",
     "neuroimaging-env-test",
     "neurodesk-compat-test",
     "rclone-test",
@@ -531,6 +534,19 @@ target "sciget-datascience" {
 
 target "sciget-datascience-test" {
   inherits = ["sciget-datascience"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+target "sciget-dermatology" {
+  inherits = ["_component"]
+  context  = "components/sciget-dermatology"
+  target   = "component"
+  contexts = { sciget = "target:sciget" }
+}
+
+target "sciget-dermatology-test" {
+  inherits = ["sciget-dermatology"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1058,6 +1074,21 @@ target "datascience-env-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: dermatology Python analysis kernel (numpy, scipy, scikit-image,
+# scikit-learn, statsmodels, tifffile, imagecodecs, zarr, ome-zarr, bioio,
+# openslide, pydicom, colour-science, trimesh, dask, xarray). Copied by dermdesktop.
+target "dermatology-env" {
+  inherits = ["_component"]
+  context  = "components/dermatology-env"
+  target   = "component"
+}
+
+target "dermatology-env-test" {
+  inherits = ["dermatology-env"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # Optional: neuroimaging Python analysis kernel (nibabel, nipype, niwrap,
 # pydra, nipoppy, ipyniivue, datalad, xnat, nf-core). Copied by neurodesktop.
 target "neuroimaging-env" {
@@ -1159,6 +1190,19 @@ target "datadesktop" {
     datascience-env    = "target:datascience-env"
   }
   tags   = [DATADESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
+target "dermdesktop" {
+  inherits = ["_common"]
+  context  = "images/dermdesktop"
+  contexts = {
+    scidesktop-base         = "target:scidesktop"
+    sciget-dermatology      = "target:sciget-dermatology"
+    jupyterlab-neuroglancer = "target:jupyterlab-neuroglancer"
+    dermatology-env         = "target:dermatology-env"
+  }
+  tags   = [DERMDESKTOP_IMAGE]
   output = ["type=docker"]
 }
 

@@ -30,7 +30,7 @@ RUN chmod -R go-w /rootfs
 # under each user's own) and the hook that downloads the catalogs at start
 # (30-sciget). It ships no catalog: which tools an image offers is the choice
 # of the catalog component the image copies (sciget-neuroimaging,
-# sciget-microscopy, sciget-datascience), or of the user (`sciget catalog add`).
+# sciget-microscopy, sciget-datascience, sciget-dermatology), or of the user (`sciget catalog add`).
 FROM scratch AS component
 COPY --from=rootfs /rootfs/ /
 COPY --from=build /out/sciget /usr/local/bin/sciget

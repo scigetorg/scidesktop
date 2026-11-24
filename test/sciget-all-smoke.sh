@@ -17,7 +17,7 @@ fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 
 # Skip when a domain-specific catalog component narrows /etc/sciget/catalogs.json.
 manifests="$(docker run --rm --entrypoint ls "${IMAGE}" /opt/scidesktop/manifest.d 2>/dev/null || true)"
-if grep -qE '^sciget-(neuroimaging|microscopy|datascience)\.json$' <<<"${manifests}"; then
+if grep -qE '^sciget-(neuroimaging|microscopy|datascience|dermatology)\.json$' <<<"${manifests}"; then
     echo "sciget-all smoke: ${IMAGE} (narrowed by a domain catalog; checked by its own smoke test)"
     exit 0
 fi
@@ -36,12 +36,12 @@ for _ in $(seq 1 120); do
 done
 
 listed="$(as_user 'sciget catalog list' | cut -f 1-3)"
-[ "${listed}" = "$(printf 'neuroimaging\t1\tsystem\nmicroscopy\t2\tsystem\ndatascience\t3\tsystem')" ] \
+[ "${listed}" = "$(printf 'neuroimaging\t1\tsystem\nmicroscopy\t2\tsystem\ndatascience\t3\tsystem\ndermatology\t4\tsystem')" ] \
     && as_user '[ ! -e ~/.config/sciget/catalogs.json ]' \
-    && pass "neuroimaging, microscopy and datascience catalogs come from the system layer" \
-    || fail "neuroimaging, microscopy and datascience catalogs come from the system layer (got: ${listed})"
+    && pass "neuroimaging, microscopy, datascience and dermatology catalogs come from the system layer" \
+    || fail "neuroimaging, microscopy, datascience and dermatology catalogs come from the system layer (got: ${listed})"
 
-for catalog in neuroimaging microscopy datascience; do
+for catalog in neuroimaging microscopy datascience dermatology; do
     as_user "for _ in \$(seq 1 60); do ls ~/.cache/sciget/catalogs/${catalog}-*/ >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1" \
         && pass "the ${catalog} catalog is downloaded at start" \
         || fail "the ${catalog} catalog is downloaded at start"
@@ -59,6 +59,12 @@ if [ -n "${found_ds}" ]; then
 else
     fail "sciget offers postgresanalytics"
 fi
+found_derm="$(as_user 'sciget find qupath' | awk -F '\t' 'index($1, "qupath/") == 1 && $2 == "dermatology"' | head -n 1)"
+if [ -n "${found_derm}" ]; then
+    pass "sciget offers qupath ($(cut -f 1 <<<"${found_derm}"))"
+else
+    fail "sciget offers qupath"
+fi
 
 mp="$(as_user 'echo "${MODULEPATH:-}"')"
 case ":${mp}:" in
@@ -70,9 +76,12 @@ esac
 case ":${mp}:" in
     *:/home/jovyan/.local/share/sciget/modules/datascience:*) ds_mp=1 ;; *) ds_mp=0 ;;
 esac
-[ "${neuro_mp}" = 1 ] && [ "${micro_mp}" = 1 ] && [ "${ds_mp}" = 1 ] \
-    && pass "Lmod MODULEPATH includes neuroimaging, microscopy and datascience sciget module dirs" \
-    || fail "Lmod MODULEPATH includes neuroimaging, microscopy and datascience sciget module dirs (got: ${mp})"
+case ":${mp}:" in
+    *:/home/jovyan/.local/share/sciget/modules/dermatology:*) derm_mp=1 ;; *) derm_mp=0 ;;
+esac
+[ "${neuro_mp}" = 1 ] && [ "${micro_mp}" = 1 ] && [ "${ds_mp}" = 1 ] && [ "${derm_mp}" = 1 ] \
+    && pass "Lmod MODULEPATH includes neuroimaging, microscopy, datascience and dermatology sciget module dirs" \
+    || fail "Lmod MODULEPATH includes neuroimaging, microscopy, datascience and dermatology sciget module dirs (got: ${mp})"
 
 echo
 if [ "${FAILED}" -eq 0 ]; then

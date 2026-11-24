@@ -1,0 +1,4 @@
+  [dermatology (EESSI/2025.06, amd64 + arm64)]
+    Interactive viewers:  napari, ParaView, VTK
+    Image & skin analysis: scikit-image, imageio, zarr, dask, xarray, scikit-learn, Seaborn, plotly.py
+    Biostatistics:        R, R-bundle-CRAN, R-bundle-Bioconductor
