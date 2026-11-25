@@ -88,7 +88,7 @@ commit's short SHA, the date and `latest`.
 | Desktop | IceWM on Xvfb with Thunar and xfce4-terminal, PipeWire for audio, VirtualGL (`vglrun`) and `mesa-utils` |
 | Streaming | Selkies from PyPI, in its own locked environment at `/opt/selkies` |
 | Containers | Apptainer built from source; sciget with all domain catalogs (`sciget-all`) by default |
-| Modules & EESSI | Lmod built from the upstream release; [EESSI](https://www.eessi.io/) CVMFS repository (`eessi-cvmfs`, `software.eessi.io`) wired into Lmod (`module load EESSI/2025.06`), `eessi-catalog`, `eessi-launch`, and JupyterLab desktop launchers (base `ParaView`, `Octave`, `Julia`, `R` plus domain launchers such as `napari` on `microdesktop`, `R + CRAN` on `datadesktop`, `R + Bioconductor` on `neurodesktop`) when mounted |
+| Modules & EESSI | Lmod built from the upstream release; [EESSI](https://www.eessi.io/) CVMFS repository (`eessi-cvmfs`, `software.eessi.io`) wired into Lmod (`module load EESSI/2025.06`), `eessi-catalog` (syncing live curated `<domain>/eessi.json` catalogs from `apps-catalog` with built-in offline fallback), `eessi-launch`, and dedicated **EESSI** JupyterLab desktop launcher tiles (base `ParaView`, `Octave`, `Julia`, `R` plus domain launchers such as `napari` on `microdesktop` and `dermdesktop`, `R + CRAN` on `datadesktop`, `R + Bioconductor` on `neurodesktop`) when mounted |
 | Viewers | [Neuroglancer](docs/viewers.md) on `microdesktop` and `dermdesktop`; [NiiVue](docs/viewers.md) and [FreeBrowse](docs/viewers.md) on `neurodesktop` |
 | Coding agents | Codex, Claude Code and OpenCode for terminals: upstream release binaries, checksummed, at `/opt/coding-agents` |
 | AI chat | [Jupyter AI](docs/jupyter-ai.md) in JupyterLab with OpenCode, Codex and Claude personas (`acp-adapters`). No model, key or endpoint comes with it |
@@ -130,6 +130,7 @@ publisher provides one. Renovate proposes updates rather than builds drifting si
 | `SCIDESKTOP_CVMFS_MODE` | `external` | `external`, `internal` or `disabled`; see the runbook |
 | `SCIDESKTOP_APPTAINER_SETUID` | unused | Removed: Apptainer is built `--without-suid` and `starter-suid` is not shipped |
 | `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download the sciget catalogs in the background at start |
+| `SCIDESKTOP_EESSI_CATALOG_REFRESH` | `yes` | Sync curated `<domain>/eessi.json` launchers when EESSI CVMFS is mounted (fail-soft to built-in fallbacks) |
 | `SCIDESKTOP_SLURM` | `yes` | Start the session's Slurm queue; see [docs/slurm.md](docs/slurm.md) |
 | `AI_READY_PUBLIC_ORIGIN` | `http://127.0.0.1:8888` | AI images only: the origin users reach the session at; see [docs/ai-ready.md](docs/ai-ready.md) |
 | `T3_CODE_WORKDIR` | the home folder | Images with T3 Code: the folder it starts in; see [docs/coding-agents.md](docs/coding-agents.md) |

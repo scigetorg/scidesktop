@@ -4,4 +4,5 @@ Name=R + CRAN (EESSI)
 Comment=Interactive R console with R-bundle-CRAN via EESSI
 Exec=/usr/local/bin/eessi-launch R-bundle-CRAN xfce4-terminal --disable-server --title="R + CRAN (EESSI)" -e R
 Terminal=false
+X-Scidesktop-Category=EESSI
 Categories=Science;Math;
