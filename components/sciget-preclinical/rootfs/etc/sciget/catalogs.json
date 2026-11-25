@@ -1,0 +1,8 @@
+[
+  {
+    "name": "preclinical",
+    "url": "https://apps-catalog.scigetorg.workers.dev/preclinical/apps.json",
+    "use": true,
+    "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
+  }
+]

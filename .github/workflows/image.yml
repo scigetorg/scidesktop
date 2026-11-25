@@ -19,7 +19,7 @@ env:
   # Images pushed to GHCR as ghcr.io/<owner>/<image>. Every folder in images/
   # is built and smoke-tested on every architecture; add a name here to
   # publish it too.
-  PUBLISH: scidesktop microdesktop datadesktop dermdesktop aidesktop neurodesktop
+  PUBLISH: scidesktop microdesktop datadesktop dermdesktop preclinicaldesktop moleculardesktop aidesktop neurodesktop
   # This run's images before they are published: <candidate>-<arch>.
   CANDIDATE: run-${{ github.run_id }}
 
@@ -29,7 +29,7 @@ jobs:
   build:
     name: Build, test and smoke (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -66,8 +66,20 @@ jobs:
       - name: Publish script
         run: ./test/publish-manifests-test.sh
 
-      # One bake builds every component, runs every component's test stage and loads
-      # every image in images/ as <image>:ci.
+      - name: Free disk space (amd64)
+        if: matrix.arch == 'amd64'
+        run: |
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      # Build the base image and every component's test stage first, then load
+      # each domain image sequentially so buildx does not stream all multi-GB
+      # image tarballs into dockerd at once (avoiding ENOSPC on ubuntu-24.04).
       - name: Build components, component tests and images
         env:
           PLATFORM: linux/${{ matrix.arch }}
@@ -77,17 +89,37 @@ jobs:
         # is run once more without the cache; any other failure stands.
         run: |
           # The build's own exit status, not tee's.
-          set -o pipefail
-          mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci write-cache)
-          if docker buildx bake "${args[@]}" default test 2>&1 | tee /tmp/bake.log; then
-              exit 0
-          fi
-          if ! grep -qE 'BlobNotFound|cache entry no longer exists|failed to copy: GET https://[^ ]*actions-cache' /tmp/bake.log; then
-              exit 1
-          fi
-          echo "::warning::The Actions cache lost a layer during the build; building once more without it."
-          mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci no-cache)
-          docker buildx bake "${args[@]}" default test
+          set -euo pipefail
+          run_bake() {
+              local cache_mode="$1"
+              shift
+              if [ "${cache_mode}" = write-cache ]; then
+                  mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci write-cache)
+              else
+                  mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci)
+              fi
+              if docker buildx bake "${args[@]}" "$@" 2>&1 | tee /tmp/bake.log; then
+                  return 0
+              fi
+              if grep -qE 'inconsistent graph state' /tmp/bake.log; then
+                  echo "::warning::Buildx hit a transient graph-state error; retrying with cache."
+                  docker buildx bake "${args[@]}" "$@"
+                  return $?
+              fi
+              if ! grep -qE 'BlobNotFound|cache entry no longer exists|failed to copy: GET https://[^ ]*actions-cache' /tmp/bake.log; then
+                  return 1
+              fi
+              echo "::warning::The Actions cache lost a layer during the build; building once more without it."
+              mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci no-cache)
+              docker buildx bake "${args[@]}" "$@"
+          }
+          run_bake write-cache test
+          run_bake write-cache scidesktop
+          for dockerfile in images/*/Dockerfile; do
+              image="$(basename "$(dirname "${dockerfile}")")"
+              [ "${image}" != "scidesktop" ] || continue
+              run_bake read-cache "${image}"
+          done
 
       # docs/components.md: what each component writes (no overlaps, no shadowing,
       # no permission changes to shared folders, a manifest entry).
@@ -124,7 +156,7 @@ jobs:
         if: matrix.arch == 'amd64'
         run: |
           failed=0
-          for image in scidesktop microdesktop datadesktop dermdesktop aidesktop neurodesktop; do
+          for image in scidesktop microdesktop datadesktop dermdesktop preclinicaldesktop moleculardesktop aidesktop neurodesktop; do
               echo "::group::browser-smoke ${image}"
               ./test/browser-smoke.sh "${image}:ci" || failed=1
               echo "::endgroup::"
@@ -190,6 +222,8 @@ jobs:
               "microdesktop:ci:/opt/microscopy-env/bin/python" \
               "datadesktop:ci:/opt/datascience-env/bin/python" \
               "dermdesktop:ci:/opt/dermatology-env/bin/python" \
+              "preclinicaldesktop:ci:/opt/preclinical-env/bin/python" \
+              "moleculardesktop:ci:/opt/molecular-imaging-env/bin/python" \
               "aidesktop:ci:/opt/ai-ready/env/bin/python" \
               "aidesktop:ci:/opt/ai-ready/airflow/bin/python" \
               "neurodesktop:ci:/opt/neuroimaging-env/bin/python"; do
@@ -267,7 +301,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [scidesktop, microdesktop, datadesktop, dermdesktop, aidesktop, neurodesktop]
+        image: [scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, aidesktop, neurodesktop]
     permissions:
       contents: read
       packages: write

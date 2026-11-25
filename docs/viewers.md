@@ -7,12 +7,12 @@ outside `/opt/conda`:
 | --- | --- | --- | --- |
 | `jupyterlab-freebrowse` | `neurodesktop` | [FreeBrowse](https://github.com/neurodesk/freebrowse), built from Neurodesk's fork at a pinned commit | `.nvd` NiiVue documents on double-click; `.nii` and `.nii.gz` through **Open With** or **Open in FreeBrowse** |
 | `jupyterlab-neuroglancer` | `microdesktop`, `dermdesktop` | [Google Neuroglancer](https://github.com/google/neuroglancer) standalone WebGL2 client at a pinned commit | **OME-Zarr** (Zarr v2 & v3), **N5**, and **Precomputed** folders via right-click → **Open in Neuroglancer** (or right-clicking `.zattrs`/`.zgroup`/`.zarray`/`zarr.json`/`attributes.json` → **Open Dataset in Neuroglancer**); `.ngstate` on double-click; `.nii`, `.nii.gz`, `.vtk`, `.obj`, `.swc` via **Open With**; blank viewer via the **Neuroglancer** launcher tile |
-| `jupyterlab-niivue` | `neurodesktop` | [jupyterlab-niivue](https://github.com/niivue/niivue-vscode/tree/main/apps/jupyter), the NiiVue viewer: the wheel from PyPI, unmodified | `.nii` and `.nii.gz` on double-click |
+| `jupyterlab-niivue` | `neurodesktop`, `preclinicaldesktop`, `moleculardesktop` | [jupyterlab-niivue](https://github.com/niivue/niivue-vscode/tree/main/apps/jupyter), the NiiVue viewer: the wheel from PyPI, unmodified | `.nii` and `.nii.gz` on double-click |
 
 ## Using them
 
 - On **`microdesktop`** and **`dermdesktop`**, right-click any `.ome.zarr`, `.zarr`, `.n5`, or Precomputed dataset folder in JupyterLab's file browser and choose **Open in Neuroglancer**, or click the **Neuroglancer** launcher tile to inspect remote or local datasets. Neuroglancer uses `type: "auto"` so multi-channel OME-Zarr microscopy and dermatopathology volumes (with OMERO metadata), segmentations, and meshes configure automatically.
-- On **`neurodesktop`**, double-click a `.nii` or `.nii.gz` file in JupyterLab's file browser to open it in NiiVue, or right-click and choose **Open in FreeBrowse**.
+- On **`neurodesktop`**, **`preclinicaldesktop`**, and **`moleculardesktop`**, double-click a `.nii` or `.nii.gz` file in JupyterLab's file browser to open it in NiiVue (and on **`neurodesktop`**, right-click and choose **Open in FreeBrowse**).
 
 All viewers draw in the browser with WebGL2 and keep local data behind the
 notebook server's login (`/files/`).

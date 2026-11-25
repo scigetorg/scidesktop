@@ -1,0 +1,7 @@
+# Preclinical MRI/CT/PET imaging libraries and notebook widgets for /opt/preclinical-env.
+# Run ./lock after changing a pin.
+nibabel==5.5.0
+nilearn==0.14.1
+ipyniivue==2.4.4
+brkraw==0.5.7
+watermark==2.6.0
