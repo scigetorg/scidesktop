@@ -29,7 +29,7 @@ jobs:
   build:
     name: Build, test and smoke (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -91,7 +91,13 @@ jobs:
           # The build's own exit status, not tee's.
           set -euo pipefail
           run_bake() {
-              mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci write-cache)
+              local cache_mode="$1"
+              shift
+              if [ "${cache_mode}" = write-cache ]; then
+                  mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci write-cache)
+              else
+                  mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci)
+              fi
               if docker buildx bake "${args[@]}" "$@" 2>&1 | tee /tmp/bake.log; then
                   return 0
               fi
@@ -107,12 +113,12 @@ jobs:
               mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci no-cache)
               docker buildx bake "${args[@]}" "$@"
           }
-          run_bake test
-          run_bake scidesktop
+          run_bake write-cache test
+          run_bake write-cache scidesktop
           for dockerfile in images/*/Dockerfile; do
               image="$(basename "$(dirname "${dockerfile}")")"
               [ "${image}" != "scidesktop" ] || continue
-              run_bake "${image}"
+              run_bake read-cache "${image}"
           done
 
       # docs/components.md: what each component writes (no overlaps, no shadowing,
