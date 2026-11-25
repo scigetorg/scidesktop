@@ -95,10 +95,15 @@ jobs:
               if docker buildx bake "${args[@]}" "$@" 2>&1 | tee /tmp/bake.log; then
                   return 0
               fi
-              if ! grep -qE 'BlobNotFound|cache entry no longer exists|failed to copy: GET https://[^ ]*actions-cache|inconsistent graph state' /tmp/bake.log; then
+              if grep -qE 'inconsistent graph state' /tmp/bake.log; then
+                  echo "::warning::Buildx hit a transient graph-state error; retrying with cache."
+                  docker buildx bake "${args[@]}" "$@"
+                  return $?
+              fi
+              if ! grep -qE 'BlobNotFound|cache entry no longer exists|failed to copy: GET https://[^ ]*actions-cache' /tmp/bake.log; then
                   return 1
               fi
-              echo "::warning::Buildx hit a transient cache or graph-state error; building once more without the cache."
+              echo "::warning::The Actions cache lost a layer during the build; building once more without it."
               mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci no-cache)
               docker buildx bake "${args[@]}" "$@"
           }
