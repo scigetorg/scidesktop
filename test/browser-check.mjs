@@ -200,6 +200,14 @@ async function openTab(cdp) {
         type: "keyUp", key: "@", code: "Digit2", windowsVirtualKeyCode: 50, modifiers: 8,
       }, sessionId);
     },
+    async pressKey(key, code, windowsVirtualKeyCode) {
+      await cdp.send("Input.dispatchKeyEvent", {
+        type: "keyDown", key, code, windowsVirtualKeyCode,
+      }, sessionId);
+      await cdp.send("Input.dispatchKeyEvent", {
+        type: "keyUp", key, code, windowsVirtualKeyCode,
+      }, sessionId);
+    },
     async waitFor(fnExpr, timeoutMs = 45000, pollMs = 300) {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
@@ -633,15 +641,37 @@ async function main() {
         const kname = (document.querySelector('.jp-Toolbar-kernelName')?.textContent || '').trim();
         return (nb && cells.length >= 2 && /neuroimaging/i.test(kname)) ? { cells: cells.length, kname } : null;
       })()`, 60000);
+      // .jp-Toolbar-kernelName renders immediately from notebook metadata before
+      // the kernel finishes booting and the frontend WebSocket attaches; wait
+      // until the server reports the notebook session's kernel is idle and
+      // connected before triggering execution.
+      const waitForNotebookKernelIdle = async (timeoutMs = 60000) => {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          try {
+            const resp = await fetch(`${BASE_URL}/api/sessions?token=${encodeURIComponent(TOKEN)}`);
+            if (resp.ok) {
+              const sessions = await resp.json();
+              const s = sessions.find((item) => (item.path || "").endsWith("smoke_ipyniivue.ipynb"));
+              if (s?.kernel && s.kernel.execution_state === "idle" && (s.kernel.connections ?? 0) > 0) {
+                return s.kernel;
+              }
+            }
+          } catch { /* transient */ }
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        return null;
+      };
       if (nbReady) {
         // Ignore pre-existing JupyterLab shell boot messages (e.g., server-proxy
         // command re-registration); track all exceptions from widget execution,
         // tab disposal, reopen, and re-render onward.
         const widgetErrStart = nvTab.errors.length;
-        const runAllCells = async () => {
-          // Focus the notebook first so Run -> Run All Cells is enabled.
+        const clickRunAllOnce = async () => {
+          // Focus the first code cell so the notebook panel is active and
+          // Run -> Run All Cells is enabled.
           const cellPt = await nvTab.waitFor(`(() => {
-            const c = document.querySelector('.jp-Notebook .jp-CodeCell');
+            const c = document.querySelector('.jp-Notebook .jp-CodeCell .jp-Cell-inputArea, .jp-Notebook .jp-CodeCell');
             if (!c) return null;
             const r = c.getBoundingClientRect();
             return r.width > 0 ? { x: Math.round(r.x + Math.min(40, r.width / 2)), y: Math.round(r.y + Math.min(16, r.height / 2)) } : null;
@@ -663,9 +693,32 @@ async function main() {
             const r = item.getBoundingClientRect();
             return r.width > 0 ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null;
           })()`, 10000);
-          if (!runAllPt) return false;
+          if (!runAllPt) {
+            await nvTab.pressKey("Escape", "Escape", 27);
+            return false;
+          }
           await nvTab.clickAt(runAllPt.x, runAllPt.y, 1);
           return true;
+        };
+        const runAllCells = async () => {
+          await waitForNotebookKernelIdle(60000);
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            const clicked = await clickRunAllOnce();
+            if (clicked) {
+              const started = await nvTab.waitFor(`(() => {
+                const prompts = [...document.querySelectorAll('.jp-Notebook .jp-CodeCell .jp-InputArea-prompt')]
+                  .map(n => (n.textContent || '').trim());
+                if (prompts.some(p => /\\[\\s*(\\*|\\d+)\\s*\\]/.test(p))) return prompts;
+                if (document.querySelectorAll('.jp-OutputArea canvas').length > 0) return ['canvas'];
+                return null;
+              })()`, 6000, 200);
+              if (started) return true;
+            }
+            // Dismiss any open menu before retrying in case cold-start focus churn swallowed the click.
+            await nvTab.pressKey("Escape", "Escape", 27);
+            await new Promise((r) => setTimeout(r, 300));
+          }
+          return false;
         };
         const waitForTwoWidgets = () => nvTab.waitFor(`(() => {
           const canvases = [...document.querySelectorAll('.jp-OutputArea canvas')]
@@ -674,14 +727,17 @@ async function main() {
           return canvases.length >= 2 ? { count: canvases.length, w: Math.round(canvases[0].width), h: Math.round(canvases[0].height) } : null;
         })()`, 60000, 400);
 
-        await runAllCells();
+        const ranFirst = await runAllCells();
         const widgets = await waitForTwoWidgets();
 
         if (widgets && sharedAssetStatus === 200) {
           pass(`ipyniivue rendered ${widgets.count} WebGL2 widgets (${widgets.w}x${widgets.h}) via shared bundle (${sharedAssetHits} request(s))`);
         } else {
-          const hint = await nvTab.eval(`[...document.querySelectorAll('.jp-OutputArea')].map(n => n.textContent.trim().slice(0, 200)).join(' | ')`);
-          fail("ipyniivue rendered 2 WebGL2 widgets via shared bundle", `widgets=${JSON.stringify(widgets)} assetStatus=${sharedAssetStatus} outputs=${hint}`);
+          const hint = await nvTab.eval(`JSON.stringify({
+            prompts: [...document.querySelectorAll('.jp-Notebook .jp-CodeCell .jp-InputArea-prompt')].map(n => (n.textContent || '').trim()),
+            outputs: [...document.querySelectorAll('.jp-OutputArea')].map(n => n.textContent.trim().slice(0, 200)),
+          })`);
+          fail("ipyniivue rendered 2 WebGL2 widgets via shared bundle", `ran=${ranFirst} widgets=${JSON.stringify(widgets)} assetStatus=${sharedAssetStatus} dom=${hint}`);
         }
 
         // Close and reopen the notebook tab in-SPA (no full page reload) to
@@ -718,10 +774,16 @@ async function main() {
               return (cells >= 2 && /neuroimaging/i.test(kname)) ? true : null;
             })()`, 30000);
             if (reopened) {
-              await runAllCells();
+              const ranSecond = await runAllCells();
               const widgets2 = await waitForTwoWidgets();
               if (widgets2) pass(`ipyniivue notebook closed, reopened in-SPA, and re-rendered ${widgets2.count} WebGL2 widgets`);
-              else fail("ipyniivue notebook reopened and re-rendered 2 WebGL2 widgets");
+              else {
+                const hint2 = await nvTab.eval(`JSON.stringify({
+                  prompts: [...document.querySelectorAll('.jp-Notebook .jp-CodeCell .jp-InputArea-prompt')].map(n => (n.textContent || '').trim()),
+                  outputs: [...document.querySelectorAll('.jp-OutputArea')].map(n => n.textContent.trim().slice(0, 200)),
+                })`);
+                fail("ipyniivue notebook reopened and re-rendered 2 WebGL2 widgets", `ran=${ranSecond} dom=${hint2}`);
+              }
             } else {
               fail("ipyniivue notebook reopened in-SPA");
             }
