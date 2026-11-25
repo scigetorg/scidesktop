@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=napari (EESSI)
+Comment=Multi-dimensional preclinical image viewer via EESSI
+Exec=/usr/local/bin/eessi-launch napari napari
+Terminal=false
+X-Scidesktop-Category=EESSI
+Categories=Science;Biology;Graphics;

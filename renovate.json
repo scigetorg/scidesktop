@@ -24,6 +24,8 @@
       "/^components/microscopy-env/requirements\\.in$/",
       "/^components/datascience-env/requirements\\.in$/",
       "/^components/dermatology-env/requirements\\.in$/",
+      "/^components/preclinical-env/requirements\\.in$/",
+      "/^components/molecular-imaging-env/requirements\\.in$/",
       "/^components/neuroimaging-env/requirements\\.in$/"
     ]
   },
@@ -618,6 +620,26 @@
       "groupName": "component dermatology-env",
       "addLabels": [
         "component:dermatology-env"
+      ]
+    },
+    {
+      "description": "Component preclinical-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/preclinical-env/**"
+      ],
+      "groupName": "component preclinical-env",
+      "addLabels": [
+        "component:preclinical-env"
+      ]
+    },
+    {
+      "description": "Component molecular-imaging-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/molecular-imaging-env/**"
+      ],
+      "groupName": "component molecular-imaging-env",
+      "addLabels": [
+        "component:molecular-imaging-env"
       ]
     },
     {

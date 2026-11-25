@@ -1,0 +1,5 @@
+  [molecular-imaging (EESSI/2025.06, amd64 + arm64)]
+    Interactive viewers:  napari, ParaView, VTK, gnuplot
+    Molecular & imaging:  GROMACS, LAMMPS, RDKit, Biopython, scikit-image, scikit-learn
+    Bioinformatics:       BLAST+, Bowtie2, HMMER, IQ-TREE, SAMtools, BCFtools
+    Statistics & compute: R, R-bundle-CRAN, R-bundle-Bioconductor, Julia, Octave

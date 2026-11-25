@@ -11,7 +11,7 @@ persona to `@`-mention:
 
 | Image | Personas |
 | --- | --- |
-| `scidesktop` and every image built on it (`microdesktop`, `datadesktop`, `dermdesktop`, `aidesktop`, `neurodesktop`) | **OpenCode**, **Codex** and **Claude** |
+| `scidesktop` and every image built on it (`microdesktop`, `datadesktop`, `dermdesktop`, `preclinicaldesktop`, `moleculardesktop`, `aidesktop`, `neurodesktop`) | **OpenCode**, **Codex** and **Claude** |
 | a custom image without `coding-agents` or `acp-adapters` | none (or **OpenCode** only, with `coding-agents` alone) |
 
 The agent a persona runs is the image's own, started for the chat as the

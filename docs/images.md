@@ -19,6 +19,13 @@ images/
                    datascience-env: general data science
   dermdesktop/     FROM scidesktop, plus sciget-dermatology,
                    jupyterlab-neuroglancer and dermatology-env: dermatology
+  preclinicaldesktop/
+                   FROM scidesktop, plus sciget-preclinical, vscode-niivue,
+                   jupyterlab-niivue and preclinical-env: preclinical imaging
+  moleculardesktop/
+                   FROM scidesktop, plus sciget-molecular-imaging,
+                   vscode-niivue, jupyterlab-niivue and
+                   molecular-imaging-env: molecular imaging
   aidesktop/       FROM scidesktop, plus sciget-datascience and ai-ready:
                    datascience
   neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
@@ -27,25 +34,28 @@ images/
                    and neurodesk-compat: neuroimaging
 ```
 
-| Component | scidesktop | microdesktop | datadesktop | dermdesktop | aidesktop | neurodesktop |
-| --- | --- | --- | --- | --- | --- | --- |
-| core base (`startup`, `lmod`, `apptainer`, `selkies`, `jupyter-env`, `sciget`, `slurm`, `jupyterlab-slurm`) | yes | yes | yes | yes | yes | yes |
-| `eessi-cvmfs` (EESSI `software.eessi.io` CVMFS config, Lmod hook, `eessi-launch`, `eessi-catalog` syncing `<domain>/eessi.json`, explicit **EESSI** desktop launchers) | yes | yes | yes | yes | yes | yes |
-| `virtualgl`, `datalad`, `workflow-engines`, `scigethelpers-cli` | yes | yes | yes | yes | yes | yes |
-| `rclone`, `gh`, `aria2`, `tcsh` (data transfer, GitHub CLI and C shell) | yes | yes | yes | yes | yes | yes |
-| `code-server`, `vscode-core` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes | yes | yes |
-| `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed | narrowed | narrowed |
-| `coding-agents`, `t3-code`, `antigravity-acp` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes | yes | yes |
-| `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | yes | yes | yes | yes | yes | yes |
-| `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | yes |
-| `sciget-microscopy`, `microscopy-env` ([tool catalogs](#tool-catalogs)) | no | yes | no | no | no | no |
-| `jupyterlab-neuroglancer` ([viewers.md](viewers.md)) | no | yes | no | yes | no | no |
-| `sciget-datascience` ([tool catalogs](#tool-catalogs)) | no | no | yes | no | yes | no |
-| `datascience-env` | no | no | yes | no | no | no |
-| `sciget-dermatology`, `dermatology-env` ([tool catalogs](#tool-catalogs)) | no | no | no | yes | no | no |
-| `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | no | no | yes | no |
-| `jupyterlab-niivue`, `jupyterlab-freebrowse`, `vscode-niivue`, `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | yes |
-| `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | yes |
+| Component | scidesktop | microdesktop | datadesktop | dermdesktop | preclinicaldesktop | moleculardesktop | aidesktop | neurodesktop |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| core base (`startup`, `lmod`, `apptainer`, `selkies`, `jupyter-env`, `sciget`, `slurm`, `jupyterlab-slurm`) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `eessi-cvmfs` (EESSI `software.eessi.io` CVMFS config, Lmod hook, `eessi-launch`, `eessi-catalog` syncing `<domain>/eessi.json`, explicit **EESSI** desktop launchers) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `virtualgl`, `datalad`, `workflow-engines`, `scigethelpers-cli` | yes | yes | yes | yes | yes | yes | yes | yes |
+| `rclone`, `gh`, `aria2`, `tcsh` (data transfer, GitHub CLI and C shell) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `code-server`, `vscode-core` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed |
+| `coding-agents`, `t3-code`, `antigravity-acp` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | no | no | yes |
+| `sciget-microscopy`, `microscopy-env` ([tool catalogs](#tool-catalogs)) | no | yes | no | no | no | no | no | no |
+| `jupyterlab-neuroglancer` ([viewers.md](viewers.md)) | no | yes | no | yes | no | no | no | no |
+| `sciget-datascience` ([tool catalogs](#tool-catalogs)) | no | no | yes | no | no | no | yes | no |
+| `datascience-env` | no | no | yes | no | no | no | no | no |
+| `sciget-dermatology`, `dermatology-env` ([tool catalogs](#tool-catalogs)) | no | no | no | yes | no | no | no | no |
+| `sciget-preclinical`, `preclinical-env` ([tool catalogs](#tool-catalogs)) | no | no | no | no | yes | no | no | no |
+| `sciget-molecular-imaging`, `molecular-imaging-env` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | yes | no | no |
+| `jupyterlab-niivue`, `vscode-niivue` ([viewers.md](viewers.md)) | no | no | no | no | yes | yes | no | yes |
+| `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | no | no | no | no | yes | no |
+| `jupyterlab-freebrowse`, `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | yes |
+| `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | yes |
 
 ## How a domain image gets the base
 
@@ -140,21 +150,26 @@ over `/etc/sciget/catalogs.json`:
 
 | Component | Catalogs | Also |
 | --- | --- | --- |
-| `sciget-all` (in `scidesktop`) | `neuroimaging`, `microscopy`, `datascience`, `dermatology` | the module folders of containers on the Neurodesk CVMFS repository |
+| `sciget-all` (in `scidesktop`) | `neuroimaging`, `microscopy`, `datascience`, `dermatology`, `preclinical`, `molecular-imaging` | the module folders of containers on the Neurodesk CVMFS repository |
 | `sciget-neuroimaging` | `neuroimaging` | |
 | `sciget-microscopy` | `microscopy` | |
 | `sciget-datascience` | `datascience` | |
 | `sciget-dermatology` | `dermatology` | |
+| `sciget-preclinical` | `preclinical` | |
+| `sciget-molecular-imaging` | `molecular-imaging` | |
 
-`scidesktop` therefore offers neuroimaging, microscopy, datascience and dermatology tools out
+`scidesktop` therefore offers neuroimaging, microscopy, datascience, dermatology, preclinical and molecular-imaging tools out
 of the box (`test/sciget-all-smoke.sh`). An image with `sciget-microscopy`
 overrides `/etc/sciget/catalogs.json` so only the `microscopy` catalog is
 configured and every offered tool comes from it
 (`test/sciget-microscopy-smoke.sh`); `sciget-neuroimaging` configures only the
 `neuroimaging` catalog (`test/sciget-neuroimaging-smoke.sh`); `sciget-datascience`
-configures only the `datascience` catalog (`test/sciget-datascience-smoke.sh`); and
+configures only the `datascience` catalog (`test/sciget-datascience-smoke.sh`);
 `sciget-dermatology` configures only the `dermatology` catalog
-(`test/sciget-dermatology-smoke.sh`). Copying two domain catalog components into
+(`test/sciget-dermatology-smoke.sh`); `sciget-preclinical` configures only the
+`preclinical` catalog (`test/sciget-preclinical-smoke.sh`); and
+`sciget-molecular-imaging` configures only the `molecular-imaging` catalog
+(`test/sciget-molecular-imaging-smoke.sh`). Copying two domain catalog components into
 one image still fails rule L1.
 
 These catalogs are published by the
@@ -240,7 +255,7 @@ to the workflow.
   (`test/publish-manifests-test.sh`). The candidate tags stay in the registry: the multi-arch
   image points at them.
 
-`PUBLISH` lists `scidesktop`, `microdesktop`, `datadesktop`, `dermdesktop`, `aidesktop` and `neurodesktop`. A published
+`PUBLISH` lists `scidesktop`, `microdesktop`, `datadesktop`, `dermdesktop`, `preclinicaldesktop`, `moleculardesktop`, `aidesktop` and `neurodesktop`. A published
 domain image gets its own package, `ghcr.io/<owner>/<name>`.
 
 ## Forks

@@ -22,5 +22,17 @@
     "url": "https://apps-catalog.scigetorg.workers.dev/dermatology/apps.json",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
+  },
+  {
+    "name": "preclinical",
+    "url": "https://apps-catalog.scigetorg.workers.dev/preclinical/apps.json",
+    "use": true,
+    "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
+  },
+  {
+    "name": "molecular-imaging",
+    "url": "https://apps-catalog.scigetorg.workers.dev/molecular-imaging/apps.json",
+    "use": true,
+    "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   }
 ]

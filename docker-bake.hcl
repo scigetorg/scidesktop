@@ -194,6 +194,8 @@ variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
 variable "DATADESKTOP_IMAGE" { default = "datadesktop:latest" }
 variable "DERMDESKTOP_IMAGE" { default = "dermdesktop:latest" }
+variable "PRECLINICALDESKTOP_IMAGE" { default = "preclinicaldesktop:latest" }
+variable "MOLECULARDESKTOP_IMAGE" { default = "moleculardesktop:latest" }
 variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
 variable "NEURODESKTOP_IMAGE" { default = "neurodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
@@ -229,7 +231,7 @@ variable "NF_NEURO_MODULES_SRC" { default = "https://github.com/nf-neuro/modules
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop", "datadesktop", "dermdesktop", "aidesktop", "neurodesktop"]
+  targets = ["scidesktop", "microdesktop", "datadesktop", "dermdesktop", "preclinicaldesktop", "moleculardesktop", "aidesktop", "neurodesktop"]
 }
 
 group "test" {
@@ -247,6 +249,8 @@ group "test" {
     "sciget-microscopy-test",
     "sciget-datascience-test",
     "sciget-dermatology-test",
+    "sciget-preclinical-test",
+    "sciget-molecular-imaging-test",
     "eessi-cvmfs-test",
     "jupyterlab-niivue-test",
     "jupyterlab-freebrowse-test",
@@ -272,6 +276,8 @@ group "test" {
     "microscopy-env-test",
     "datascience-env-test",
     "dermatology-env-test",
+    "preclinical-env-test",
+    "molecular-imaging-env-test",
     "neuroimaging-env-test",
     "neurodesk-compat-test",
     "rclone-test",
@@ -547,6 +553,32 @@ target "sciget-dermatology" {
 
 target "sciget-dermatology-test" {
   inherits = ["sciget-dermatology"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+target "sciget-preclinical" {
+  inherits = ["_component"]
+  context  = "components/sciget-preclinical"
+  target   = "component"
+  contexts = { sciget = "target:sciget" }
+}
+
+target "sciget-preclinical-test" {
+  inherits = ["sciget-preclinical"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+target "sciget-molecular-imaging" {
+  inherits = ["_component"]
+  context  = "components/sciget-molecular-imaging"
+  target   = "component"
+  contexts = { sciget = "target:sciget" }
+}
+
+target "sciget-molecular-imaging-test" {
+  inherits = ["sciget-molecular-imaging"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1089,6 +1121,36 @@ target "dermatology-env-test" {
   output   = ["type=cacheonly"]
 }
 
+# Optional: preclinical imaging Python analysis kernel (numpy, scipy,
+# scikit-image, scikit-learn, statsmodels, tifffile, zarr, pydicom, SimpleITK,
+# nibabel, nilearn, ipyniivue, brkraw, dask, xarray). Copied by preclinicaldesktop.
+target "preclinical-env" {
+  inherits = ["_component"]
+  context  = "components/preclinical-env"
+  target   = "component"
+}
+
+target "preclinical-env-test" {
+  inherits = ["preclinical-env"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: molecular imaging Python analysis kernel (numpy, scipy,
+# scikit-image, scikit-learn, statsmodels, pydicom, highdicom, SimpleITK,
+# nibabel, nilearn, ipyniivue). Copied by moleculardesktop.
+target "molecular-imaging-env" {
+  inherits = ["_component"]
+  context  = "components/molecular-imaging-env"
+  target   = "component"
+}
+
+target "molecular-imaging-env-test" {
+  inherits = ["molecular-imaging-env"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # Optional: neuroimaging Python analysis kernel (nibabel, nipype, niwrap,
 # pydra, nipoppy, ipyniivue, datalad, xnat, nf-core). Copied by neurodesktop.
 target "neuroimaging-env" {
@@ -1203,6 +1265,34 @@ target "dermdesktop" {
     dermatology-env         = "target:dermatology-env"
   }
   tags   = [DERMDESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
+target "preclinicaldesktop" {
+  inherits = ["_common"]
+  context  = "images/preclinicaldesktop"
+  contexts = {
+    scidesktop-base    = "target:scidesktop"
+    sciget-preclinical = "target:sciget-preclinical"
+    vscode-niivue      = "target:vscode-niivue"
+    jupyterlab-niivue  = "target:jupyterlab-niivue"
+    preclinical-env    = "target:preclinical-env"
+  }
+  tags   = [PRECLINICALDESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
+target "moleculardesktop" {
+  inherits = ["_common"]
+  context  = "images/moleculardesktop"
+  contexts = {
+    scidesktop-base          = "target:scidesktop"
+    sciget-molecular-imaging = "target:sciget-molecular-imaging"
+    vscode-niivue            = "target:vscode-niivue"
+    jupyterlab-niivue        = "target:jupyterlab-niivue"
+    molecular-imaging-env    = "target:molecular-imaging-env"
+  }
+  tags   = [MOLECULARDESKTOP_IMAGE]
   output = ["type=docker"]
 }
 

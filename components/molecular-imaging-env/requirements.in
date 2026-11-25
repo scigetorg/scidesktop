@@ -1,0 +1,7 @@
+# Molecular imaging (PET/SPECT/multimodal) libraries and notebook widgets for /opt/molecular-imaging-env.
+# Run ./lock after changing a pin.
+nibabel==5.5.0
+nilearn==0.14.1
+highdicom==0.29.0
+ipyniivue==2.4.4
+watermark==2.6.0
