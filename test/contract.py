@@ -237,16 +237,23 @@ def static():
 
     def strip_shell_comments_and_heredocs(script: str) -> str:
         out = []
-        heredoc_end = None
+        heredoc_queue: list[tuple[str, bool]] = []
         for line in script.splitlines():
-            if heredoc_end is not None:
-                if line.lstrip("\t") == heredoc_end or line == heredoc_end:
-                    heredoc_end = None
+            if heredoc_queue:
+                delim, strip_tabs = heredoc_queue[0]
+                candidate = line.lstrip("\t") if strip_tabs else line
+                if candidate == delim:
+                    heredoc_queue.pop(0)
                 continue
-            in_sq = in_dq = False
+            in_sq = in_dq = escaped = False
             cut = len(line)
             for idx, ch in enumerate(line):
-                if ch == "'" and not in_dq:
+                if escaped:
+                    escaped = False
+                    continue
+                if ch == "\\" and not in_sq:
+                    escaped = True
+                elif ch == "'" and not in_dq:
                     in_sq = not in_sq
                 elif ch == '"' and not in_sq:
                     in_dq = not in_dq
@@ -255,9 +262,68 @@ def static():
                     break
             cleaned = line[:cut]
             out.append(cleaned)
-            hd_m = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", cleaned)
-            if hd_m:
-                heredoc_end = hd_m.group(1)
+            # Scan unquoted text for << or <<- heredoc operators (not <<< here-strings).
+            in_sq = in_dq = escaped = False
+            i = 0
+            n = len(cleaned)
+            while i < n:
+                ch = cleaned[i]
+                if escaped:
+                    escaped = False
+                    i += 1
+                    continue
+                if ch == "\\" and not in_sq:
+                    escaped = True
+                    i += 1
+                    continue
+                if ch == "'" and not in_dq:
+                    in_sq = not in_sq
+                    i += 1
+                    continue
+                if ch == '"' and not in_sq:
+                    in_dq = not in_dq
+                    i += 1
+                    continue
+                if not in_sq and not in_dq and cleaned.startswith("<<", i):
+                    if (i > 0 and cleaned[i - 1] == "<") or (i + 2 < n and cleaned[i + 2] == "<"):
+                        while i < n and cleaned[i] == "<":
+                            i += 1
+                        continue
+                    i += 2
+                    strip_tabs = i < n and cleaned[i] == "-"
+                    if strip_tabs:
+                        i += 1
+                    while i < n and cleaned[i] in " \t":
+                        i += 1
+                    delim_chars = []
+                    d_sq = d_dq = d_esc = False
+                    while i < n:
+                        c = cleaned[i]
+                        if d_esc:
+                            delim_chars.append(c)
+                            d_esc = False
+                            i += 1
+                            continue
+                        if c == "\\" and not d_sq:
+                            d_esc = True
+                            i += 1
+                            continue
+                        if c == "'" and not d_dq:
+                            d_sq = not d_sq
+                            i += 1
+                            continue
+                        if c == '"' and not d_sq:
+                            d_dq = not d_dq
+                            i += 1
+                            continue
+                        if not d_sq and not d_dq and c in " \t;|&()<>":
+                            break
+                        delim_chars.append(c)
+                        i += 1
+                    if delim_chars:
+                        heredoc_queue.append(("".join(delim_chars), strip_tabs))
+                    continue
+                i += 1
         return "\n".join(out)
 
     publish_raw = (ci_doc.get("env") or {}).get("PUBLISH")
@@ -311,7 +377,7 @@ def static():
                 re.M | re.S,
             )
             if loop_m and re.search(
-                r"^\s*/tmp/pip-audit-venv/bin/pip-audit\s+-r\s+/tmp/env-freeze\.txt\b",
+                r"""^\s*/tmp/pip-audit-venv/bin/pip-audit\s+-r\s+(?:/tmp/env-freeze\.txt|"/tmp/env-freeze\.txt"|'/tmp/env-freeze\.txt')(?:\s|[;&|]|$)""",
                 loop_m.group(1),
                 re.M,
             ):
