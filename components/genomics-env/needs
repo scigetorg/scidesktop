@@ -1,0 +1,4 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+eessi-cvmfs  # eessi-launch and EESSI launcher/catalog registration
+jupyter-env  # registers the Genomics Jupyter kernel

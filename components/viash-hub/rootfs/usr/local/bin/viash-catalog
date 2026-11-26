@@ -1,0 +1,767 @@
+#!/opt/conda/bin/python3
+"""Discover curated Viash Hub workflows and scaffold Viash components.
+
+Usage:
+  viash-catalog list [--domain DOMAIN] [--kind KIND] [--arch ARCH]
+  viash-catalog info <package-id> [--arch ARCH]
+  viash-catalog run-cmd <package-id> [workflow] [--slurm] [--revision REV] [--config PATH] [--arch ARCH] [--allow-unsupported-arch]
+  viash-catalog init <name> [--dir DIR] [--lang python|bash|r] [--image OCI_IMAGE] [--force]
+  viash-catalog json [--domain DOMAIN] [--kind KIND] [--arch ARCH]
+
+Environment:
+  VIASH_CATALOG_FILE         Override catalog JSON path (default: /etc/scidesktop/viash-hub/catalog.json)
+  SCIDESKTOP_NEXTFLOW_CONFIG Override Nextflow config path (default: /etc/scidesktop/nextflow/scidesktop.config)
+"""
+
+from __future__ import annotations
+
+import argparse
+import errno
+import json
+import os
+import platform
+import re
+import secrets
+import shlex
+import stat
+import sys
+from pathlib import Path
+from typing import Any, NoReturn
+
+DEFAULT_CATALOG = Path("/etc/scidesktop/viash-hub/catalog.json")
+DEFAULT_NF_CONFIG = "/etc/scidesktop/nextflow/scidesktop.config"
+
+VALID_KINDS = ("nextflow-workflow", "viash-package")
+VALID_ARCHES = ("amd64", "arm64")
+YAML_RESERVED_WORDS = frozenset({"null", "true", "false", "yes", "no", "on", "off", "y", "n"})
+
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+DOMAIN_RE = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
+NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+VSH_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?$")
+WORKFLOW_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_/-]{0,127}$")
+REV_RE = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
+COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+# OCI distribution image reference (matching distribution/reference grammar):
+# [registry[:port]/]name[:tag][@sha256:<64hex>]
+OCI_IMAGE_RE = re.compile(
+    r"^(?:(?:"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+|localhost|\[[0-9A-Fa-f:]+\])(?::[0-9]{1,5})?"
+    r"|[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?:[0-9]{1,5}"
+    r")/)?"
+    r"[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*)*"
+    r"(?::[A-Za-z0-9_][A-Za-z0-9._-]{0,127})?"
+    r"(?:@sha256:[0-9a-f]{64})?$"
+)
+
+
+def die(msg: str, code: int = 1) -> NoReturn:
+    print(f"viash-catalog: {msg}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def detect_host_arch() -> str:
+    machine = platform.machine().lower()
+    mapping = {
+        "x86_64": "amd64",
+        "amd64": "amd64",
+        "aarch64": "arm64",
+        "arm64": "arm64",
+    }
+    return mapping.get(machine, machine or "unknown")
+
+
+def _require_clean_str(val: Any, ctx: str, *, allow_empty: bool = False) -> str:
+    if not isinstance(val, str):
+        die(f"invalid catalog: {ctx} must be a string")
+    if CTRL_RE.search(val):
+        die(f"invalid catalog: {ctx} contains control characters")
+    if not allow_empty and not val.strip():
+        die(f"invalid catalog: {ctx} must not be empty")
+    return val
+
+
+def _validate_arches(val: Any, ctx: str) -> list[str]:
+    if not isinstance(val, list) or not val:
+        die(f"invalid catalog: {ctx} must be a non-empty list")
+    out: list[str] = []
+    for item in val:
+        arch = _require_clean_str(item, f"{ctx}[]")
+        if arch not in VALID_ARCHES:
+            die(f"invalid catalog: {ctx} contains unsupported architecture {arch!r}")
+        if arch not in out:
+            out.append(arch)
+    return out
+
+
+def _validate_rel_script(val: Any, ctx: str) -> str:
+    s = _require_clean_str(val, ctx)
+    if s.startswith("/") or "\\" in s or not s.endswith(".nf"):
+        die(f"invalid catalog: {ctx} must be a relative .nf path ({s!r})")
+    parts = s.split("/")
+    if any(p in ("", ".", "..") for p in parts):
+        die(f"invalid catalog: {ctx} contains invalid path segments ({s!r})")
+    return s
+
+
+def _validate_catalog(data: Any, path: Path) -> dict[str, Any]:
+    if not isinstance(data, dict) or type(data.get("schemaVersion")) is not int or data.get("schemaVersion") != 1:
+        die(f"unsupported catalog schema in {path}")
+    nf_cfg = data.get("nextflowConfig", DEFAULT_NF_CONFIG)
+    _require_clean_str(nf_cfg, "nextflowConfig")
+    raw_packages = data.get("packages")
+    if not isinstance(raw_packages, list):
+        die(f"catalog {path} missing packages list")
+
+    seen_ids: set[str] = set()
+    for idx, pkg in enumerate(raw_packages):
+        pctx = f"packages[{idx}]"
+        if not isinstance(pkg, dict):
+            die(f"invalid catalog: {pctx} must be an object")
+        pkg_id = _require_clean_str(pkg.get("id"), f"{pctx}.id")
+        if not ID_RE.fullmatch(pkg_id):
+            die(f"invalid catalog: {pctx}.id {pkg_id!r} is not a valid package slug")
+        if pkg_id in seen_ids:
+            die(f"invalid catalog: duplicate package id {pkg_id!r}")
+        seen_ids.add(pkg_id)
+
+        _require_clean_str(pkg.get("name"), f"{pkg_id}.name")
+        kind = _require_clean_str(pkg.get("kind"), f"{pkg_id}.kind")
+        if kind not in VALID_KINDS:
+            die(f"invalid catalog: {pkg_id}.kind must be one of {VALID_KINDS}")
+
+        repo = _require_clean_str(pkg.get("repository"), f"{pkg_id}.repository")
+        if not REPO_RE.fullmatch(repo) or ".." in repo:
+            die(f"invalid catalog: {pkg_id}.repository {repo!r} must be owner/repo")
+
+        ver = _require_clean_str(pkg.get("version"), f"{pkg_id}.version")
+        if not REV_RE.fullmatch(ver) or ".." in ver or ver.startswith("-"):
+            die(f"invalid catalog: {pkg_id}.version {ver!r} is invalid")
+
+        _require_clean_str(pkg.get("description"), f"{pkg_id}.description")
+        for opt_key in ("license", "homepage", "viash_hub_url"):
+            if opt_key in pkg and pkg[opt_key] is not None:
+                _require_clean_str(pkg[opt_key], f"{pkg_id}.{opt_key}", allow_empty=True)
+
+        domains = pkg.get("domains")
+        if not isinstance(domains, list) or not domains:
+            die(f"invalid catalog: {pkg_id}.domains must be a non-empty list")
+        for d in domains:
+            ds = _require_clean_str(d, f"{pkg_id}.domains[]")
+            if not DOMAIN_RE.fullmatch(ds):
+                die(f"invalid catalog: {pkg_id}.domains contains invalid domain {ds!r}")
+
+        if "formats" in pkg:
+            fmts = pkg["formats"]
+            if not isinstance(fmts, list):
+                die(f"invalid catalog: {pkg_id}.formats must be a list")
+            for f in fmts:
+                _require_clean_str(f, f"{pkg_id}.formats[]")
+
+        pkg_arches = _validate_arches(pkg.get("architectures"), f"{pkg_id}.architectures")
+
+        if kind == "nextflow-workflow":
+            workflows = pkg.get("workflows")
+            if not isinstance(workflows, dict) or not workflows:
+                die(f"invalid catalog: {pkg_id}.workflows must be a non-empty object")
+            for wf_name, wf in workflows.items():
+                _require_clean_str(wf_name, f"{pkg_id}.workflows key")
+                if not WORKFLOW_NAME_RE.fullmatch(wf_name) or ".." in wf_name:
+                    die(f"invalid catalog: {pkg_id} has invalid workflow name {wf_name!r}")
+                if not isinstance(wf, dict):
+                    die(f"invalid catalog: {pkg_id}.workflows[{wf_name!r}] must be an object")
+                _validate_rel_script(wf.get("main_script"), f"{pkg_id}.workflows[{wf_name!r}].main_script")
+                _require_clean_str(wf.get("description"), f"{pkg_id}.workflows[{wf_name!r}].description")
+                if "architectures" in wf:
+                    wf_arches = _validate_arches(wf["architectures"], f"{pkg_id}.workflows[{wf_name!r}].architectures")
+                    extra = sorted(set(wf_arches) - set(pkg_arches))
+                    if extra:
+                        die(
+                            f"invalid catalog: {pkg_id}.workflows[{wf_name!r}].architectures "
+                            f"lists {extra} not declared in {pkg_id}.architectures ({pkg_arches})"
+                        )
+            default_wf = _require_clean_str(pkg.get("default_workflow"), f"{pkg_id}.default_workflow")
+            if default_wf not in workflows:
+                die(f"invalid catalog: {pkg_id}.default_workflow {default_wf!r} not in workflows")
+        else:
+            if "vsh_repo" in pkg and pkg["vsh_repo"] is not None:
+                vsh_repo = _require_clean_str(pkg["vsh_repo"], f"{pkg_id}.vsh_repo")
+                if not VSH_REPO_RE.fullmatch(vsh_repo) or ".." in vsh_repo:
+                    die(f"invalid catalog: {pkg_id}.vsh_repo {vsh_repo!r} is invalid")
+    return data
+
+
+def load_catalog() -> dict[str, Any]:
+    path = Path(os.environ.get("VIASH_CATALOG_FILE") or DEFAULT_CATALOG)
+    if not path.is_file():
+        die(f"catalog file not found: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        die(f"failed to read catalog {path}: {exc}")
+    return _validate_catalog(data, path)
+
+
+def filter_packages(
+    packages: list[dict[str, Any]],
+    domain: str | None = None,
+    kind: str | None = None,
+    arch: str | None = None,
+) -> list[dict[str, Any]]:
+    out = []
+    for pkg in packages:
+        if domain and domain not in pkg.get("domains", []):
+            continue
+        if kind and pkg.get("kind") != kind:
+            continue
+        if arch and arch not in pkg.get("architectures", []):
+            continue
+        out.append(pkg)
+    return out
+
+
+def find_package(data: dict[str, Any], pkg_id: str) -> dict[str, Any]:
+    for pkg in data["packages"]:
+        if pkg.get("id") == pkg_id:
+            return pkg
+    known = ", ".join(p.get("id", "?") for p in data["packages"])
+    die(f"unknown package {pkg_id!r} (available: {known})")
+
+
+def workflow_arches(pkg: dict[str, Any], wf: dict[str, Any] | None = None) -> list[str]:
+    if wf and "architectures" in wf:
+        return list(wf["architectures"])
+    return list(pkg["architectures"])
+
+
+def yaml_quote(value: str) -> str:
+    return json.dumps(value)
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    data = load_catalog()
+    pkgs = filter_packages(
+        data["packages"], domain=args.domain, kind=args.kind, arch=args.arch
+    )
+    if not pkgs:
+        print("No matching Viash Hub packages.")
+        return 0
+    for pkg in pkgs:
+        domains = ",".join(pkg.get("domains", []))
+        arches = ",".join(pkg.get("architectures", []))
+        print(
+            f"{pkg['id']}\t{pkg['version']}\t{pkg['kind']}\t"
+            f"{pkg['repository']}\t[arch:{arches}]\t[{domains}]\t{pkg['description']}"
+        )
+    return 0
+
+
+def cmd_info(args: argparse.Namespace) -> int:
+    data = load_catalog()
+    pkg = find_package(data, args.id)
+    target_arch = args.arch or detect_host_arch()
+    nf_cfg = os.environ.get("SCIDESKTOP_NEXTFLOW_CONFIG") or data.get(
+        "nextflowConfig", DEFAULT_NF_CONFIG
+    )
+    arches = pkg["architectures"]
+    print(f"ID:            {pkg['id']}")
+    print(f"Name:          {pkg['name']}")
+    print(f"Kind:          {pkg['kind']}")
+    print(f"Repository:    {pkg['repository']} ({pkg['version']})")
+    print(f"Architectures: {', '.join(arches)} (host: {target_arch})")
+    print(f"License:       {pkg.get('license', 'unknown')}")
+    print(f"Domains:       {', '.join(pkg.get('domains', []))}")
+    print(f"Formats:       {', '.join(pkg.get('formats', []))}")
+    print(f"Homepage:      {pkg.get('homepage', '')}")
+    print(f"Viash Hub:     {pkg.get('viash_hub_url', '')}")
+    print(f"Description:   {pkg['description']}")
+    if target_arch not in arches:
+        print(
+            f"\nNote: upstream container images for '{pkg['id']}' publish "
+            f"[{', '.join(arches)}] manifests only (incompatible with {target_arch} without emulation)."
+        )
+    if pkg["kind"] == "nextflow-workflow":
+        workflows = pkg["workflows"]
+        print("\nCurated Nextflow workflows:")
+        for wf_name, wf in workflows.items():
+            marker = " (default)" if wf_name == pkg["default_workflow"] else ""
+            wf_arch = ",".join(workflow_arches(pkg, wf))
+            print(f"  - {wf_name}{marker} [arch:{wf_arch}]: {wf['description']}")
+        default_wf = pkg["default_workflow"]
+        main_script = workflows[default_wf]["main_script"]
+        print("\nRun with rootless Apptainer:")
+        print(
+            f"  NXF_SYNTAX_PARSER=v1 nextflow run {shlex.quote(pkg['repository'])} "
+            f"-r {shlex.quote(pkg['version'])} "
+            f"-main-script {shlex.quote(main_script)} "
+            f"-c {shlex.quote(nf_cfg)} -profile apptainer --help"
+        )
+    else:
+        vsh_repo = pkg.get("vsh_repo") or pkg["repository"]
+        print("\nUse as a Viash Hub dependency in config.vsh.yaml:")
+        print("  dependencies:")
+        print("    - name: <component_name>")
+        print("      repository:")
+        print('        type: "vsh"')
+        print(f"        repo: {yaml_quote(vsh_repo)}")
+        print(f"        tag: {yaml_quote(pkg['version'])}")
+    return 0
+
+
+def cmd_run_cmd(args: argparse.Namespace) -> int:
+    data = load_catalog()
+    pkg = find_package(data, args.id)
+    rev = args.revision or pkg["version"]
+    if not REV_RE.fullmatch(rev) or ".." in rev or rev.startswith("-"):
+        die(f"invalid revision: {rev!r}")
+
+    target_arch = args.arch or detect_host_arch()
+
+    if pkg["kind"] != "nextflow-workflow":
+        if args.workflow is not None:
+            die(f"package {pkg['id']!r} is a viash-package and does not take a workflow argument")
+        if args.slurm:
+            die(f"--slurm is only valid for nextflow-workflow packages (not {pkg['id']!r})")
+        if args.config is not None:
+            die(f"--config is only valid for nextflow-workflow packages (not {pkg['id']!r})")
+        arches = workflow_arches(pkg)
+        if target_arch not in arches:
+            if not args.allow_unsupported_arch:
+                die(
+                    f"package {pkg['id']!r} publishes container images for [{', '.join(arches)}] only, "
+                    f"which is incompatible with {target_arch!r} "
+                    "(pass --allow-unsupported-arch to emit commands anyway)"
+                )
+            print(
+                f"viash-catalog: warning: {pkg['id']!r} publishes [{', '.join(arches)}] images "
+                f"(current arch: {target_arch})",
+                file=sys.stderr,
+            )
+        vsh_repo = pkg.get("vsh_repo") or pkg["repository"]
+        clone_url = f"https://github.com/{pkg['repository']}.git"
+        repo_dir = pkg["repository"].split("/", 1)[1]
+        if COMMIT_SHA_RE.fullmatch(rev):
+            clone_cmd = (
+                f"git clone {shlex.quote(clone_url)} {shlex.quote(repo_dir)} && "
+                f"git -C {shlex.quote(repo_dir)} checkout {shlex.quote(rev)}"
+            )
+        else:
+            clone_cmd = f"git clone --depth 1 --branch {shlex.quote(rev)} {shlex.quote(clone_url)}"
+        print(
+            f"# {pkg['id']} ({pkg['repository']}@{rev}) is a Viash Hub component package.\n"
+            f"# Reference its components in config.vsh.yaml under dependencies:\n"
+            f"#   - name: <component_name>\n"
+            f"#     repository:\n"
+            f'#       type: "vsh"\n'
+            f"#       repo: {yaml_quote(vsh_repo)}\n"
+            f"#       tag: {yaml_quote(rev)}\n"
+            f"# Or clone and inspect/build locally:\n"
+            f"{clone_cmd}"
+        )
+        return 0
+
+    workflows = pkg["workflows"]
+    wf_name = args.workflow or pkg["default_workflow"]
+    if wf_name not in workflows:
+        known = ", ".join(sorted(workflows))
+        die(f"unknown workflow {wf_name!r} for {pkg['id']} (available: {known})")
+    wf = workflows[wf_name]
+    arches = workflow_arches(pkg, wf)
+    if target_arch not in arches:
+        if not args.allow_unsupported_arch:
+            die(
+                f"workflow {pkg['id']}:{wf_name} publishes container images for [{', '.join(arches)}] only, "
+                f"which is incompatible with {target_arch!r} "
+                "(pass --allow-unsupported-arch to emit the command anyway)"
+            )
+        print(
+            f"viash-catalog: warning: {pkg['id']}:{wf_name} publishes [{', '.join(arches)}] images "
+            f"(current arch: {target_arch})",
+            file=sys.stderr,
+        )
+
+    main_script = wf["main_script"]
+    nf_cfg = (
+        args.config
+        or os.environ.get("SCIDESKTOP_NEXTFLOW_CONFIG")
+        or data.get("nextflowConfig", DEFAULT_NF_CONFIG)
+    )
+    if CTRL_RE.search(nf_cfg):
+        die(f"invalid Nextflow config path: {nf_cfg!r}")
+    profile = "apptainer,slurm" if args.slurm else "apptainer"
+    # Viash 0.9.x VDSL3 generated Nextflow modules require the v1 syntax parser
+    # on Nextflow 26+ (which defaults to the strict v2 parser).
+    cmd = [
+        "nextflow",
+        "run",
+        pkg["repository"],
+        "-r",
+        rev,
+        "-main-script",
+        main_script,
+        "-c",
+        nf_cfg,
+        "-profile",
+        profile,
+    ]
+    print("NXF_SYNTAX_PARSER=v1 " + " ".join(shlex.quote(part) for part in cmd))
+    return 0
+
+
+def cmd_json(args: argparse.Namespace) -> int:
+    data = load_catalog()
+    out = {
+        "schemaVersion": data["schemaVersion"],
+        "hostArch": args.arch or detect_host_arch(),
+        "nextflowConfig": os.environ.get("SCIDESKTOP_NEXTFLOW_CONFIG")
+        or data.get("nextflowConfig", DEFAULT_NF_CONFIG),
+        "packages": filter_packages(
+            data["packages"], domain=args.domain, kind=args.kind, arch=args.arch
+        ),
+    }
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def scaffold_files(name: str, lang: str, image: str | None) -> dict[str, tuple[str, int]]:
+    engines_yaml = "engines:\n  - type: native\n"
+    if image:
+        engines_yaml += f"  - type: docker\n    image: {yaml_quote(image)}\n"
+
+    if image:
+        # Viash's NextflowRunner treats engines[].image as a build base image
+        # and defaults the process container to <name>:latest unless
+        # runners[].directives.container is explicitly set.
+        runners_yaml = (
+            "runners:\n"
+            "  - type: executable\n"
+            "  - type: nextflow\n"
+            "    directives:\n"
+            f"      container: {yaml_quote(image)}\n"
+        )
+    else:
+        runners_yaml = "runners:\n  - type: executable\n  - type: nextflow\n"
+
+    if lang == "python":
+        res_type, script_name = "python_script", "script.py"
+        script_body = f'''#!/usr/bin/env python3
+from pathlib import Path
+
+## VIASH START
+par = {{
+    "input": "input.txt",
+    "output": "output.txt",
+}}
+## VIASH END
+
+
+def main() -> None:
+    text = Path(par["input"]).read_text(encoding="utf-8")
+    lines = text.splitlines()
+    out = Path(par["output"])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(f"component={name}\\nlines={{len(lines)}}\\n{{text}}", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    elif lang == "r":
+        res_type, script_name = "r_script", "script.R"
+        script_body = f'''## VIASH START
+par <- list(
+  input = "input.txt",
+  output = "output.txt"
+)
+## VIASH END
+
+lines <- readLines(par$input, warn = FALSE)
+dir.create(dirname(par$output), recursive = TRUE, showWarnings = FALSE)
+writeLines(c(paste0("component={name}"), paste0("lines=", length(lines)), lines), par$output)
+'''
+    else:
+        res_type, script_name = "bash_script", "script.sh"
+        script_body = f'''#!/bin/bash
+set -euo pipefail
+
+## VIASH START
+par_input="input.txt"
+par_output="output.txt"
+## VIASH END
+
+lines="$(wc -l < "${{par_input}}" | tr -d ' ')"
+mkdir -p "$(dirname "${{par_output}}")"
+{{
+    echo "component={name}"
+    echo "lines=${{lines}}"
+    cat "${{par_input}}"
+}} > "${{par_output}}"
+'''
+
+    config_yaml = f'''name: {yaml_quote(name)}
+description: "Reproducible Viash component scaffolded on scidesktop."
+arguments:
+  - name: --input
+    type: file
+    direction: input
+    required: true
+    description: "Input file path."
+  - name: --output
+    type: file
+    direction: output
+    required: true
+    description: "Output file path."
+resources:
+  - type: {res_type}
+    path: {yaml_quote(script_name)}
+test_resources:
+  - type: bash_script
+    path: "test.sh"
+{engines_yaml}{runners_yaml}'''
+
+    test_sh = f'''#!/bin/bash
+set -euo pipefail
+printf 'alpha\\nbeta\\n' > input.txt
+"$meta_executable" --input input.txt --output output.txt
+grep -qxF "component={name}" output.txt
+grep -qxF "lines=2" output.txt
+grep -qxF "alpha" output.txt
+echo ">>> Test succeeded!"
+'''
+
+    return {
+        "config.vsh.yaml": (config_yaml, 0o644),
+        script_name: (script_body, 0o755),
+        "test.sh": (test_sh, 0o755),
+    }
+
+
+def _open_scaffold_dir(target_dir: Path, force: bool) -> int:
+    """Create (if absent) and open target_dir without following symlinks."""
+    try:
+        try:
+            st = os.lstat(target_dir)
+        except FileNotFoundError:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            st = os.lstat(target_dir)
+
+        if stat.S_ISLNK(st.st_mode):
+            die(f"refusing to scaffold into symlink target: {target_dir}")
+        if not stat.S_ISDIR(st.st_mode):
+            die(f"target exists and is not a directory: {target_dir}")
+
+        dir_fd = os.open(target_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as exc:
+        die(f"cannot open target directory {target_dir}: {exc.strerror or exc}")
+
+    try:
+        entries = os.listdir(dir_fd)
+        if entries and not force:
+            os.close(dir_fd)
+            die(f"target directory is not empty: {target_dir} (pass --force to overwrite)")
+    except OSError as exc:
+        os.close(dir_fd)
+        die(f"cannot inspect target directory {target_dir}: {exc.strerror or exc}")
+
+    return dir_fd
+
+
+def _validate_destinations(
+    dir_fd: int, filenames: list[str], *, force: bool, target_dir: Path
+) -> None:
+    """Validate all target filenames before writing anything to target_dir."""
+    for filename in filenames:
+        try:
+            st = os.lstat(filename, dir_fd=dir_fd)
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            die(f"cannot stat {target_dir / filename}: {exc.strerror or exc}")
+        if stat.S_ISLNK(st.st_mode):
+            die(f"refusing to overwrite symlink: {target_dir / filename}")
+        if not stat.S_ISREG(st.st_mode):
+            die(f"refusing to overwrite non-regular file: {target_dir / filename}")
+        if not force:
+            die(f"destination already exists: {target_dir / filename} (pass --force to overwrite)")
+
+
+def _write_scaffold_files(
+    dir_fd: int,
+    files: dict[str, tuple[str, int]],
+    *,
+    force: bool,
+    target_dir: Path,
+) -> None:
+    """Validate all destinations, stage all temp files, then publish safely."""
+    _validate_destinations(dir_fd, list(files), force=force, target_dir=target_dir)
+    staged: list[tuple[str, str]] = []
+    try:
+        for filename, (content, mode) in files.items():
+            tmp_name = f".{filename}.tmp.{os.getpid()}.{secrets.token_hex(6)}"
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+            fd = -1
+            try:
+                fd = os.open(tmp_name, flags, mode, dir_fd=dir_fd)
+                staged.append((tmp_name, filename))
+                os.fchmod(fd, mode)
+                data = content.encode("utf-8")
+                view = memoryview(data)
+                written = 0
+                while written < len(view):
+                    written += os.write(fd, view[written:])
+                os.fsync(fd)
+            finally:
+                if fd >= 0:
+                    os.close(fd)
+
+        # Re-check destinations immediately before publishing.
+        _validate_destinations(dir_fd, list(files), force=force, target_dir=target_dir)
+        for tmp_name, filename in list(staged):
+            if force:
+                os.replace(tmp_name, filename, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+                staged.remove((tmp_name, filename))
+            else:
+                # os.link fails with EEXIST if another process raced us without --force.
+                os.link(tmp_name, filename, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+                os.unlink(tmp_name, dir_fd=dir_fd)
+                staged.remove((tmp_name, filename))
+    except OSError as exc:
+        die(f"failed writing scaffold in {target_dir}: {exc.strerror or exc}")
+    finally:
+        for tmp_name, _ in staged:
+            try:
+                os.unlink(tmp_name, dir_fd=dir_fd)
+            except OSError as unlink_exc:
+                if unlink_exc.errno != errno.ENOENT:
+                    pass
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    if not NAME_RE.fullmatch(args.name) or args.name in YAML_RESERVED_WORDS:
+        die(
+            f"invalid component name {args.name!r}: must match ^[a-z][a-z0-9_]{{0,63}}$ "
+            "and must not be a YAML reserved word (null, true, false, yes, no, on, off)"
+        )
+    if args.image and (CTRL_RE.search(args.image) or not OCI_IMAGE_RE.fullmatch(args.image)):
+        die(f"invalid OCI container image reference {args.image!r}")
+
+    target_dir = Path(args.dir) if args.dir else Path.cwd() / args.name
+    dir_fd = _open_scaffold_dir(target_dir, force=args.force)
+    try:
+        files = scaffold_files(args.name, args.lang, args.image)
+        _write_scaffold_files(dir_fd, files, force=args.force, target_dir=target_dir)
+    finally:
+        os.close(dir_fd)
+
+    cfg_path = shlex.quote(str(target_dir / "config.vsh.yaml"))
+    nf_dir = shlex.quote(str(target_dir / "target/nextflow"))
+    print(f"Scaffolded Viash component '{args.name}' in {target_dir}")
+    print(f"  Run locally:  viash run {cfg_path} --engine native -- --input in.txt --output out.txt")
+    print(f"  Unit test:    viash test {cfg_path} --engine native")
+    print(f"  Build NF:     viash build {cfg_path} --runner nextflow --output {nf_dir}")
+    print(
+        f"  Run NF (26+): NXF_SYNTAX_PARSER=v1 nextflow run {nf_dir}/main.nf "
+        "-c /etc/scidesktop/nextflow/scidesktop.config -profile apptainer --help"
+    )
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="viash-catalog",
+        description="Discover curated Viash Hub workflows and scaffold Viash components.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_list = sub.add_parser("list", help="List curated Viash Hub packages")
+    p_list.add_argument("--domain", help="Filter by domain (e.g. genomics, cellular-biology)")
+    p_list.add_argument(
+        "--kind",
+        choices=VALID_KINDS,
+        help="Filter by package kind",
+    )
+    p_list.add_argument(
+        "--arch",
+        choices=VALID_ARCHES,
+        help="Filter by supported container architecture (amd64, arm64)",
+    )
+    p_list.set_defaults(func=cmd_list)
+
+    p_info = sub.add_parser("info", help="Show details and workflows for a package")
+    p_info.add_argument("id", help="Package ID (from `viash-catalog list`)")
+    p_info.add_argument(
+        "--arch",
+        choices=VALID_ARCHES,
+        help="Check compatibility against a specific architecture (default: host)",
+    )
+    p_info.set_defaults(func=cmd_info)
+
+    p_run = sub.add_parser("run-cmd", help="Print ready-to-run Nextflow/Apptainer command")
+    p_run.add_argument("id", help="Package ID")
+    p_run.add_argument("workflow", nargs="?", help="Workflow name (optional for default)")
+    p_run.add_argument("--slurm", action="store_true", help="Include the session Slurm profile")
+    p_run.add_argument("--revision", help="Override pinned release tag or commit")
+    p_run.add_argument("--config", help="Override Nextflow config file path")
+    p_run.add_argument(
+        "--arch",
+        choices=VALID_ARCHES,
+        help="Target host architecture for compatibility check (default: host)",
+    )
+    p_run.add_argument(
+        "--allow-unsupported-arch",
+        action="store_true",
+        help="Emit command with a warning even when upstream images do not publish for this architecture",
+    )
+    p_run.set_defaults(func=cmd_run_cmd)
+
+    p_init = sub.add_parser(
+        "init",
+        help="Scaffold a Viash component (optionally wrapping a SCIGET/OCI container image)",
+    )
+    p_init.add_argument("name", help="Component name (lowercase snake_case)")
+    p_init.add_argument("--dir", help="Target directory (default: ./<name>)")
+    p_init.add_argument(
+        "--lang",
+        choices=("python", "bash", "r"),
+        default="python",
+        help="Script language (default: python)",
+    )
+    p_init.add_argument(
+        "--image",
+        help="Optional OCI/Docker container image to bridge via Viash's Nextflow container directive",
+    )
+    p_init.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow scaffolding into a non-empty directory (still refuses symlinks)",
+    )
+    p_init.set_defaults(func=cmd_init)
+
+    p_json = sub.add_parser("json", help="Print curated catalog as JSON")
+    p_json.add_argument("--domain", help="Filter by domain")
+    p_json.add_argument(
+        "--kind",
+        choices=VALID_KINDS,
+        help="Filter by package kind",
+    )
+    p_json.add_argument(
+        "--arch",
+        choices=VALID_ARCHES,
+        help="Filter by supported architecture",
+    )
+    p_json.set_defaults(func=cmd_json)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

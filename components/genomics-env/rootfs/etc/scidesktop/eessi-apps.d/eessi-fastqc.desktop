@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=FastQC (EESSI)
+Comment=Quality control for high-throughput sequencing data via EESSI
+Exec=/usr/local/bin/eessi-launch FastQC fastqc
+Terminal=false
+X-Scidesktop-Category=EESSI
+Categories=Science;Biology;

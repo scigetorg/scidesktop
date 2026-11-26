@@ -120,7 +120,7 @@ settings win and their catalogs come first, and `sciget doctor` names a user
 file that hides a system one. `scidesktop` ships all published catalogs
 (`neuroimaging`, `microscopy`, `datascience`, `dermatology`, `preclinical` and `molecular-imaging` via `sciget-all`); domain images
 narrow that file to their community (`neuroimaging` in `neurodesktop`,
-`microscopy` in `microdesktop`, `datascience` in `datadesktop` and `aidesktop`,
+`microscopy` in `microdesktop`, `datascience` in `datadesktop`, `genomicsdesktop` and `aidesktop`,
 `dermatology` in `dermdesktop`, `preclinical` in `preclinicaldesktop`,
 `molecular-imaging` in `moleculardesktop`;
 [images.md](images.md#tool-catalogs)).

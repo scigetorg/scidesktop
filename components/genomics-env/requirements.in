@@ -1,0 +1,4 @@
+# Pipeline tooling and reproducibility helpers for /opt/genomics-env.
+# Run ./lock after changing a pin.
+nf-core==4.2.2
+watermark==2.6.0

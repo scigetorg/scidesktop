@@ -19,6 +19,8 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 BAKE = ROOT / "docker-bake.hcl"
 IMAGES = ROOT / "images"
@@ -52,6 +54,7 @@ NOT_RENOVATED = {
     "DERMDESKTOP_IMAGE": "output tag",
     "PRECLINICALDESKTOP_IMAGE": "output tag",
     "MOLECULARDESKTOP_IMAGE": "output tag",
+    "GENOMICSDESKTOP_IMAGE": "output tag",
     "AIDESKTOP_IMAGE": "output tag",
     "NEURODESKTOP_IMAGE": "output tag",
     "SLURM_TAG": "tracked by its own Renovate rule (github-tags, regex versioning)",
@@ -218,10 +221,182 @@ def static():
             if not lock.is_file():
                 fail("S7", f"{rel(env.parent)}: no {lock.name} for {arch}; run ./lock")
 
-    ci = sorted(re.findall(r"^ +- arch: (\S+)$", CI.read_text(), re.M))
+    ci_text = CI.read_text()
+    ci_doc = yaml.safe_load(ci_text)
+    if not isinstance(ci_doc, dict):
+        fail("S6", f"{rel(CI)}: workflow YAML did not parse as a mapping")
+        ci_doc = {}
+
+    jobs = ci_doc.get("jobs") or {}
+    build_job = jobs.get("build") or {}
+    build_include = ((build_job.get("strategy") or {}).get("matrix") or {}).get("include") or []
+    ci = sorted(str(entry["arch"]) for entry in build_include if isinstance(entry, dict) and "arch" in entry)
     if ci != sorted(arches):
         fail("S7", f"{rel(CI)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
                    f"components/target-arch lists {', '.join(arches)}")
+
+    def strip_shell_comments_and_heredocs(script: str) -> str:
+        out = []
+        heredoc_queue: list[tuple[str, bool]] = []
+        in_sq = in_dq = False
+        for line in script.splitlines():
+            if heredoc_queue:
+                delim, strip_tabs = heredoc_queue[0]
+                candidate = line.lstrip("\t") if strip_tabs else line
+                if candidate == delim:
+                    heredoc_queue.pop(0)
+                continue
+            escaped = False
+            cleaned_chars = []
+            i = 0
+            n = len(line)
+            while i < n:
+                ch = line[i]
+                if escaped:
+                    cleaned_chars.append(ch)
+                    escaped = False
+                    i += 1
+                    continue
+                if ch == "\\" and not in_sq:
+                    cleaned_chars.append(ch)
+                    escaped = True
+                    i += 1
+                    continue
+                if ch == "'" and not in_dq:
+                    in_sq = not in_sq
+                    cleaned_chars.append(ch)
+                    i += 1
+                    continue
+                if ch == '"' and not in_sq:
+                    in_dq = not in_dq
+                    cleaned_chars.append(ch)
+                    i += 1
+                    continue
+                if ch == "#" and not in_sq and not in_dq and (i == 0 or line[i - 1].isspace()):
+                    break
+                if not in_sq and not in_dq and line.startswith("<<", i):
+                    if (i > 0 and line[i - 1] == "<") or (i + 2 < n and line[i + 2] == "<"):
+                        while i < n and line[i] == "<":
+                            cleaned_chars.append(line[i])
+                            i += 1
+                        continue
+                    cleaned_chars.append("<<")
+                    i += 2
+                    strip_tabs = i < n and line[i] == "-"
+                    if strip_tabs:
+                        cleaned_chars.append("-")
+                        i += 1
+                    while i < n and line[i] in " \t":
+                        cleaned_chars.append(line[i])
+                        i += 1
+                    delim_chars = []
+                    d_sq = d_dq = d_esc = False
+                    while i < n:
+                        c = line[i]
+                        if d_esc:
+                            delim_chars.append(c)
+                            cleaned_chars.append(c)
+                            d_esc = False
+                            i += 1
+                            continue
+                        if c == "\\" and not d_sq:
+                            cleaned_chars.append(c)
+                            d_esc = True
+                            i += 1
+                            continue
+                        if c == "'" and not d_dq:
+                            d_sq = not d_sq
+                            cleaned_chars.append(c)
+                            i += 1
+                            continue
+                        if c == '"' and not d_sq:
+                            d_dq = not d_dq
+                            cleaned_chars.append(c)
+                            i += 1
+                            continue
+                        if not d_sq and not d_dq and c in " \t;|&()<>":
+                            break
+                        delim_chars.append(c)
+                        cleaned_chars.append(c)
+                        i += 1
+                    if delim_chars:
+                        heredoc_queue.append(("".join(delim_chars), strip_tabs))
+                    continue
+                cleaned_chars.append(ch)
+                i += 1
+            out.append("".join(cleaned_chars))
+        return "\n".join(out)
+
+    publish_raw = (ci_doc.get("env") or {}).get("PUBLISH")
+    if not isinstance(publish_raw, str) or not publish_raw.split():
+        fail("S6", f"{rel(CI)}: env.PUBLISH is missing or empty")
+    else:
+        pub_imgs = publish_raw.split()
+
+        # Attestation matrix: jobs.attest.strategy.matrix.image
+        att_imgs = (((jobs.get("attest") or {}).get("strategy") or {}).get("matrix") or {}).get("image")
+        if not isinstance(att_imgs, list) or not att_imgs:
+            fail("S6", f"{rel(CI)}: jobs.attest.strategy.matrix.image is missing or empty")
+        elif set(pub_imgs) != {str(x) for x in att_imgs}:
+            fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match attest matrix ({', '.join(map(str, att_imgs))})")
+
+        # Browser smoke step: must loop over ${PUBLISH} and invoke ./test/browser-smoke.sh "${image}:ci".
+        build_steps = build_job.get("steps") or []
+        browser_ok = False
+        for step in build_steps:
+            if not (isinstance(step, dict) and isinstance(step.get("run"), str)):
+                continue
+            code = strip_shell_comments_and_heredocs(step["run"])
+            loop_m = re.search(
+                r"^\s*for\s+image\s+in\s+\$\{PUBLISH\}\s*;\s*do\s*\n(.*?)^\s*done\b",
+                code,
+                re.M | re.S,
+            )
+            if loop_m and re.search(
+                r'^\s*\./test/browser-smoke\.sh\s+"\$\{image\}:ci"(?:\s|$)',
+                loop_m.group(1),
+                re.M,
+            ):
+                browser_ok = True
+                break
+        if not browser_ok:
+            fail("S6", f"{rel(CI)}: jobs.build must have a step looping `for image in ${{PUBLISH}}; do` that runs `./test/browser-smoke.sh \"${{image}}:ci\"`")
+
+        # Installed Python pip-audit step: must declare env.PIP_AUDIT_SPECS covering
+        # every published image's domain *-env interpreter and execute pip-audit in a loop over it.
+        audit_step = None
+        for step in build_steps:
+            if not (isinstance(step, dict) and isinstance(step.get("run"), str)):
+                continue
+            specs_val = (step.get("env") or {}).get("PIP_AUDIT_SPECS")
+            if not isinstance(specs_val, str):
+                continue
+            code = strip_shell_comments_and_heredocs(step["run"])
+            loop_m = re.search(
+                r"^\s*for\s+spec\s+in\s+\$\{PIP_AUDIT_SPECS\}\s*;\s*do\s*\n(.*?)^\s*done\b",
+                code,
+                re.M | re.S,
+            )
+            if loop_m and re.search(
+                r"""^\s*/tmp/pip-audit-venv/bin/pip-audit\s+-r\s+(?:/tmp/env-freeze\.txt|"/tmp/env-freeze\.txt"|'/tmp/env-freeze\.txt')(?:\s|[;&|]|$)""",
+                loop_m.group(1),
+                re.M,
+            ):
+                audit_step = (step, specs_val.split())
+                break
+        if audit_step is None:
+            fail("S6", f"{rel(CI)}: jobs.build must have a step with env.PIP_AUDIT_SPECS looped into `/tmp/pip-audit-venv/bin/pip-audit`")
+        else:
+            step, specs = audit_step
+            audited = set(specs)
+            for img in pub_imgs:
+                if img not in targets:
+                    continue
+                for comp in sorted(image_components(targets, img)):
+                    if comp.endswith("-env") and comp != "jupyter-env":
+                        expected_spec = f"{img}:ci:/opt/{comp}/bin/python"
+                        if expected_spec not in audited:
+                            fail("S6", f"{rel(CI)}: published image {img} holds {comp}, but env.PIP_AUDIT_SPECS in {step.get('name')!r} omits {expected_spec}")
 
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is

@@ -1,0 +1,34 @@
+# genomicsdesktop
+
+`scidesktop` for genomics and single-cell bioinformatics: builds on
+`scidesktop`'s shared workflow engines (**Nextflow**, **nf-test**, **Viash**,
+**Snakemake**, and `/etc/scidesktop/nextflow/scidesktop.config` for rootless
+Apptainer and session Slurm execution), narrows sciget to the `genomics`
+catalog (`sciget-genomics`, which also syncs `genomics/eessi.json` in `eessi-catalog`),
+adds the curated **Viash Hub & OpenPipelines** catalog (`viash-hub` /
+`viash-catalog`), ships a locked Python 3.13 **Genomics** Jupyter kernel
+(`/opt/genomics-env`) with `anndata`, `scanpy`, `mudata`, `biopython`,
+`polars`, `pyarrow`, `h5py`, `zarr`, `dask`, `xarray`, `scikit-learn`,
+`statsmodels`, `igraph`, `leidenalg`, `umap-learn`, `pyyaml`, `jsonschema`,
+and `nf-core`, and configures coding-agent instructions (`genomics-agents`) for
+Viash, OpenPipelines, and EESSI genomics modules (`SAMtools`, `BCFtools`,
+`BEDTools`, `BWA`, `Bowtie2`, `minimap2`, `STAR`, `Salmon`, `FastQC`,
+`MultiQC`, `GATK`, `R-bundle-Bioconductor`, and more).
+
+| Component | What it adds |
+| --- | --- |
+| `sciget-genomics` | narrows sciget to the `genomics` catalog (Nextflow, RStudio, IRkernel, DataLad, rclone, Globus, OpenRefine, Postgres Analytics, LibreOffice) and points `eessi-catalog` at `genomics/eessi.json` |
+| `viash-hub` | curated Viash Hub & OpenPipelines catalog (`/etc/scidesktop/viash-hub/catalog.json`) and `viash-catalog` CLI (`list`, `info`, `run-cmd`, `init`, `json`) |
+| `genomics-env` | locked Python 3.13 genomics & single-cell kernel (`/opt/genomics-env`) and EESSI genomics catalog/launchers |
+| `genomics-agents` | coding-agent instructions (`/opt/genomics-agents/AGENTS.md`) for Codex, Claude Code, OpenCode and T3 Code |
+
+> **Architecture note:** `genomicsdesktop`, the `genomics` Python kernel,
+> Viash, Nextflow, Snakemake, and EESSI/2025.06 bioinformatics modules run
+> natively on both `amd64` and `arm64`. Curated upstream OpenPipelines and
+> OpenProblems GHCR images currently publish `amd64` manifests only;
+> `viash-catalog run-cmd` checks architecture compatibility automatically.
+
+```sh
+docker buildx bake genomicsdesktop
+./test/image-smoke.sh genomicsdesktop
+```

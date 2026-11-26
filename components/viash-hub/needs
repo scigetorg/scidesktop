@@ -1,0 +1,6 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+apptainer
+jupyter-env       # /opt/conda/bin/python3 for viash-catalog
+slurm
+workflow-engines  # viash, nextflow and /etc/scidesktop/nextflow/scidesktop.config

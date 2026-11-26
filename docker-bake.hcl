@@ -177,6 +177,9 @@ variable "NEXTFLOW_SHA256" { default = "c54cd4b7be058e8954180b378a8efa6d61085bc4
 # renovate: datasource=github-releases depName=askimed/nf-test extractVersion=^v(?<version>.*)$
 variable "NF_TEST_VERSION" { default = "0.9.5" }
 variable "NF_TEST_SHA256" { default = "b7679eb90cdc9642bfa89e9634db02ce6e699de53ad35ef0e2f4847634fc1641" }
+# renovate: datasource=github-releases depName=viash-io/viash
+variable "VIASH_VERSION" { default = "0.9.7" }
+variable "VIASH_SHA256" { default = "63f282fa1d49bc6a52fe2e25e265bce8b4223f0d8f521d38094942deb5a1ccc4" }
 
 # The notebook user, set in the OS layer and used by components that own files.
 variable "NB_USER" { default = "jovyan" }
@@ -196,6 +199,7 @@ variable "DATADESKTOP_IMAGE" { default = "datadesktop:latest" }
 variable "DERMDESKTOP_IMAGE" { default = "dermdesktop:latest" }
 variable "PRECLINICALDESKTOP_IMAGE" { default = "preclinicaldesktop:latest" }
 variable "MOLECULARDESKTOP_IMAGE" { default = "moleculardesktop:latest" }
+variable "GENOMICSDESKTOP_IMAGE" { default = "genomicsdesktop:latest" }
 variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
 variable "NEURODESKTOP_IMAGE" { default = "neurodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
@@ -231,7 +235,7 @@ variable "NF_NEURO_MODULES_SRC" { default = "https://github.com/nf-neuro/modules
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop", "datadesktop", "dermdesktop", "preclinicaldesktop", "moleculardesktop", "aidesktop", "neurodesktop"]
+  targets = ["scidesktop", "microdesktop", "datadesktop", "dermdesktop", "preclinicaldesktop", "moleculardesktop", "genomicsdesktop", "aidesktop", "neurodesktop"]
 }
 
 group "test" {
@@ -251,6 +255,7 @@ group "test" {
     "sciget-dermatology-test",
     "sciget-preclinical-test",
     "sciget-molecular-imaging-test",
+    "sciget-genomics-test",
     "eessi-cvmfs-test",
     "jupyterlab-niivue-test",
     "jupyterlab-freebrowse-test",
@@ -273,11 +278,14 @@ group "test" {
     "virtualgl-test",
     "jupyterlab-slurm-test",
     "workflow-engines-test",
+    "viash-hub-test",
     "microscopy-env-test",
     "datascience-env-test",
     "dermatology-env-test",
     "preclinical-env-test",
     "molecular-imaging-env-test",
+    "genomics-env-test",
+    "genomics-agents-test",
     "neuroimaging-env-test",
     "neurodesk-compat-test",
     "rclone-test",
@@ -579,6 +587,19 @@ target "sciget-molecular-imaging" {
 
 target "sciget-molecular-imaging-test" {
   inherits = ["sciget-molecular-imaging"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+target "sciget-genomics" {
+  inherits = ["_component"]
+  context  = "components/sciget-genomics"
+  target   = "component"
+  contexts = { sciget = "target:sciget" }
+}
+
+target "sciget-genomics-test" {
+  inherits = ["sciget-genomics"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1016,6 +1037,8 @@ target "workflow-engines" {
     NEXTFLOW_SHA256  = NEXTFLOW_SHA256
     NF_TEST_VERSION  = NF_TEST_VERSION
     NF_TEST_SHA256   = NF_TEST_SHA256
+    VIASH_VERSION    = VIASH_VERSION
+    VIASH_SHA256     = VIASH_SHA256
   }
 }
 
@@ -1147,6 +1170,60 @@ target "molecular-imaging-env" {
 
 target "molecular-imaging-env-test" {
   inherits = ["molecular-imaging-env"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: curated Viash Hub & OpenPipelines workflow catalog and `viash-catalog`
+# CLI for workflow discovery, rootless Apptainer/Slurm Nextflow commands, and
+# Viash component scaffolding. Copied by genomicsdesktop.
+target "viash-hub" {
+  inherits = ["_component"]
+  context  = "components/viash-hub"
+  target   = "component"
+  contexts = {
+    workflow-engines = "target:workflow-engines"
+    jupyter-env      = "target:jupyter-env"
+  }
+}
+
+target "viash-hub-test" {
+  inherits = ["viash-hub"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: genomics and single-cell Python analysis kernel (anndata, scanpy,
+# mudata, biopython, polars, pyarrow, h5py, zarr, dask, xarray, igraph,
+# leidenalg, umap-learn, pyyaml, jsonschema, nf-core) + EESSI genomics metadata.
+# Copied by genomicsdesktop.
+target "genomics-env" {
+  inherits = ["_component"]
+  context  = "components/genomics-env"
+  target   = "component"
+}
+
+target "genomics-env-test" {
+  inherits = ["genomics-env"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Optional: coding-agent instructions for genomicsdesktop (Viash Hub,
+# OpenPipelines, rootless Apptainer Nextflow profiles, EESSI genomics modules).
+# Copied by genomicsdesktop.
+target "genomics-agents" {
+  inherits = ["_component"]
+  context  = "components/genomics-agents"
+  target   = "component"
+  contexts = {
+    coding-agents = "target:coding-agents"
+    startup       = "target:startup"
+  }
+}
+
+target "genomics-agents-test" {
+  inherits = ["genomics-agents"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1293,6 +1370,20 @@ target "moleculardesktop" {
     molecular-imaging-env    = "target:molecular-imaging-env"
   }
   tags   = [MOLECULARDESKTOP_IMAGE]
+  output = ["type=docker"]
+}
+
+target "genomicsdesktop" {
+  inherits = ["_common"]
+  context  = "images/genomicsdesktop"
+  contexts = {
+    scidesktop-base = "target:scidesktop"
+    sciget-genomics = "target:sciget-genomics"
+    viash-hub       = "target:viash-hub"
+    genomics-env    = "target:genomics-env"
+    genomics-agents = "target:genomics-agents"
+  }
+  tags   = [GENOMICSDESKTOP_IMAGE]
   output = ["type=docker"]
 }
 
