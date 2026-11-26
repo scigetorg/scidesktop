@@ -1,0 +1,5 @@
+  [genomics (EESSI/2025.06, amd64 + arm64)]
+    Alignment & sequence: SAMtools, BCFtools, BEDTools, HTSlib, BWA, Bowtie2, minimap2, STAR, Salmon, BLAST+, HMMER, DIAMOND, MMseqs2, MUMmer, Flye, IQ-TREE, Kraken2
+    QC & variants:        FastQC, MultiQC, fastp, Trimmomatic, GATK, VCFtools
+    R & single-cell:      R, R-bundle-Bioconductor, R-bundle-CRAN, Biopython, Pysam, anndata
+    Workflows:            Use `viash-catalog list` for curated Viash Hub & OpenPipelines Nextflow workflows (rootless Apptainer + Slurm)

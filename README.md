@@ -61,12 +61,13 @@ enough for a large virtual screen.
 
 | Image | Folder | What it adds |
 |---|---|---|
-| scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below, including all sciget domains (`sciget-all`), Slurm + `jupyterlab-slurm`, VS Code (`code-server`, `vscode-core`), DataLad, workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, `scigethelpers`, and the [coding agents, Jupyter AI ACP adapters, T3 Code and T3 Connect](docs/coding-agents.md) |
+| scidesktop | [images/scidesktop](images/scidesktop) | The base: everything below, including all sciget domains (`sciget-all`), Slurm + `jupyterlab-slurm`, VS Code (`code-server`, `vscode-core`), DataLad, workflow engines (Nextflow, nf-test, Viash, Snakemake + shared Apptainer/Slurm Nextflow profiles), VirtualGL, `scigethelpers`, and the [coding agents, Jupyter AI ACP adapters, T3 Code and T3 Connect](docs/coding-agents.md) |
 | microdesktop | [images/microdesktop](images/microdesktop) | Microscopy: narrows sciget to the microscopy tools (`sciget-microscopy`) and adds [Neuroglancer](docs/viewers.md) (`jupyterlab-neuroglancer`) plus the locked `microscopy` Python kernel (`microscopy-env`: `scikit-image`, `tifffile`, `zarr`, `ome-zarr`, `bioio`, `dask`, `xarray`); inherits every generic feature from `scidesktop` |
 | datadesktop | [images/datadesktop](images/datadesktop) | Data Science: narrows sciget to the datascience catalog (`sciget-datascience`) and adds the locked `datascience` Python kernel (`datascience-env`: `polars`, `pyarrow`, `duckdb`, `jupysql`, `scikit-learn`, `statsmodels`, `xgboost`, `lightgbm`, `optuna`, `shap`, `plotly`, `altair`, `sqlalchemy`) without the background services of `aidesktop` |
 | dermdesktop | [images/dermdesktop](images/dermdesktop) | Dermatology: narrows sciget to the dermatology catalog (`sciget-dermatology`) and adds [Neuroglancer](docs/viewers.md) (`jupyterlab-neuroglancer`) plus the locked `dermatology` Python kernel (`dermatology-env`: `scikit-image`, `tifffile`, `zarr`, `ome-zarr`, `bioio`, `openslide`, `pydicom`, `colour-science`, `trimesh`, `statsmodels`, `dask`, `xarray`) |
 | preclinicaldesktop | [images/preclinicaldesktop](images/preclinicaldesktop) | Preclinical imaging: narrows sciget to the preclinical catalog (`sciget-preclinical`) and adds [NiiVue](docs/viewers.md) (`jupyterlab-niivue`, `vscode-niivue`) plus the locked `preclinical` Python kernel (`preclinical-env`: `nibabel`, `nilearn`, `SimpleITK`, `pydicom`, `brkraw`, `ipyniivue`, `scikit-image`, `tifffile`, `zarr`, `dask`, `xarray`) |
 | moleculardesktop | [images/moleculardesktop](images/moleculardesktop) | Molecular imaging: narrows sciget to the molecular-imaging catalog (`sciget-molecular-imaging`) and adds [NiiVue](docs/viewers.md) (`jupyterlab-niivue`, `vscode-niivue`) plus the locked `molecular-imaging` Python kernel (`molecular-imaging-env`: `nibabel`, `nilearn`, `SimpleITK`, `pydicom`, `highdicom`, `ipyniivue`, `scikit-image`, `scikit-learn`, `statsmodels`) |
+| genomicsdesktop | [images/genomicsdesktop](images/genomicsdesktop) | Genomics & single-cell: narrows sciget to `sciget-datascience`, adds the curated Viash Hub & OpenPipelines catalog (`viash-hub` / `viash-catalog`), coding-agent instructions (`genomics-agents`), EESSI genomics metadata/launchers, and the locked `genomics` Python kernel (`genomics-env`: `anndata`, `scanpy`, `mudata`, `biopython`, `polars`, `pyarrow`, `h5py`, `zarr`, `dask`, `xarray`, `igraph`, `leidenalg`, `umap-learn`, `pyyaml`, `jsonschema`, `nf-core`) |
 | aidesktop | [images/aidesktop](images/aidesktop) | The [AI Ready workshop](docs/ai-ready.md): its notebooks and kernel, Airflow, MLflow and PostgreSQL, with the datascience catalog (`sciget-datascience`) |
 | neurodesktop | [images/neurodesktop](images/neurodesktop) | [Neuroimaging](docs/neurodesktop.md): narrows sciget to neuroimaging, and adds the Neurodesk CVMFS config, [NiiVue](docs/viewers.md) (`jupyterlab-niivue`, `vscode-niivue`), [FreeBrowse](docs/viewers.md) (`jupyterlab-freebrowse`), the neuroimaging Python kernel (`neuroimaging-env`), the Neurodesk compatibility layer (`neurodesk-compat`), Claude Code/Codex VS Code extensions (`vscode-coding-agents`) and Neurodesk's coding-agent defaults |
 
@@ -76,7 +77,7 @@ base alongside them, so nothing needs publishing first. To start a new one, or
 to build one for your own community in a fork, see [docs/images.md](docs/images.md).
 
 CI builds and tests every image on amd64 and arm64. On `main` it publishes
-scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, aidesktop and neurodesktop to
+scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, genomicsdesktop, aidesktop and neurodesktop to
 `ghcr.io/scigetorg/<image>`, each as one multi-arch image, tagged with the
 commit's short SHA, the date and `latest`.
 
@@ -98,7 +99,7 @@ commit's short SHA, the date and `latest`.
 | T3 Connect | [Remote access](docs/t3-connect.md) to T3 Code from the T3 apps, through T3's relay. Off until the user sets it up; at `/opt/t3-connect` |
 | Batch jobs | A [Slurm queue](docs/slurm.md) for the session (`sbatch`, `srun`) plus the `jupyterlab-slurm` Queue Manager extension in JupyterLab |
 | VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile, with `vscode-core` preinstalled (plus `vscode-niivue` and `vscode-coding-agents` on `neurodesktop`) |
-| Data & workflows | DataLad (`datalad-container`, `datalad-osf`, `osf`) and git-annex at `/opt/datalad`; Nextflow, nf-test and Snakemake (+ Slurm executor plugin) at `/opt/workflow-engines`; `rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`, `gh` |
+| Data & workflows | DataLad (`datalad-container`, `datalad-osf`, `osf`) and git-annex at `/opt/datalad`; Nextflow, nf-test, Viash and Snakemake (+ Slurm executor plugin and `/etc/scidesktop/nextflow/scidesktop.config` Apptainer/Slurm profiles) at `/opt/workflow-engines`; `rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`, `gh` |
 | Helper CLI | The `scigethelpers` command (`cite`, `kernel`, `check`, `info`, `uv`) at `/opt/scigethelpers-cli` |
 
 The domain images add domain-specific components the base leaves out (and narrow
@@ -112,6 +113,7 @@ the sciget catalog to their domain; [which image has which](docs/images.md)):
 | Dermatology Python | The `dermatology` Jupyter kernel (`scikit-image`, `tifffile`, `imagecodecs`, `zarr`, `ome-zarr`, `bioio`, `openslide`, `pydicom`, `colour-science`, `trimesh`, `statsmodels`, `dask`, `xarray`) at `/opt/dermatology-env` |
 | Preclinical Python | The `preclinical` Jupyter kernel (`nibabel`, `nilearn`, `SimpleITK`, `pydicom`, `brkraw`, `ipyniivue`, `scikit-image`, `tifffile`, `zarr`, `dask`, `xarray`) at `/opt/preclinical-env` |
 | Molecular Imaging Python | The `molecular-imaging` Jupyter kernel (`nibabel`, `nilearn`, `SimpleITK`, `pydicom`, `highdicom`, `ipyniivue`, `scikit-image`, `scikit-learn`, `statsmodels`) at `/opt/molecular-imaging-env` |
+| Genomics & Viash Hub | The `genomics` Jupyter kernel (`anndata`, `scanpy`, `mudata`, `biopython`, `polars`, `pyarrow`, `h5py`, `zarr`, `dask`, `xarray`, `igraph`, `leidenalg`, `umap-learn`, `pyyaml`, `jsonschema`, `nf-core`) at `/opt/genomics-env`, the curated Viash Hub & OpenPipelines catalog (`viash-hub` / `viash-catalog`), and genomics coding-agent instructions (`genomics-agents`) |
 | Neuroimaging Python | The `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`, `datalad`, `xnat`, `nf-core`) at `/opt/neuroimaging-env` |
 | Neurodesk | The Neurodesk CVMFS repository's mirrors and key (`neurodesk-cvmfs`), Neurodesk's coding-agent defaults (`neurodesk-agents`), Claude Code/Codex VS Code extensions (`vscode-coding-agents`), and FreeSurfer/nf-neuro compatibility (`neurodesk-compat`) |
 | AI Ready | A Python 3.12 kernel with the workshop's libraries and MLflow, Airflow in its own environment, PostgreSQL from conda-forge; all locked, at `/opt/ai-ready` |

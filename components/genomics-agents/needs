@@ -1,0 +1,7 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+coding-agents     # the agents it configures
+jupyter-env
+startup           # seeds home defaults
+viash-hub         # viash-catalog CLI referenced in instructions
+workflow-engines  # viash, nextflow, snakemake and scidesktop.config

@@ -26,6 +26,7 @@
       "/^components/dermatology-env/requirements\\.in$/",
       "/^components/preclinical-env/requirements\\.in$/",
       "/^components/molecular-imaging-env/requirements\\.in$/",
+      "/^components/genomics-env/requirements\\.in$/",
       "/^components/neuroimaging-env/requirements\\.in$/"
     ]
   },
@@ -575,6 +576,7 @@
       "matchDepNames": [
         "nextflow-io/nextflow",
         "askimed/nf-test",
+        "viash-io/viash",
         "adoptium/temurin21-binaries"
       ],
       "groupName": "component workflow-engines",
@@ -640,6 +642,36 @@
       "groupName": "component molecular-imaging-env",
       "addLabels": [
         "component:molecular-imaging-env"
+      ]
+    },
+    {
+      "description": "Component viash-hub: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/viash-hub/**"
+      ],
+      "groupName": "component viash-hub",
+      "addLabels": [
+        "component:viash-hub"
+      ]
+    },
+    {
+      "description": "Component genomics-env: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/genomics-env/**"
+      ],
+      "groupName": "component genomics-env",
+      "addLabels": [
+        "component:genomics-env"
+      ]
+    },
+    {
+      "description": "Component genomics-agents: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/genomics-agents/**"
+      ],
+      "groupName": "component genomics-agents",
+      "addLabels": [
+        "component:genomics-agents"
       ]
     },
     {

@@ -1,0 +1,403 @@
+#!/opt/conda/bin/python3
+"""Discover curated Viash Hub workflows and scaffold Viash components.
+
+Usage:
+  viash-catalog list [--domain DOMAIN] [--kind KIND]
+  viash-catalog info <package-id>
+  viash-catalog run-cmd <package-id> [workflow] [--slurm] [--revision REV] [--config PATH]
+  viash-catalog init <name> [--dir DIR] [--lang python|bash|r] [--image OCI_IMAGE] [--force]
+  viash-catalog json [--domain DOMAIN] [--kind KIND]
+
+Environment:
+  VIASH_CATALOG_FILE         Override catalog JSON path (default: /etc/scidesktop/viash-hub/catalog.json)
+  SCIDESKTOP_NEXTFLOW_CONFIG Override Nextflow config path (default: /etc/scidesktop/nextflow/scidesktop.config)
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import sys
+from pathlib import Path
+from typing import Any
+
+DEFAULT_CATALOG = Path("/etc/scidesktop/viash-hub/catalog.json")
+DEFAULT_NF_CONFIG = "/etc/scidesktop/nextflow/scidesktop.config"
+NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+IMAGE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,255}$")
+REV_RE = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
+
+
+def die(msg: str, code: int = 1) -> None:
+    print(f"viash-catalog: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def load_catalog() -> dict[str, Any]:
+    path = Path(os.environ.get("VIASH_CATALOG_FILE") or DEFAULT_CATALOG)
+    if not path.is_file():
+        die(f"catalog file not found: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        die(f"failed to read catalog {path}: {exc}")
+    if not isinstance(data, dict) or data.get("schemaVersion") != 1:
+        die(f"unsupported catalog schema in {path}")
+    packages = data.get("packages")
+    if not isinstance(packages, list):
+        die(f"catalog {path} missing packages list")
+    return data
+
+
+def filter_packages(
+    packages: list[dict[str, Any]],
+    domain: str | None = None,
+    kind: str | None = None,
+) -> list[dict[str, Any]]:
+    out = []
+    for pkg in packages:
+        if domain and domain not in pkg.get("domains", []):
+            continue
+        if kind and pkg.get("kind") != kind:
+            continue
+        out.append(pkg)
+    return out
+
+
+def find_package(data: dict[str, Any], pkg_id: str) -> dict[str, Any]:
+    for pkg in data["packages"]:
+        if pkg.get("id") == pkg_id:
+            return pkg
+    known = ", ".join(p.get("id", "?") for p in data["packages"])
+    die(f"unknown package {pkg_id!r} (available: {known})")
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    data = load_catalog()
+    pkgs = filter_packages(data["packages"], domain=args.domain, kind=args.kind)
+    if not pkgs:
+        print("No matching Viash Hub packages.")
+        return 0
+    for pkg in pkgs:
+        domains = ",".join(pkg.get("domains", []))
+        print(
+            f"{pkg['id']}\t{pkg['version']}\t{pkg['kind']}\t"
+            f"{pkg['repository']}\t[{domains}]\t{pkg['description']}"
+        )
+    return 0
+
+
+def cmd_info(args: argparse.Namespace) -> int:
+    data = load_catalog()
+    pkg = find_package(data, args.id)
+    nf_cfg = os.environ.get("SCIDESKTOP_NEXTFLOW_CONFIG") or data.get(
+        "nextflowConfig", DEFAULT_NF_CONFIG
+    )
+    print(f"ID:          {pkg['id']}")
+    print(f"Name:        {pkg['name']}")
+    print(f"Kind:        {pkg['kind']}")
+    print(f"Repository:  {pkg['repository']} ({pkg['version']})")
+    print(f"License:     {pkg.get('license', 'unknown')}")
+    print(f"Domains:     {', '.join(pkg.get('domains', []))}")
+    print(f"Formats:     {', '.join(pkg.get('formats', []))}")
+    print(f"Homepage:    {pkg.get('homepage', '')}")
+    print(f"Viash Hub:   {pkg.get('viash_hub_url', '')}")
+    print(f"Description: {pkg['description']}")
+    if pkg["kind"] == "nextflow-workflow":
+        workflows = pkg.get("workflows") or {}
+        if workflows:
+            print("\nCurated Nextflow workflows:")
+            for wf_name, wf in workflows.items():
+                marker = " (default)" if wf_name == pkg.get("default_workflow") else ""
+                print(f"  - {wf_name}{marker}: {wf['description']}")
+            default_wf = pkg.get("default_workflow") or next(iter(workflows))
+            main_script = workflows[default_wf]["main_script"]
+            print("\nRun with rootless Apptainer:")
+            print(
+                f"  NXF_SYNTAX_PARSER=v1 nextflow run {shlex.quote(pkg['repository'])} "
+                f"-r {shlex.quote(pkg['version'])} "
+                f"-main-script {shlex.quote(main_script)} "
+                f"-c {shlex.quote(nf_cfg)} -profile apptainer --help"
+            )
+    else:
+        vsh_repo = pkg.get("vsh_repo") or pkg["repository"]
+        print("\nUse as a Viash Hub dependency in config.vsh.yaml:")
+        print("  dependencies:")
+        print("    - name: <component_name>")
+        print("      repository:")
+        print("        type: vsh")
+        print(f"        repo: {vsh_repo}")
+        print(f"        tag: {pkg['version']}")
+    return 0
+
+
+def cmd_run_cmd(args: argparse.Namespace) -> int:
+    data = load_catalog()
+    pkg = find_package(data, args.id)
+    rev = args.revision or pkg["version"]
+    if not REV_RE.fullmatch(rev):
+        die(f"invalid revision: {rev!r}")
+    if pkg["kind"] != "nextflow-workflow":
+        vsh_repo = pkg.get("vsh_repo") or pkg["repository"]
+        print(
+            f"# {pkg['id']} ({pkg['repository']}@{rev}) is a Viash Hub component package.\n"
+            f"# Reference its components in config.vsh.yaml under dependencies:\n"
+            f"#   - name: <component_name>\n"
+            f"#     repository:\n"
+            f"#       type: vsh\n"
+            f"#       repo: {vsh_repo}\n"
+            f"#       tag: {rev}\n"
+            f"# Or clone and inspect/build locally:\n"
+            f"git clone --depth 1 --branch {shlex.quote(rev)} "
+            f"{shlex.quote('https://github.com/' + pkg['repository'] + '.git')}"
+        )
+        return 0
+    workflows = pkg.get("workflows") or {}
+    wf_name = args.workflow or pkg.get("default_workflow")
+    if wf_name not in workflows:
+        known = ", ".join(sorted(workflows))
+        die(f"unknown workflow {wf_name!r} for {pkg['id']} (available: {known})")
+    main_script = workflows[wf_name]["main_script"]
+    nf_cfg = (
+        args.config
+        or os.environ.get("SCIDESKTOP_NEXTFLOW_CONFIG")
+        or data.get("nextflowConfig", DEFAULT_NF_CONFIG)
+    )
+    profile = "apptainer,slurm" if args.slurm else "apptainer"
+    # Viash 0.9.x VDSL3 generated Nextflow modules require the v1 syntax parser
+    # on Nextflow 26+ (which defaults to the strict v2 parser).
+    cmd = [
+        "nextflow",
+        "run",
+        pkg["repository"],
+        "-r",
+        rev,
+        "-main-script",
+        main_script,
+        "-c",
+        nf_cfg,
+        "-profile",
+        profile,
+    ]
+    print("NXF_SYNTAX_PARSER=v1 " + " ".join(shlex.quote(part) for part in cmd))
+    return 0
+
+
+def cmd_json(args: argparse.Namespace) -> int:
+    data = load_catalog()
+    out = {
+        "schemaVersion": data["schemaVersion"],
+        "nextflowConfig": os.environ.get("SCIDESKTOP_NEXTFLOW_CONFIG")
+        or data.get("nextflowConfig", DEFAULT_NF_CONFIG),
+        "packages": filter_packages(data["packages"], domain=args.domain, kind=args.kind),
+    }
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def scaffold_files(name: str, lang: str, image: str | None) -> dict[str, tuple[str, int]]:
+    engines_yaml = "engines:\n  - type: native\n"
+    if image:
+        engines_yaml += f"  - type: docker\n    image: {image}\n"
+
+    if lang == "python":
+        res_type, script_name = "python_script", "script.py"
+        script_body = f'''#!/usr/bin/env python3
+from pathlib import Path
+
+## VIASH START
+par = {{
+    "input": "input.txt",
+    "output": "output.txt",
+}}
+## VIASH END
+
+
+def main() -> None:
+    text = Path(par["input"]).read_text(encoding="utf-8")
+    lines = text.splitlines()
+    out = Path(par["output"])
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(f"component={name}\\nlines={{len(lines)}}\\n{{text}}", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()
+'''
+    elif lang == "r":
+        res_type, script_name = "r_script", "script.R"
+        script_body = f'''## VIASH START
+par <- list(
+  input = "input.txt",
+  output = "output.txt"
+)
+## VIASH END
+
+lines <- readLines(par$input, warn = FALSE)
+dir.create(dirname(par$output), recursive = TRUE, showWarnings = FALSE)
+writeLines(c(paste0("component={name}"), paste0("lines=", length(lines)), lines), par$output)
+'''
+    else:
+        res_type, script_name = "bash_script", "script.sh"
+        script_body = f'''#!/bin/bash
+set -euo pipefail
+
+## VIASH START
+par_input="input.txt"
+par_output="output.txt"
+## VIASH END
+
+lines="$(wc -l < "${{par_input}}" | tr -d ' ')"
+mkdir -p "$(dirname "${{par_output}}")"
+{{
+    echo "component={name}"
+    echo "lines=${{lines}}"
+    cat "${{par_input}}"
+}} > "${{par_output}}"
+'''
+
+    config_yaml = f'''name: {name}
+description: Reproducible Viash component scaffolded on scidesktop.
+arguments:
+  - name: --input
+    type: file
+    direction: input
+    required: true
+    description: Input file path.
+  - name: --output
+    type: file
+    direction: output
+    required: true
+    description: Output file path.
+resources:
+  - type: {res_type}
+    path: {script_name}
+test_resources:
+  - type: bash_script
+    path: test.sh
+{engines_yaml}runners:
+  - type: executable
+  - type: nextflow
+'''
+
+    test_sh = f'''#!/bin/bash
+set -euo pipefail
+printf 'alpha\\nbeta\\n' > input.txt
+"$meta_executable" --input input.txt --output output.txt
+grep -qxF "component={name}" output.txt
+grep -qxF "lines=2" output.txt
+grep -qxF "alpha" output.txt
+echo ">>> Test succeeded!"
+'''
+
+    return {
+        "config.vsh.yaml": (config_yaml, 0o644),
+        script_name: (script_body, 0o755),
+        "test.sh": (test_sh, 0o755),
+    }
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    if not NAME_RE.fullmatch(args.name):
+        die(
+            f"invalid component name {args.name!r}: must match ^[a-z][a-z0-9_]*$ "
+            "(lowercase letters, digits, underscores)"
+        )
+    if args.image and not IMAGE_RE.fullmatch(args.image):
+        die(f"invalid container image reference {args.image!r}")
+
+    target_dir = Path(args.dir) if args.dir else Path.cwd() / args.name
+    if target_dir.exists():
+        if not target_dir.is_dir():
+            die(f"target exists and is not a directory: {target_dir}")
+        if any(target_dir.iterdir()) and not args.force:
+            die(f"target directory is not empty: {target_dir} (pass --force to overwrite)")
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    files = scaffold_files(args.name, args.lang, args.image)
+    for filename, (content, mode) in files.items():
+        dest = target_dir / filename
+        dest.write_text(content, encoding="utf-8")
+        dest.chmod(mode)
+
+    print(f"Scaffolded Viash component '{args.name}' in {target_dir}")
+    print(f"  Run locally:  viash run {shlex.quote(str(target_dir / 'config.vsh.yaml'))} -- --input in.txt --output out.txt")
+    print(f"  Unit test:    viash test {shlex.quote(str(target_dir / 'config.vsh.yaml'))} --engine native")
+    print(f"  Build NF:     viash build {shlex.quote(str(target_dir / 'config.vsh.yaml'))} --runner nextflow --output {shlex.quote(str(target_dir / 'target/nextflow'))}")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="viash-catalog",
+        description="Discover curated Viash Hub workflows and scaffold Viash components.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_list = sub.add_parser("list", help="List curated Viash Hub packages")
+    p_list.add_argument("--domain", help="Filter by domain (e.g. genomics, cellular-biology)")
+    p_list.add_argument(
+        "--kind",
+        choices=("nextflow-workflow", "viash-package"),
+        help="Filter by package kind",
+    )
+    p_list.set_defaults(func=cmd_list)
+
+    p_info = sub.add_parser("info", help="Show details and workflows for a package")
+    p_info.add_argument("id", help="Package ID (from `viash-catalog list`)")
+    p_info.set_defaults(func=cmd_info)
+
+    p_run = sub.add_parser("run-cmd", help="Print ready-to-run Nextflow/Apptainer command")
+    p_run.add_argument("id", help="Package ID")
+    p_run.add_argument("workflow", nargs="?", help="Workflow name (optional for default)")
+    p_run.add_argument("--slurm", action="store_true", help="Include the session Slurm profile")
+    p_run.add_argument("--revision", help="Override pinned release tag or commit")
+    p_run.add_argument("--config", help="Override Nextflow config file path")
+    p_run.set_defaults(func=cmd_run_cmd)
+
+    p_init = sub.add_parser(
+        "init",
+        help="Scaffold a Viash component (optionally wrapping a SCIGET/OCI container image)",
+    )
+    p_init.add_argument("name", help="Component name (lowercase snake_case)")
+    p_init.add_argument("--dir", help="Target directory (default: ./<name>)")
+    p_init.add_argument(
+        "--lang",
+        choices=("python", "bash", "r"),
+        default="python",
+        help="Script language (default: python)",
+    )
+    p_init.add_argument(
+        "--image",
+        help="Optional OCI/Docker container image to bridge via Viash's docker engine",
+    )
+    p_init.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow scaffolding into a non-empty directory",
+    )
+    p_init.set_defaults(func=cmd_init)
+
+    p_json = sub.add_parser("json", help="Print curated catalog as JSON")
+    p_json.add_argument("--domain", help="Filter by domain")
+    p_json.add_argument(
+        "--kind",
+        choices=("nextflow-workflow", "viash-package"),
+        help="Filter by package kind",
+    )
+    p_json.set_defaults(func=cmd_json)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1
 # Generic scientific workflow engines at /opt/workflow-engines, shared across
-# all desktops (scidesktop, microdesktop, aidesktop, neurodesktop):
+# all desktops (scidesktop, microdesktop, aidesktop, neurodesktop, genomicsdesktop, ...):
 #   - Nextflow (Apache-2.0): offline fat distribution executable
 #   - nf-test (MIT): test runner JAR for Nextflow pipelines
+#   - Viash (GPL-3.0): standalone JVM executable for modular pipeline components
 #   - Snakemake (MIT): isolated locked venv backed by jupyter-env's Python 3.13
-#   - Java for both Nextflow and nf-test: the Eclipse Temurin 21 runtime at
+#   - Java for Nextflow, nf-test and Viash: the Eclipse Temurin 21 runtime at
 #     /opt/workflow-engines/jre; java, keytool and rmiregistry on PATH
 
 ARG UBUNTU_IMAGE
@@ -15,6 +16,8 @@ ARG NEXTFLOW_VERSION
 ARG NEXTFLOW_SHA256
 ARG NF_TEST_VERSION
 ARG NF_TEST_SHA256
+ARG VIASH_VERSION
+ARG VIASH_SHA256
 ARG TEMURIN_JRE_VERSION
 ARG TEMURIN_JRE_SHA256_AMD64
 ARG TEMURIN_JRE_SHA256_ARM64
@@ -29,11 +32,14 @@ COPY requirements.lock /tmp/
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     --mount=type=bind,from=components,source=trim-python-env,target=/usr/local/bin/trim-python-env \
-    install -d -m 0755 /opt/workflow-engines/bin /opt/workflow-engines/nf-test \
+    install -d -m 0755 /opt/workflow-engines/bin /opt/workflow-engines/nf-test /opt/workflow-engines/viash \
         /out/usr/local/bin /out/opt/scidesktop/manifest.d \
     && fetch "https://github.com/nextflow-io/nextflow/releases/download/v${NEXTFLOW_VERSION:?}/nextflow-${NEXTFLOW_VERSION}-dist" \
         "${NEXTFLOW_SHA256:?}" /opt/workflow-engines/bin/nextflow \
     && chmod 0755 /opt/workflow-engines/bin/nextflow \
+    && fetch "https://github.com/viash-io/viash/releases/download/${VIASH_VERSION:?}/viash" \
+        "${VIASH_SHA256:?}" /opt/workflow-engines/viash/viash \
+    && chmod 0755 /opt/workflow-engines/viash/viash \
     # Temurin names the architectures x64 and aarch64, and the files after the
     # release with _ for +.
     && case "${TARGETARCH}" in \
@@ -64,14 +70,15 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     && ln -s /opt/workflow-engines/snakemake/bin/snakemake /out/usr/local/bin/snakemake \
     && smk="$(/opt/workflow-engines/snakemake/bin/python -c 'import importlib.metadata as m; print(m.version("snakemake"))')" \
     && smk_slurm="$(/opt/workflow-engines/snakemake/bin/python -c 'import importlib.metadata as m; print(m.version("snakemake-executor-plugin-slurm"))')" \
-    && printf '{"nextflow": "%s", "nf-test": "%s", "temurin-jre": "%s", "snakemake": "%s", "snakemake-executor-plugin-slurm": "%s"}\n' \
-        "${NEXTFLOW_VERSION}" "${NF_TEST_VERSION}" "${TEMURIN_JRE_VERSION}" "${smk}" "${smk_slurm}" \
+    && printf '{"nextflow": "%s", "nf-test": "%s", "viash": "%s", "temurin-jre": "%s", "snakemake": "%s", "snakemake-executor-plugin-slurm": "%s"}\n' \
+        "${NEXTFLOW_VERSION}" "${NF_TEST_VERSION}" "${VIASH_VERSION}" "${TEMURIN_JRE_VERSION}" "${smk}" "${smk_slurm}" \
         > /out/opt/scidesktop/manifest.d/workflow-engines.json \
     && chmod -R a+rX,go-w /opt/workflow-engines /out
 
 FROM ${UBUNTU_IMAGE} AS rootfs
 COPY rootfs/ /rootfs/
-RUN chmod -R a+rX,go-w /rootfs
+RUN chmod -R a+rX,go-w /rootfs \
+    && chmod 0755 /rootfs/usr/local/bin/nf-test /rootfs/usr/local/bin/viash
 
 FROM scratch AS component
 COPY --from=rootfs /rootfs/ /
@@ -100,10 +107,27 @@ RUN set -eu \
 USER ${NB_UID}
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     set -eu \
-    && HOME="$(mktemp -d)" && export HOME \
+    && HOME="$(mktemp -d)" && export HOME && cd "${HOME}" \
     && [ "$(readlink -f "$(command -v java)")" = /opt/workflow-engines/jre/bin/java ] \
     && nf_ver="$(nextflow -version)" && grep -q "version" <<<"${nf_ver}" \
     && nft_ver="$(nf-test version)" && grep -qi "nf-test" <<<"${nft_ver}" \
+    && vsh_ver="$(viash --version)" && grep -qi "viash" <<<"${vsh_ver}" \
+    && test -r /etc/scidesktop/nextflow/scidesktop.config \
+    && mkdir -p "${HOME}/vsh" \
+    && printf 'name: greet\narguments:\n  - name: --name\n    type: string\n    default: world\n  - name: --output\n    type: file\n    direction: output\n    required: true\nresources:\n  - type: bash_script\n    path: script.sh\nengines:\n  - type: native\nrunners:\n  - type: executable\n  - type: nextflow\n' > "${HOME}/vsh/config.vsh.yaml" \
+    && printf '#!/bin/bash\nset -euo pipefail\necho "hello-${par_name}" > "${par_output}"\n' > "${HOME}/vsh/script.sh" \
+    && viash run "${HOME}/vsh/config.vsh.yaml" -- --name test --output "${HOME}/vsh-run.txt" \
+    && [ "$(cat "${HOME}/vsh-run.txt")" = "hello-test" ] \
+    && viash build "${HOME}/vsh/config.vsh.yaml" --runner executable --output "${HOME}/vsh-exe" \
+    && "${HOME}/vsh-exe/greet" --name exe --output "${HOME}/vsh-exe.txt" \
+    && [ "$(cat "${HOME}/vsh-exe.txt")" = "hello-exe" ] \
+    && viash build "${HOME}/vsh/config.vsh.yaml" --runner nextflow --output "${HOME}/vsh-nf" \
+    && test -f "${HOME}/vsh-nf/main.nf" \
+    && NXF_OFFLINE=true NXF_SYNTAX_PARSER=v1 nextflow run "${HOME}/vsh-nf/main.nf" \
+        -c /etc/scidesktop/nextflow/scidesktop.config -profile apptainer \
+        -work-dir "${HOME}/vsh-nf-work" \
+        --id s1 --name nf --output out.txt --publish_dir "${HOME}/vsh-nf-out" \
+    && [ "$(cat "${HOME}/vsh-nf-out/out.txt")" = "hello-nf" ] \
     && snakemake --version \
     && snakemake --executor slurm --help >/dev/null \
     && printf 'rule all:\n    output: "done.txt"\n    shell: "echo smk-ok > {output}"\n' > "${HOME}/Snakefile" \

@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "nextflowConfig": "/etc/scidesktop/nextflow/scidesktop.config",
+  "packages": [
+    {
+      "id": "openpipelines",
+      "name": "OpenPipelines",
+      "kind": "nextflow-workflow",
+      "repository": "openpipelines-bio/openpipeline",
+      "version": "v4.2.0",
+      "license": "MIT",
+      "domains": ["genomics", "cellular-biology"],
+      "formats": [".h5mu", ".h5ad", "10x-mtx", "fastq"],
+      "homepage": "https://openpipelines.bio",
+      "viash_hub_url": "https://viash-hub.com/packages/openpipeline",
+      "description": "Modular single-cell and multi-omics Nextflow VDSL3 workflows (ingestion, demux, QC, integration, cell-type annotation, differential expression) built with Viash.",
+      "default_workflow": "multiomics/process_samples",
+      "workflows": {
+        "multiomics/process_samples": {
+          "main_script": "target/nextflow/workflows/multiomics/process_samples/main.nf",
+          "description": "End-to-end multi-sample single-cell multi-omics processing pipeline"
+        },
+        "multiomics/process_singlesample": {
+          "main_script": "target/nextflow/workflows/multiomics/process_singlesample/main.nf",
+          "description": "Single-sample single-cell multi-omics QC, filtering and normalization"
+        },
+        "rna/rna_singlesample": {
+          "main_script": "target/nextflow/workflows/rna/rna_singlesample/main.nf",
+          "description": "Single-sample scRNA-seq preprocessing and quality control"
+        },
+        "rna/rna_multisample": {
+          "main_script": "target/nextflow/workflows/rna/rna_multisample/main.nf",
+          "description": "Multi-sample scRNA-seq merging, normalization and dimensionality reduction"
+        },
+        "qc/qc": {
+          "main_script": "target/nextflow/workflows/qc/qc/main.nf",
+          "description": "Single-cell quality control metrics calculation on MuData (.h5mu)"
+        },
+        "integration/harmony_leiden": {
+          "main_script": "target/nextflow/workflows/integration/harmony_leiden/main.nf",
+          "description": "Harmony batch integration, neighbors, Leiden clustering and UMAP"
+        },
+        "integration/scvi_leiden": {
+          "main_script": "target/nextflow/workflows/integration/scvi_leiden/main.nf",
+          "description": "scVI variational autoencoder batch integration and Leiden clustering"
+        },
+        "annotation/celltypist": {
+          "main_script": "target/nextflow/workflows/annotation/celltypist/main.nf",
+          "description": "Automated cell-type annotation with CellTypist"
+        },
+        "differential_expression/pseudobulk_deseq2": {
+          "main_script": "target/nextflow/workflows/differential_expression/pseudobulk_deseq2/main.nf",
+          "description": "Pseudobulk differential gene expression analysis with DESeq2"
+        },
+        "ingestion/demux": {
+          "main_script": "target/nextflow/workflows/ingestion/demux/main.nf",
+          "description": "Sequencing run demultiplexing to FASTQ"
+        },
+        "ingestion/conversion": {
+          "main_script": "target/nextflow/workflows/ingestion/conversion/main.nf",
+          "description": "Convert raw single-cell matrices (10x, Cell Ranger, AnnData) to MuData (.h5mu)"
+        }
+      }
+    },
+    {
+      "id": "openpipelines-spatial",
+      "name": "OpenPipelines Spatial",
+      "kind": "viash-package",
+      "repository": "openpipelines-bio/openpipeline_spatial",
+      "version": "v0.1.0",
+      "license": "MIT",
+      "domains": ["genomics", "cellular-biology", "microscopy"],
+      "formats": [".h5mu", ".h5ad", "spatialdata"],
+      "homepage": "https://openpipelines.bio",
+      "viash_hub_url": "https://viash-hub.com/packages/openpipeline_spatial",
+      "description": "Modular spatial transcriptomics Viash components and workflows for the OpenPipelines ecosystem.",
+      "vsh_repo": "openpipelines-bio/openpipeline_spatial"
+    },
+    {
+      "id": "biobox",
+      "name": "Viash Hub Biobox",
+      "kind": "viash-package",
+      "repository": "viash-hub/biobox",
+      "version": "v0.5.0",
+      "license": "MIT",
+      "domains": ["genomics"],
+      "formats": ["fastq", "bam", "cram", "vcf", "bed", "gff"],
+      "homepage": "https://github.com/viash-hub/biobox",
+      "viash_hub_url": "https://viash-hub.com/packages/biobox",
+      "description": "Curated Viash Hub component library for sequence bioinformatics (FastQC, MultiQC, BWA, minimap2, STAR, SAMtools, BCFtools, BEDTools, cutadapt).",
+      "vsh_repo": "biobox"
+    },
+    {
+      "id": "openproblems-batch-integration",
+      "name": "OpenProblems Batch Integration",
+      "kind": "nextflow-workflow",
+      "repository": "openproblems-bio/task_batch_integration",
+      "version": "v2.0.0",
+      "license": "MIT",
+      "domains": ["genomics", "cellular-biology"],
+      "formats": [".h5ad"],
+      "homepage": "https://openproblems.bio",
+      "viash_hub_url": "https://github.com/openproblems-bio/task_batch_integration",
+      "description": "OpenProblems.bio single-cell batch integration benchmark components (BBKNN, Harmony, scVI, Scanorama, MNN, evaluation metrics) built with Viash.",
+      "default_workflow": "methods/bbknn",
+      "workflows": {
+        "methods/bbknn": {
+          "main_script": "target/nextflow/methods/bbknn/main.nf",
+          "description": "BBKNN batch-balanced k-nearest neighbors integration component"
+        },
+        "data_processors/process_dataset": {
+          "main_script": "target/nextflow/data_processors/process_dataset/main.nf",
+          "description": "Prepare standardized AnnData (.h5ad) benchmark inputs"
+        },
+        "data_processors/process_integration": {
+          "main_script": "target/nextflow/data_processors/process_integration/main.nf",
+          "description": "Post-process integrated embeddings for benchmark scoring"
+        }
+      }
+    }
+  ]
+}

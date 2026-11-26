@@ -3,9 +3,10 @@
 #
 #   ./test/workflow-engines-smoke.sh [image]
 #
-# Verifies Nextflow (offline fat executable), nf-test, and Snakemake (plus its
-# Slurm executor plugin) execute real workflows cleanly with `--network none`
-# without altering the session's default Python.
+# Verifies Nextflow (offline fat executable), nf-test, Viash, and Snakemake
+# (plus Slurm execution and `/etc/scidesktop/nextflow/scidesktop.config`)
+# execute real workflows cleanly with `--network none` without altering the
+# session's default Python.
 
 set -uo pipefail
 
@@ -59,6 +60,44 @@ nextflow_pipeline {
 NFT
     NXF_OFFLINE=true nf-test test "${work}/main.nf.test" >/dev/null 2>&1 && echo "nf_test_run=ok"
 
+    vsh_ver="$(viash --version 2>&1)"
+    printf "%s\n" "${vsh_ver}" | grep -qi "viash" && echo "viash_ver=ok"
+    [ "${SCIDESKTOP_NEXTFLOW_CONFIG:-}" = "/etc/scidesktop/nextflow/scidesktop.config" ] && echo "nf_config_env=ok"
+    [ -n "${NXF_APPTAINER_CACHEDIR:-}" ] && echo "nxf_apptainer_cache=ok"
+    mkdir -p "${work}/vsh"
+    cat > "${work}/vsh/config.vsh.yaml" <<'\''VSH'\''
+name: greet
+arguments:
+  - name: --name
+    type: string
+    default: world
+  - name: --output
+    type: file
+    direction: output
+    required: true
+resources:
+  - type: bash_script
+    path: script.sh
+engines:
+  - type: native
+runners:
+  - type: executable
+  - type: nextflow
+VSH
+    cat > "${work}/vsh/script.sh" <<'\''SH'\''
+#!/bin/bash
+set -euo pipefail
+echo "viash-${par_name}" > "${par_output}"
+SH
+    viash run "${work}/vsh/config.vsh.yaml" -- --name native --output "${work}/vsh-native.txt" >/dev/null 2>&1
+    [ "$(cat "${work}/vsh-native.txt")" = "viash-native" ] && echo "viash_run=ok"
+    viash build "${work}/vsh/config.vsh.yaml" --runner nextflow --output "${work}/vsh-nf" >/dev/null 2>&1
+    NXF_OFFLINE=true NXF_SYNTAX_PARSER=v1 nextflow run "${work}/vsh-nf/main.nf" \
+        -c "${SCIDESKTOP_NEXTFLOW_CONFIG}" -profile apptainer \
+        -work-dir "${work}/vsh-nf-work" \
+        --id s1 --name nextflow --output out.txt --publish_dir "${work}/vsh-nf-out" >/dev/null 2>&1
+    [ "$(cat "${work}/vsh-nf-out/out.txt")" = "viash-nextflow" ] && echo "viash_nf_run=ok"
+
     snakemake --version >/dev/null && echo "snakemake_ver=ok"
     snakemake --executor slurm --help >/dev/null 2>&1 && echo "snakemake_slurm=ok"
     cat > "${work}/Snakefile" <<'\''SMK'\''
@@ -87,6 +126,25 @@ SMK
         --default-resources slurm_partition=scidesktop runtime=5 mem_mb=256 \
         --jobs 1 >/dev/null 2>&1
     [ "$(cat "${work}/slurm-result.txt")" = "slurm-smk-ok" ] && echo "snakemake_slurm_run=ok"
+
+    cat > "${work}/slurm.nf" <<'\''NF'\''
+process SLURM_HELLO {
+    output:
+    path "nf-slurm.txt"
+    script:
+    """
+    echo nextflow-slurm-ok > nf-slurm.txt
+    """
+}
+workflow {
+    SLURM_HELLO()
+}
+NF
+    cd "${work}"
+    NXF_OFFLINE=true nextflow run "${work}/slurm.nf" \
+        -c "${SCIDESKTOP_NEXTFLOW_CONFIG}" -profile slurm \
+        -work-dir "${work}/nf-slurm-work" >/dev/null 2>&1
+    grep -rq "nextflow-slurm-ok" "${work}/nf-slurm-work" && echo "nextflow_slurm_run=ok"
 ' 2>/dev/null)
 
 has() { printf '%s\n%s\n' "${out}" "${slurm_out}" | grep -qxF "$1"; }
@@ -98,10 +156,16 @@ has "nextflow_ver=ok" && pass "nextflow version works offline" || fail "nextflow
 has "nextflow_run=ok" && pass "nextflow executes a pipeline with --network none" || fail "nextflow executes a pipeline with --network none"
 has "nf_test_ver=ok" && pass "nf-test version works offline" || fail "nf-test version works offline"
 has "nf_test_run=ok" && pass "nf-test executes a pipeline test with --network none" || fail "nf-test executes a pipeline test with --network none"
+has "viash_ver=ok" && pass "viash version works offline" || fail "viash version works offline"
+has "nf_config_env=ok" && pass "SCIDESKTOP_NEXTFLOW_CONFIG points to shared Nextflow config" || fail "SCIDESKTOP_NEXTFLOW_CONFIG points to shared Nextflow config"
+has "nxf_apptainer_cache=ok" && pass "NXF_APPTAINER_CACHEDIR is set by default" || fail "NXF_APPTAINER_CACHEDIR is set by default"
+has "viash_run=ok" && pass "viash runs a native component offline" || fail "viash runs a native component offline"
+has "viash_nf_run=ok" && pass "viash builds a Nextflow VDSL3 module that runs offline with scidesktop.config" || fail "viash builds a Nextflow VDSL3 module that runs offline with scidesktop.config"
 has "snakemake_ver=ok" && pass "snakemake runs" || fail "snakemake runs"
 has "snakemake_slurm=ok" && pass "snakemake Slurm executor plugin is installed" || fail "snakemake Slurm executor plugin is installed"
 has "snakemake_run=ok" && pass "snakemake executes a workflow rule" || fail "snakemake executes a workflow rule"
 has "snakemake_slurm_run=ok" && pass "snakemake executes a rule on the session Slurm queue (--slurm-status-command squeue)" || fail "snakemake executes a rule on the session Slurm queue (--slurm-status-command squeue)"
+has "nextflow_slurm_run=ok" && pass "nextflow executes a process on the session Slurm queue (-profile slurm)" || fail "nextflow executes a process on the session Slurm queue (-profile slurm)"
 
 echo
 if [ "${FAILED}" -eq 0 ]; then

@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+java_bin="/opt/workflow-engines/jre/bin/java"
+if [ -n "${VIASH_JAVA_HOME:-}" ] && [ -x "${VIASH_JAVA_HOME}/bin/java" ]; then
+    java_bin="${VIASH_JAVA_HOME}/bin/java"
+elif [ -n "${JAVA_HOME:-}" ] && [ -x "${JAVA_HOME}/bin/java" ]; then
+    java_bin="${JAVA_HOME}/bin/java"
+fi
+java_args=()
+if [ -n "${VIASH_JAVA_ARGS:-}" ]; then
+    # shellcheck disable=SC2206
+    java_args=(${VIASH_JAVA_ARGS})
+fi
+exec "${java_bin}" "${java_args[@]}" -jar /opt/workflow-engines/viash/viash "$@"
