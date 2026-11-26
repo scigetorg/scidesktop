@@ -235,9 +235,14 @@ def static():
         fail("S7", f"{rel(CI)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
                    f"components/target-arch lists {', '.join(arches)}")
 
-    def strip_shell_comments(script: str) -> str:
+    def strip_shell_comments_and_heredocs(script: str) -> str:
         out = []
+        heredoc_end = None
         for line in script.splitlines():
+            if heredoc_end is not None:
+                if line.lstrip("\t") == heredoc_end or line == heredoc_end:
+                    heredoc_end = None
+                continue
             in_sq = in_dq = False
             cut = len(line)
             for idx, ch in enumerate(line):
@@ -248,7 +253,11 @@ def static():
                 elif ch == "#" and not in_sq and not in_dq and (idx == 0 or line[idx - 1].isspace()):
                     cut = idx
                     break
-            out.append(line[:cut])
+            cleaned = line[:cut]
+            out.append(cleaned)
+            hd_m = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", cleaned)
+            if hd_m:
+                heredoc_end = hd_m.group(1)
         return "\n".join(out)
 
     publish_raw = (ci_doc.get("env") or {}).get("PUBLISH")
@@ -270,7 +279,7 @@ def static():
         for step in build_steps:
             if not (isinstance(step, dict) and isinstance(step.get("run"), str)):
                 continue
-            code = strip_shell_comments(step["run"])
+            code = strip_shell_comments_and_heredocs(step["run"])
             loop_m = re.search(
                 r"^\s*for\s+image\s+in\s+\$\{PUBLISH\}\s*;\s*do\s*\n(.*?)^\s*done\b",
                 code,
@@ -295,14 +304,14 @@ def static():
             specs_val = (step.get("env") or {}).get("PIP_AUDIT_SPECS")
             if not isinstance(specs_val, str):
                 continue
-            code = strip_shell_comments(step["run"])
+            code = strip_shell_comments_and_heredocs(step["run"])
             loop_m = re.search(
                 r"^\s*for\s+spec\s+in\s+\$\{PIP_AUDIT_SPECS\}\s*;\s*do\s*\n(.*?)^\s*done\b",
                 code,
                 re.M | re.S,
             )
             if loop_m and re.search(
-                r"^\s*/tmp/pip-audit-venv/bin/pip-audit\s+",
+                r"^\s*/tmp/pip-audit-venv/bin/pip-audit\s+-r\s+/tmp/env-freeze\.txt\b",
                 loop_m.group(1),
                 re.M,
             ):
