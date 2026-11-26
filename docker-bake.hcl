@@ -200,7 +200,6 @@ variable "DERMDESKTOP_IMAGE" { default = "dermdesktop:latest" }
 variable "PRECLINICALDESKTOP_IMAGE" { default = "preclinicaldesktop:latest" }
 variable "MOLECULARDESKTOP_IMAGE" { default = "moleculardesktop:latest" }
 variable "GENOMICSDESKTOP_IMAGE" { default = "genomicsdesktop:latest" }
-variable "AIDESKTOP_IMAGE" { default = "aidesktop:latest" }
 variable "NEURODESKTOP_IMAGE" { default = "neurodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
 # (Renovate tracks its main branch). For local sciget development, build your
@@ -235,7 +234,7 @@ variable "NF_NEURO_MODULES_SRC" { default = "https://github.com/nf-neuro/modules
 
 # Every image in images/; building one builds the images it is FROM.
 group "default" {
-  targets = ["scidesktop", "microdesktop", "datadesktop", "dermdesktop", "preclinicaldesktop", "moleculardesktop", "genomicsdesktop", "aidesktop", "neurodesktop"]
+  targets = ["scidesktop", "microdesktop", "datadesktop", "dermdesktop", "preclinicaldesktop", "moleculardesktop", "genomicsdesktop", "neurodesktop"]
 }
 
 group "test" {
@@ -690,7 +689,7 @@ target "micromamba-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: not in the base. The aidesktop image copies it.
+# Optional: not in the base. The datadesktop image copies it.
 target "ai-ready" {
   inherits = ["_component"]
   context  = "components/ai-ready"
@@ -1327,6 +1326,7 @@ target "datadesktop" {
     scidesktop-base    = "target:scidesktop"
     sciget-datascience = "target:sciget-datascience"
     datascience-env    = "target:datascience-env"
+    ai-ready           = "target:ai-ready"
   }
   tags   = [DATADESKTOP_IMAGE]
   output = ["type=docker"]
@@ -1384,18 +1384,6 @@ target "genomicsdesktop" {
     genomics-agents = "target:genomics-agents"
   }
   tags   = [GENOMICSDESKTOP_IMAGE]
-  output = ["type=docker"]
-}
-
-target "aidesktop" {
-  inherits = ["_common"]
-  context  = "images/aidesktop"
-  contexts = {
-    scidesktop-base    = "target:scidesktop"
-    sciget-datascience = "target:sciget-datascience"
-    ai-ready           = "target:ai-ready"
-  }
-  tags   = [AIDESKTOP_IMAGE]
   output = ["type=docker"]
 }
 

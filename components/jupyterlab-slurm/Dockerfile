@@ -2,7 +2,7 @@
 # Slurm Queue Manager extension for JupyterLab (NERSC/jupyterlab-slurm,
 # BSD-3-Clause) at /opt/jupyterlab-slurm, built from a pinned commit against
 # the Jupyter environment's JupyterLab. Works alongside components/slurm in
-# every desktop image (scidesktop, microdesktop, aidesktop, neurodesktop).
+# every desktop image (scidesktop, microdesktop, datadesktop, neurodesktop).
 
 ARG NODE_VERSION
 ARG UBUNTU_IMAGE

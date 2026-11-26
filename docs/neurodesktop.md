@@ -3,7 +3,7 @@
 `neurodesktop` gives users what
 [neurodesk/neurodesktop](https://github.com/neurodesk/neurodesktop) gives
 them, built from scidesktop components. `scidesktop` already ships all
-generic capabilities shared across every desktop (`microdesktop`, `aidesktop`,
+generic capabilities shared across every desktop (`microdesktop`, `datadesktop`,
 `neurodesktop`): Slurm + `jupyterlab-slurm`, VS Code (`code-server`,
 `vscode-core`), DataLad (+ `datalad-osf`), workflow engines
 (Nextflow, nf-test, Snakemake + Slurm executor plugin), VirtualGL,

@@ -10,7 +10,7 @@
 
 set -uo pipefail
 
-IMAGE="${1:-aidesktop}"
+IMAGE="${1:-datadesktop}"
 NAME="ai-ready-smoke-$$"
 PORT="${SMOKE_AI_READY_PORT:-18888}"
 BASE_PATH="/user/ai-ready-smoke/"

@@ -15,8 +15,9 @@ images/
                    T3 Code and T3 Connect
   microdesktop/    FROM scidesktop, plus sciget-microscopy,
                    jupyterlab-neuroglancer and microscopy-env: microscopy
-  datadesktop/     FROM scidesktop, plus sciget-datascience and
-                   datascience-env: general data science
+  datadesktop/     FROM scidesktop, plus sciget-datascience,
+                   datascience-env and ai-ready: general data science
+                   and the AI Ready workshop
   dermdesktop/     FROM scidesktop, plus sciget-dermatology,
                    jupyterlab-neuroglancer and dermatology-env: dermatology
   preclinicaldesktop/
@@ -28,37 +29,35 @@ images/
                    molecular-imaging-env: molecular imaging
   genomicsdesktop/ FROM scidesktop, plus sciget-genomics, viash-hub,
                    genomics-env and genomics-agents: genomics and single-cell
-  aidesktop/       FROM scidesktop, plus sciget-datascience and ai-ready:
-                   datascience
   neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
                    vscode-niivue, vscode-coding-agents, jupyterlab-niivue,
                    jupyterlab-freebrowse, neurodesk-agents, neuroimaging-env
                    and neurodesk-compat: neuroimaging
 ```
 
-| Component | scidesktop | microdesktop | datadesktop | dermdesktop | preclinicaldesktop | moleculardesktop | genomicsdesktop | aidesktop | neurodesktop |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| core base (`startup`, `lmod`, `apptainer`, `selkies`, `jupyter-env`, `sciget`, `slurm`, `jupyterlab-slurm`) | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `eessi-cvmfs` (EESSI `software.eessi.io` CVMFS config, Lmod hook, `eessi-launch`, `eessi-catalog` syncing `<domain>/eessi.json`, explicit **EESSI** desktop launchers) | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `virtualgl`, `datalad`, `workflow-engines`, `scigethelpers-cli` | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `rclone`, `gh`, `aria2`, `tcsh` (data transfer, GitHub CLI and C shell) | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `code-server`, `vscode-core` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed |
-| `coding-agents`, `t3-code`, `antigravity-acp` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | no | no | no | yes |
-| `sciget-microscopy`, `microscopy-env` ([tool catalogs](#tool-catalogs)) | no | yes | no | no | no | no | no | no | no |
-| `jupyterlab-neuroglancer` ([viewers.md](viewers.md)) | no | yes | no | yes | no | no | no | no | no |
-| `sciget-datascience` ([tool catalogs](#tool-catalogs)) | no | no | yes | no | no | no | no | yes | no |
-| `datascience-env` | no | no | yes | no | no | no | no | no | no |
-| `sciget-dermatology`, `dermatology-env` ([tool catalogs](#tool-catalogs)) | no | no | no | yes | no | no | no | no | no |
-| `sciget-preclinical`, `preclinical-env` ([tool catalogs](#tool-catalogs)) | no | no | no | no | yes | no | no | no | no |
-| `sciget-molecular-imaging`, `molecular-imaging-env` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | yes | no | no | no |
-| `sciget-genomics`, `viash-hub`, `genomics-env`, `genomics-agents` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | no | yes | no | no |
-| `jupyterlab-niivue`, `vscode-niivue` ([viewers.md](viewers.md)) | no | no | no | no | yes | yes | no | no | yes |
-| `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | no | no | no | no | no | yes | no |
-| `jupyterlab-freebrowse`, `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | no | yes |
-| `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | no | yes |
+| Component | scidesktop | microdesktop | datadesktop | dermdesktop | preclinicaldesktop | moleculardesktop | genomicsdesktop | neurodesktop |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| core base (`startup`, `lmod`, `apptainer`, `selkies`, `jupyter-env`, `sciget`, `slurm`, `jupyterlab-slurm`) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `eessi-cvmfs` (EESSI `software.eessi.io` CVMFS config, Lmod hook, `eessi-launch`, `eessi-catalog` syncing `<domain>/eessi.json`, explicit **EESSI** desktop launchers) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `virtualgl`, `datalad`, `workflow-engines`, `scigethelpers-cli` | yes | yes | yes | yes | yes | yes | yes | yes |
+| `rclone`, `gh`, `aria2`, `tcsh` (data transfer, GitHub CLI and C shell) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `code-server`, `vscode-core` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed |
+| `coding-agents`, `t3-code`, `antigravity-acp` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | no | no | yes |
+| `sciget-microscopy`, `microscopy-env` ([tool catalogs](#tool-catalogs)) | no | yes | no | no | no | no | no | no |
+| `jupyterlab-neuroglancer` ([viewers.md](viewers.md)) | no | yes | no | yes | no | no | no | no |
+| `sciget-datascience` ([tool catalogs](#tool-catalogs)) | no | no | yes | no | no | no | no | no |
+| `datascience-env` | no | no | yes | no | no | no | no | no |
+| `sciget-dermatology`, `dermatology-env` ([tool catalogs](#tool-catalogs)) | no | no | no | yes | no | no | no | no |
+| `sciget-preclinical`, `preclinical-env` ([tool catalogs](#tool-catalogs)) | no | no | no | no | yes | no | no | no |
+| `sciget-molecular-imaging`, `molecular-imaging-env` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | yes | no | no |
+| `sciget-genomics`, `viash-hub`, `genomics-env`, `genomics-agents` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | no | yes | no |
+| `jupyterlab-niivue`, `vscode-niivue` ([viewers.md](viewers.md)) | no | no | no | no | yes | yes | no | yes |
+| `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no | no | no | no | no |
+| `jupyterlab-freebrowse`, `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | yes |
+| `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | yes |
 
 ## How a domain image gets the base
 
@@ -260,7 +259,7 @@ to the workflow.
   (`test/publish-manifests-test.sh`). The candidate tags stay in the registry: the multi-arch
   image points at them.
 
-`PUBLISH` lists `scidesktop`, `microdesktop`, `datadesktop`, `dermdesktop`, `preclinicaldesktop`, `moleculardesktop`, `genomicsdesktop`, `aidesktop` and `neurodesktop`. A published
+`PUBLISH` lists `scidesktop`, `microdesktop`, `datadesktop`, `dermdesktop`, `preclinicaldesktop`, `moleculardesktop`, `genomicsdesktop` and `neurodesktop`. A published
 domain image gets its own package, `ghcr.io/<owner>/<name>`.
 
 ## Forks

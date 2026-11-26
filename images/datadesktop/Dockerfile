@@ -11,6 +11,10 @@
 #                      pandas, polars, pyarrow, duckdb, jupysql, scikit-learn,
 #                      statsmodels, xgboost, lightgbm, optuna, shap, matplotlib,
 #                      seaborn, plotly, altair, sqlalchemy)
+#   ai-ready           Intersect Australia's AI Ready workshop: its notebooks
+#                      and kernel, plus Airflow, MLflow and PostgreSQL in every
+#                      session; the workshop page is the landing page
+#                      (docs/ai-ready.md)
 #
 # Slurm (+ jupyterlab-slurm), VS Code (+ core extensions), DataLad,
 # workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, scigethelpers,
@@ -21,6 +25,7 @@ FROM scidesktop-base
 
 COPY --link --from=sciget-datascience / /
 COPY --link --from=datascience-env / /
+COPY --link --from=ai-ready / /
 
 LABEL org.opencontainers.image.title="datadesktop" \
-      org.opencontainers.image.description="scidesktop for data science: datascience sciget catalog and locked Python 3.13 tabular, SQL, statistical and ML kernel"
+      org.opencontainers.image.description="scidesktop for data science: datascience sciget catalog and locked Python 3.13 tabular, SQL, statistical and ML kernel, and the AI Ready workshop"
