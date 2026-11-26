@@ -152,6 +152,10 @@ configuration: its nodes do not have this image's Python, so its catalog is
 the site's to write. To keep a shape of your own, copy the generated file to
 `~/.lightcone/compute.yaml` and edit it.
 
+**No history.** The queue keeps no accounting, so once an allocation has
+ended `lc compute status <id>` fails with `sacct failed`; `lc compute status`
+lists only the current allocations, and an ended one is no longer among them.
+
 ## Checks
 
 ```sh

@@ -96,15 +96,19 @@ lc materialize "${cluster}" baseline/answer >/tmp/lc-mat.log 2>&1
 [ "$(cat results/baseline/answer.txt)" = 43 ] \
     && pass "lc materialize rebuilds it" || { fail "lc materialize rebuilds it"; sed 's/^/        /' /tmp/lc-mat.log; }
 
+# The session's queue keeps no accounting, so lc cannot look up an ended
+# allocation by ID (sacct fails); it leaves the list of current ones instead.
+[[ " $(lc compute status --json | json '" ".join(c["id"] for c in d["clusters"])') " == *" ${cluster} "* ]] \
+    || fail "the running allocation is listed as current"
 lc compute down "${cluster}" --json >/dev/null 2>&1
-phase=""
+current=""
 for _ in $(seq 60); do
-    phase="$(lc compute status "${cluster}" --json 2>/dev/null | json 'd["phase"]')"
-    [ "${phase}" = ended ] && break
+    current="$(lc compute status --json 2>&1 | json '" ".join(c["id"] for c in d["clusters"]) + ("" if not d["errors"] else " errors: %s" % d["errors"])' 2>&1)"
+    [ -z "${current}" ] && break
     sleep 1
 done
-[ "${phase}" = ended ] && pass "lc compute down releases the allocation" \
-    || fail "lc compute down releases the allocation (phase: ${phase:-unknown})"
+[ -z "${current}" ] && pass "lc compute down releases the allocation" \
+    || fail "lc compute down releases the allocation (still current: ${current})"
 exit "${FAILED}"
 FLOW
 FAILED=$?
