@@ -39,7 +39,7 @@ def catalog(partition, cpus, memory_mb):
                 "resources": {"cpus": offer_cpus, "memory": f"{offer_memory}MB"},
                 "max_nodes": 1,
                 "time": {"default": "2h"},
-                "config": {"partition": partition, "python": PYTHON, "task_slots_per_node": 1},
+                "config": {"partition": partition, "python": PYTHON},
             }
             for name, offer_cpus, offer_memory in shapes
         ],

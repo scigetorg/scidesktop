@@ -35,7 +35,7 @@ STUB
     chmod +x "${stubs}/sinfo"
 }
 
-# offers: name cpus GiB partition python slots, one line per offer, as lc reads the catalog.
+# offers: name cpus GiB partition python, one line per offer, as lc reads the catalog.
 offers() {
     lc compute resources --json | /opt/lightcone/bin/python -c '
 import json, sys, yaml, os
@@ -46,7 +46,7 @@ config = {o["name"]: o.get("config", {}) for o in yaml.safe_load(open(path))["of
 for o in offers:
     c = config.get(o["name"], {})
     print(o["name"], o["resources"]["cpus"], o["resources"]["memory"],
-          c.get("partition"), c.get("python"), c.get("task_slots_per_node"))'
+          c.get("partition"), c.get("python"))'
 }
 
 # A node smaller than Neurodesktop's 2 CPUs and 8 GiB in memory (a 4 GB
@@ -54,8 +54,8 @@ for o in offers:
 queue scidesktop 16 3328
 export PATH="${stubs}:${PATH}"
 got="$(offers)"
-want="standard 2 3.25 scidesktop /opt/lightcone/bin/python 1
-node 16 3.25 scidesktop /opt/lightcone/bin/python 1"
+want="standard 2 3.25 scidesktop /opt/lightcone/bin/python
+node 16 3.25 scidesktop /opt/lightcone/bin/python"
 [ "${got}" = "${want}" ] || fail "small node offers:
 ${got}"
 catalog="${runtime}/scidesktop-lightcone-$(id -u)"
@@ -67,8 +67,8 @@ grep -q '^allow_local: false' "${catalog}/compute.yaml" || fail "local compute a
 # `lc compute launch --cpus 2 --memory 8` plans; the whole node is offered too.
 queue mine 32 128000
 got="$(offers)"
-want="standard 2 8.0 mine /opt/lightcone/bin/python 1
-node 32 125.0 mine /opt/lightcone/bin/python 1"
+want="standard 2 8.0 mine /opt/lightcone/bin/python
+node 32 125.0 mine /opt/lightcone/bin/python"
 [ "${got}" = "${want}" ] || fail "big node offers:
 ${got}"
 plan="$(lc compute launch --cpus 2 --memory 8 --dry-run --json)" || fail "dry run: ${plan}"

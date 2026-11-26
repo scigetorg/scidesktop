@@ -139,8 +139,9 @@ real `lc`, with two offers on the queue's default partition:
 | `node` | the node's | the node's; left out when it equals `standard` |
 
 So `lc compute launch --cpus 2 --memory 8` works on any node at least that
-size. The workers run `/opt/lightcone/bin/python`, one task at a time, for at
-most 2 hours by default; local compute is off. The file is
+size. The workers run `/opt/lightcone/bin/python`; an allocation runs one task
+per CPU less one (at least one) and lasts 2 hours by default; local compute is
+off. The file is
 `${XDG_RUNTIME_DIR:-/tmp}/scidesktop-lightcone-<uid>/compute.yaml`, rewritten
 at each `lc` command, in a directory only the user can write (`lc` warns and
 writes nothing if the directory is anyone else's or writable by others).
