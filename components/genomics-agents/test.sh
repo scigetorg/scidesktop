@@ -24,12 +24,15 @@ echo mine > "${HOME}/.codex/AGENTS.md.new" && mv "${HOME}/.codex/AGENTS.md.new" 
 [ "$(cat "${HOME}/.codex/AGENTS.md")" = mine ]
 
 # Switching domain images with a persistent home refreshes dangling image-managed
-# /opt/*-agents/* symlinks while preserving custom user symlinks.
+# /opt/<domain>-agents/AGENTS.md symlinks at the known agent instruction paths
+# while preserving custom user symlinks (even under /opt/local/custom-agents/).
 ln -sf /opt/neurodesk-agents/AGENTS.md "${HOME}/.claude/CLAUDE.md"
-ln -sf /tmp/user-custom-agents-missing.md "${HOME}/.config/opencode/AGENTS.md"
+ln -sf /opt/local/custom-agents/AGENTS.md "${HOME}/.config/opencode/AGENTS.md"
+ln -sf /opt/local/custom-agents/config.toml "${HOME}/.codex/config.toml"
 /usr/local/bin/before-notebook.d/25-home-defaults
 [ "$(readlink "${HOME}/.claude/CLAUDE.md")" = "${component}/AGENTS.md" ]
-[ "$(readlink "${HOME}/.config/opencode/AGENTS.md")" = "/tmp/user-custom-agents-missing.md" ]
+[ "$(readlink "${HOME}/.config/opencode/AGENTS.md")" = "/opt/local/custom-agents/AGENTS.md" ]
+[ "$(readlink "${HOME}/.codex/config.toml")" = "/opt/local/custom-agents/config.toml" ]
 
 # No secret, token or preset model is shipped.
 if grep -rnE '"model"|sk-[A-Za-z0-9]{8}|Bearer ' "${component}"; then

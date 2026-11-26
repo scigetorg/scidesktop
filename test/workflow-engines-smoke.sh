@@ -133,7 +133,7 @@ process SLURM_HELLO {
     path "nf-slurm.txt"
     script:
     """
-    echo nextflow-slurm-ok > nf-slurm.txt
+    echo "nextflow-slurm-ok job=\${SLURM_JOB_ID:?SLURM_JOB_ID missing}" > nf-slurm.txt
     """
 }
 workflow {
@@ -143,12 +143,17 @@ NF
     cd "${work}"
     nf_slurm_log="$(NXF_OFFLINE=true nextflow run "${work}/slurm.nf" \
         -c "${SCIDESKTOP_NEXTFLOW_CONFIG}" -profile slurm \
-        -work-dir "${work}/nf-slurm-work" 2>&1)"
+        -work-dir "${work}/nf-slurm-work" 2>&1)" || {
+        printf "%s\n" "${nf_slurm_log}"
+        exit 1
+    }
     nf_slurm_out="$(find "${work}/nf-slurm-work" -type f -name nf-slurm.txt -exec cat {} +)"
-    if grep -q "executor >  slurm" <<<"${nf_slurm_log}" && [ "${nf_slurm_out}" = "nextflow-slurm-ok" ]; then
+    if grep -qE "^nextflow-slurm-ok job=[0-9]+$" <<<"${nf_slurm_out}"; then
         echo "nextflow_slurm_run=ok"
+    else
+        printf "nf_slurm_out=%s\n%s\n" "${nf_slurm_out}" "${nf_slurm_log}"
     fi
-' 2>/dev/null)
+' 2>&1)
 
 has() { printf '%s\n%s\n' "${out}" "${slurm_out}" | grep -qxF "$1"; }
 

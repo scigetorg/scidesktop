@@ -11,12 +11,17 @@ copy='
 cd "$1" || exit 0
 n=0
 while IFS= read -r -d "" f; do
-    dest="$2/${f#./}"
+    rel="${f#./}"
+    dest="$2/${rel}"
     if [ -L "${dest}" ] && [ ! -e "${dest}" ]; then
         target="$(readlink "${dest}" 2>/dev/null || true)"
-        case "${target}" in
-            /opt/*-agents/*)
-                rm -f "${dest}"
+        case "${rel}" in
+            .codex/AGENTS.md|.claude/CLAUDE.md|.config/opencode/AGENTS.md)
+                if [ -L "${f}" ] && [[ "${target}" =~ ^/opt/[a-z0-9-]+-agents/AGENTS\.md$ ]]; then
+                    rm -f "${dest}"
+                else
+                    continue
+                fi
                 ;;
             *)
                 continue

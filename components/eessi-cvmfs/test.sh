@@ -604,6 +604,84 @@ fallback_dirs="$(env -u SCIDESKTOP_APP_DIRS EESSI_MODULE_ROOT="${tmp}/modroot" \
     bash -c ". ${app_hook} 2>/dev/null; echo \"\${SCIDESKTOP_APP_DIRS}\"")"
 [ "${fallback_dirs}" = "/opt/sciget/applications:/etc/scidesktop/eessi-apps.d" ]
 
+# Merging static domain launchers respects live collisions and `show_in_menu: false`:
+# a bundled launcher whose tool ID is absent from the live catalog is merged,
+# a live entry wins on filename collision, and a live tool with show_in_menu=false
+# stays hidden in both session-apps-dir and `eessi-catalog list`.
+mkdir -p "${tmp}/static-apps"
+cat >"${tmp}/static-apps/eessi-paraview.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Static ParaView
+Exec=/usr/local/bin/eessi-launch ParaView paraview
+X-Scidesktop-Category=EESSI
+EOF
+cat >"${tmp}/static-apps/eessi-fastqc.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=FastQC (EESSI)
+Exec=/usr/local/bin/eessi-launch FastQC fastqc
+X-Scidesktop-Category=EESSI
+EOF
+cat >"${tmp}/static-apps/eessi-hidden-tool.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Hidden Tool (EESSI)
+Exec=/usr/local/bin/eessi-launch HiddenTool hiddentool
+X-Scidesktop-Category=EESSI
+EOF
+cat >"${tmp}/merge-fixture.eessi.json" <<'EOF'
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06"],
+  "tools": {
+    "paraview": {
+      "package": "ParaView",
+      "categories": ["visualization"],
+      "apps": {
+        "ParaView Live (EESSI/2025.06)": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "ParaView/6.0.1-foss-2025b",
+          "exec": ["paraview"],
+          "gui": true,
+          "show_in_menu": true
+        }
+      }
+    },
+    "hidden-tool": {
+      "package": "HiddenTool",
+      "categories": ["biology"],
+      "apps": {
+        "Hidden Tool (EESSI/2025.06)": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "HiddenTool/1.0-foss-2025b",
+          "exec": ["hiddentool"],
+          "gui": true,
+          "show_in_menu": false
+        }
+      }
+    }
+  }
+}
+EOF
+EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/merge-fixture.eessi.json" /usr/local/bin/eessi-catalog sync
+merged_dir="$(EESSI_CACHE_DIR="${cache}" EESSI_STATIC_APPS_DIR="${tmp}/static-apps" \
+    EESSI_SESSION_APPS_ROOT="${tmp}/session-apps" \
+    EESSI_CATALOG_FILES="${tmp}/merge-fixture.eessi.json" /usr/local/bin/eessi-catalog session-apps-dir)"
+grep -q '^Name=ParaView Live (EESSI/2025\.06)$' "${merged_dir}/eessi-paraview.desktop"
+test -f "${merged_dir}/eessi-fastqc.desktop"
+[ ! -e "${merged_dir}/eessi-hidden-tool.desktop" ]
+merged_list="$(EESSI_CACHE_DIR="${cache}" EESSI_STATIC_APPS_DIR="${tmp}/static-apps" \
+    EESSI_CATALOG_FILES="${tmp}/merge-fixture.eessi.json" /usr/local/bin/eessi-catalog list)"
+grep -q 'ParaView Live (EESSI/2025\.06)' <<<"${merged_list}"
+grep -q 'FastQC (EESSI)' <<<"${merged_list}"
+! grep -q 'Hidden Tool (EESSI)' <<<"${merged_list}"
+
 # Static fallback .desktop entries also belong to the explicit EESSI category.
 for f in /etc/scidesktop/eessi-apps.d/*.desktop; do
     grep -q '^X-Scidesktop-Category=EESSI$' "${f}"

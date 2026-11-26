@@ -225,17 +225,44 @@ def static():
         fail("S7", f"{rel(CI)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
                    f"components/target-arch lists {', '.join(arches)}")
     pub_m = re.search(r"^  PUBLISH:\s+(.+)$", ci_text, re.M)
-    att_m = re.search(r"^        image:\s+\[([^\]]+)\]$", ci_text, re.M)
-    brw_m = re.search(r"^          for image in ([^;]+); do$", ci_text, re.M)
-    if pub_m and att_m:
+    if not pub_m:
+        fail("S6", f"{rel(CI)}: could not parse PUBLISH list")
+    else:
         pub_imgs = pub_m.group(1).split()
-        att_imgs = [s.strip() for s in att_m.group(1).split(",") if s.strip()]
-        if set(pub_imgs) != set(att_imgs):
+        # Attestation matrix (supports inline `image: [...]` and block `- img` YAML)
+        att_section = re.search(r"^  attest:\n([\s\S]+)$", ci_text, re.M)
+        att_imgs = None
+        if att_section:
+            att_block = att_section.group(1)
+            inline_m = re.search(r"^\s+image:\s+\[([^\]]+)\]", att_block, re.M)
+            block_m = re.search(r"^\s+image:\s*\n((?:\s+-\s+\S+\n)+)", att_block, re.M)
+            if inline_m:
+                att_imgs = [s.strip() for s in inline_m.group(1).split(",") if s.strip()]
+            elif block_m:
+                att_imgs = re.findall(r"^\s+-\s+(\S+)", block_m.group(1), re.M)
+        if not att_imgs:
+            fail("S6", f"{rel(CI)}: could not parse attest.strategy.matrix.image")
+        elif set(pub_imgs) != set(att_imgs):
             fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match attest matrix ({', '.join(att_imgs)})")
-        if brw_m:
+
+        brw_m = re.search(r"^          for image in ([^;]+); do$", ci_text, re.M)
+        if not brw_m:
+            fail("S6", f"{rel(CI)}: could not parse browser-smoke image loop")
+        else:
             brw_imgs = brw_m.group(1).split()
             if set(pub_imgs) != set(brw_imgs):
                 fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match browser-smoke loop ({', '.join(brw_imgs)})")
+
+        # Installed Python pip-audit must cover every domain *-env kernel copied by a published image.
+        audited = set(re.findall(r'"([a-z0-9-]+):ci:(/opt/[^"]+)"', ci_text))
+        for img in pub_imgs:
+            if img not in targets:
+                continue
+            for comp in sorted(image_components(targets, img)):
+                if comp.endswith("-env") and comp != "jupyter-env":
+                    expected_spec = (img, f"/opt/{comp}/bin/python")
+                    if expected_spec not in audited:
+                        fail("S6", f"{rel(CI)}: published image {img} holds {comp}, but pip-audit omits {expected_spec[0]}:ci:{expected_spec[1]}")
 
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is

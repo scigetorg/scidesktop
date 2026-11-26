@@ -177,6 +177,15 @@ session_apps_dir() {
         return 0
     fi
 
+    local merged_json="${ns_dir}/current/merged.json"
+    local -A live_tools=()
+    if [ -f "${merged_json}" ]; then
+        local tid
+        while IFS= read -r tid; do
+            [ -n "${tid}" ] && live_tools["${tid}"]=1
+        done < <(jq -r '.tools | keys[]' "${merged_json}" 2>/dev/null || true)
+    fi
+
     session_root="${EESSI_SESSION_APPS_ROOT:-/tmp}"
     mkdir -p "${session_root}"
     session_dir="$(mktemp -d "${session_root}/scidesktop-eessi-apps.XXXXXX")"
@@ -190,13 +199,17 @@ session_apps_dir() {
     done
     exec {lock_fd}>&-
 
-    # Merge any image-bundled domain launchers whose filename is not already
-    # provided by the synced catalog (live synced entries win by filename).
+    # Merge any image-bundled domain launchers whose tool ID is NOT managed by
+    # the live catalog (so live entries win on collision and tools explicitly
+    # hidden with `show_in_menu: false` stay hidden).
     if [ -d "${STATIC_APPS_DIR}" ]; then
-        local base
+        local base tool_id
         for f in "${STATIC_APPS_DIR}"/*.desktop; do
             [ -f "${f}" ] || continue
             base="$(basename "${f}")"
+            tool_id="${base#eessi-}"
+            tool_id="${tool_id%.desktop}"
+            [ -z "${live_tools[${tool_id}]+x}" ] || continue
             if [ ! -e "${session_dir}/${base}" ]; then
                 cp -- "${f}" "${session_dir}/${base}"
                 chmod 0644 "${session_dir}/${base}"
@@ -599,10 +612,22 @@ show_catalog() {
             printf '  - %-32s %s\n' "${name}" "${exec_cmd}"
         done
         if [ "${apps_dir}" != "${STATIC_APPS_DIR}" ] && [ -d "${STATIC_APPS_DIR}" ]; then
+            local -A live_tools=()
+            if [ -n "${expected}" ] && cache_matches_sources_for "${expected}"; then
+                local _ns_dir tid
+                _ns_dir="$(namespace_dir_for_sources "${expected}")"
+                while IFS= read -r tid; do
+                    [ -n "${tid}" ] && live_tools["${tid}"]=1
+                done < <(jq -r '.tools | keys[]' "${_ns_dir}/current/merged.json" 2>/dev/null || true)
+            fi
+            local tool_id
             for f in "${STATIC_APPS_DIR}"/*.desktop; do
                 [ -f "${f}" ] || continue
                 base="$(basename "${f}")"
+                tool_id="${base#eessi-}"
+                tool_id="${tool_id%.desktop}"
                 [ -z "${seen_launchers[${base}]+x}" ] || continue
+                [ -z "${live_tools[${tool_id}]+x}" ] || continue
                 name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
                 exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
                 printf '  - %-32s %s\n' "${name}" "${exec_cmd}"

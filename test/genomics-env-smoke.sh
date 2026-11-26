@@ -191,14 +191,99 @@ else
 fi
 
 if docker exec -u jovyan "${NAME}" bash -lc '
-    eessi-catalog list | grep -q "FastQC (EESSI)" \
-    && eessi-catalog list | grep -q "SAMtools" \
-    && EESSI_CACHE_DIR="$(mktemp -d)" eessi-catalog list | grep -q "FastQC (EESSI)" \
-    && EESSI_CACHE_DIR="$(mktemp -d)" eessi-catalog list | grep -q "SAMtools"
+    set -euo pipefail
+    # Cold-cache fallback shows bundled FastQC launcher and domain genomics notes.
+    cold_out="$(EESSI_CACHE_DIR="$(mktemp -d)" eessi-catalog list)"
+    grep -q "FastQC (EESSI)" <<<"${cold_out}"
+    grep -q "SAMtools" <<<"${cold_out}"
+
+    # Synced fixture test: live entry wins collision, absent bundled FastQC is
+    # merged, explicitly hidden fastqc (show_in_menu=false) stays hidden, and
+    # domain genomics notes remain visible.
+    fx="$(mktemp -d)"
+    cat > "${fx}/live.eessi.json" <<'\''JSON'\''
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06"],
+  "tools": {
+    "r-bundle-bioconductor": {
+      "package": "R-bundle-Bioconductor",
+      "categories": ["biology"],
+      "apps": {
+        "R + Bioconductor Live (EESSI/2025.06)": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "R-bundle-Bioconductor/3.22-foss-2025b-R-4.5.2",
+          "exec": ["R"],
+          "gui": false,
+          "terminal": true,
+          "show_in_menu": true
+        }
+      }
+    }
+  }
+}
+JSON
+    EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/live.eessi.json" eessi-catalog sync
+    sync_out="$(EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/live.eessi.json" eessi-catalog list)"
+    grep -q "R + Bioconductor Live (EESSI/2025\.06)" <<<"${sync_out}"
+    grep -q "FastQC (EESSI)" <<<"${sync_out}"
+    grep -q "SAMtools" <<<"${sync_out}"
+    sdir="$(EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/live.eessi.json" EESSI_SESSION_APPS_ROOT="${fx}/sapps" eessi-catalog session-apps-dir)"
+    grep -q "^Name=R + Bioconductor Live (EESSI/2025\.06)$" "${sdir}/eessi-r-bioconductor.desktop"
+    test -f "${sdir}/eessi-fastqc.desktop"
+
+    cat > "${fx}/hide-fastqc.eessi.json" <<'\''JSON'\''
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06"],
+  "tools": {
+    "fastqc": {
+      "package": "FastQC",
+      "categories": ["biology"],
+      "apps": {
+        "FastQC Hidden (EESSI/2025.06)": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "FastQC/0.12.1-Java-11",
+          "exec": ["fastqc"],
+          "gui": true,
+          "show_in_menu": false
+        }
+      }
+    },
+    "paraview": {
+      "package": "ParaView",
+      "categories": ["visualization"],
+      "apps": {
+        "ParaView Live (EESSI/2025.06)": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "ParaView/6.0.1-foss-2025b",
+          "exec": ["paraview"],
+          "gui": true,
+          "show_in_menu": true
+        }
+      }
+    }
+  }
+}
+JSON
+    EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/hide-fastqc.eessi.json" eessi-catalog sync
+    hdir="$(EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/hide-fastqc.eessi.json" EESSI_SESSION_APPS_ROOT="${fx}/happs" eessi-catalog session-apps-dir)"
+    [ ! -e "${hdir}/eessi-fastqc.desktop" ]
+    ! EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/hide-fastqc.eessi.json" eessi-catalog list | grep -q "FastQC (EESSI)"
+    rm -rf "${fx}"
 ' 2>/dev/null; then
-    pass "eessi-catalog list shows FastQC and genomics notes in both synced and cold-cache modes"
+    pass "eessi-catalog fixture tests pass (live collision, FastQC merge, show_in_menu=false hide, cold-cache & synced notes)"
 else
-    fail "eessi-catalog list shows FastQC and genomics notes in both synced and cold-cache modes"
+    fail "eessi-catalog fixture tests pass (live collision, FastQC merge, show_in_menu=false hide, cold-cache & synced notes)"
 fi
 
 bad_execs="$(docker exec "${NAME}" bash -c '

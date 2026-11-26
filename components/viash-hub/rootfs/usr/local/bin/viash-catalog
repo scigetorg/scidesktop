@@ -45,9 +45,13 @@ REV_RE = re.compile(r"^[A-Za-z0-9._/-]{1,128}$")
 COMMIT_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
-# OCI distribution image reference: [registry[:port]/]name[:tag][@sha256:<64hex>]
+# OCI distribution image reference (matching distribution/reference grammar):
+# [registry[:port]/]name[:tag][@sha256:<64hex>]
 OCI_IMAGE_RE = re.compile(
-    r"^(?:(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+|localhost)(?::[0-9]{1,5})?/)?"
+    r"^(?:(?:"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+|localhost|\[[0-9A-Fa-f:]+\])(?::[0-9]{1,5})?"
+    r"|[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?:[0-9]{1,5}"
+    r")/)?"
     r"[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*)*"
     r"(?::[A-Za-z0-9_][A-Za-z0-9._-]{0,127})?"
     r"(?:@sha256:[0-9a-f]{64})?$"
@@ -104,7 +108,7 @@ def _validate_rel_script(val: Any, ctx: str) -> str:
 
 
 def _validate_catalog(data: Any, path: Path) -> dict[str, Any]:
-    if not isinstance(data, dict) or data.get("schemaVersion") != 1:
+    if not isinstance(data, dict) or type(data.get("schemaVersion")) is not int or data.get("schemaVersion") != 1:
         die(f"unsupported catalog schema in {path}")
     nf_cfg = data.get("nextflowConfig", DEFAULT_NF_CONFIG)
     _require_clean_str(nf_cfg, "nextflowConfig")
@@ -157,7 +161,7 @@ def _validate_catalog(data: Any, path: Path) -> dict[str, Any]:
             for f in fmts:
                 _require_clean_str(f, f"{pkg_id}.formats[]")
 
-        _validate_arches(pkg.get("architectures"), f"{pkg_id}.architectures")
+        pkg_arches = _validate_arches(pkg.get("architectures"), f"{pkg_id}.architectures")
 
         if kind == "nextflow-workflow":
             workflows = pkg.get("workflows")
@@ -172,7 +176,13 @@ def _validate_catalog(data: Any, path: Path) -> dict[str, Any]:
                 _validate_rel_script(wf.get("main_script"), f"{pkg_id}.workflows[{wf_name!r}].main_script")
                 _require_clean_str(wf.get("description"), f"{pkg_id}.workflows[{wf_name!r}].description")
                 if "architectures" in wf:
-                    _validate_arches(wf["architectures"], f"{pkg_id}.workflows[{wf_name!r}].architectures")
+                    wf_arches = _validate_arches(wf["architectures"], f"{pkg_id}.workflows[{wf_name!r}].architectures")
+                    extra = sorted(set(wf_arches) - set(pkg_arches))
+                    if extra:
+                        die(
+                            f"invalid catalog: {pkg_id}.workflows[{wf_name!r}].architectures "
+                            f"lists {extra} not declared in {pkg_id}.architectures ({pkg_arches})"
+                        )
             default_wf = _require_clean_str(pkg.get("default_workflow"), f"{pkg_id}.default_workflow")
             if default_wf not in workflows:
                 die(f"invalid catalog: {pkg_id}.default_workflow {default_wf!r} not in workflows")
@@ -190,7 +200,7 @@ def load_catalog() -> dict[str, Any]:
         die(f"catalog file not found: {path}")
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         die(f"failed to read catalog {path}: {exc}")
     return _validate_catalog(data, path)
 
@@ -559,47 +569,74 @@ def _open_scaffold_dir(target_dir: Path, force: bool) -> int:
     return dir_fd
 
 
-def _atomic_write_in_dir(dir_fd: int, filename: str, content: str, mode: int, target_dir: Path) -> None:
-    try:
-        st = os.lstat(filename, dir_fd=dir_fd)
-    except FileNotFoundError:
-        st = None
-    except OSError as exc:
-        die(f"cannot stat {target_dir / filename}: {exc.strerror or exc}")
-
-    if st is not None:
+def _validate_destinations(
+    dir_fd: int, filenames: list[str], *, force: bool, target_dir: Path
+) -> None:
+    """Validate all target filenames before writing anything to target_dir."""
+    for filename in filenames:
+        try:
+            st = os.lstat(filename, dir_fd=dir_fd)
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            die(f"cannot stat {target_dir / filename}: {exc.strerror or exc}")
         if stat.S_ISLNK(st.st_mode):
             die(f"refusing to overwrite symlink: {target_dir / filename}")
         if not stat.S_ISREG(st.st_mode):
             die(f"refusing to overwrite non-regular file: {target_dir / filename}")
+        if not force:
+            die(f"destination already exists: {target_dir / filename} (pass --force to overwrite)")
 
-    tmp_name = f".{filename}.tmp.{os.getpid()}.{secrets.token_hex(6)}"
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
-    fd = -1
+
+def _write_scaffold_files(
+    dir_fd: int,
+    files: dict[str, tuple[str, int]],
+    *,
+    force: bool,
+    target_dir: Path,
+) -> None:
+    """Validate all destinations, stage all temp files, then publish safely."""
+    _validate_destinations(dir_fd, list(files), force=force, target_dir=target_dir)
+    staged: list[tuple[str, str]] = []
     try:
-        fd = os.open(tmp_name, flags, mode, dir_fd=dir_fd)
-        os.fchmod(fd, mode)
-        data = content.encode("utf-8")
-        view = memoryview(data)
-        written = 0
-        while written < len(view):
-            written += os.write(fd, view[written:])
-        os.fsync(fd)
-        os.close(fd)
-        fd = -1
-        os.replace(tmp_name, filename, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
-    except OSError as exc:
-        if fd >= 0:
+        for filename, (content, mode) in files.items():
+            tmp_name = f".{filename}.tmp.{os.getpid()}.{secrets.token_hex(6)}"
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+            fd = -1
             try:
-                os.close(fd)
-            except OSError:
-                pass
-        try:
-            os.unlink(tmp_name, dir_fd=dir_fd)
-        except OSError as unlink_exc:
-            if unlink_exc.errno != errno.ENOENT:
-                pass
-        die(f"failed writing {target_dir / filename}: {exc.strerror or exc}")
+                fd = os.open(tmp_name, flags, mode, dir_fd=dir_fd)
+                staged.append((tmp_name, filename))
+                os.fchmod(fd, mode)
+                data = content.encode("utf-8")
+                view = memoryview(data)
+                written = 0
+                while written < len(view):
+                    written += os.write(fd, view[written:])
+                os.fsync(fd)
+            finally:
+                if fd >= 0:
+                    os.close(fd)
+
+        # Re-check destinations immediately before publishing.
+        _validate_destinations(dir_fd, list(files), force=force, target_dir=target_dir)
+        for tmp_name, filename in list(staged):
+            if force:
+                os.replace(tmp_name, filename, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+                staged.remove((tmp_name, filename))
+            else:
+                # os.link fails with EEXIST if another process raced us without --force.
+                os.link(tmp_name, filename, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+                os.unlink(tmp_name, dir_fd=dir_fd)
+                staged.remove((tmp_name, filename))
+    except OSError as exc:
+        die(f"failed writing scaffold in {target_dir}: {exc.strerror or exc}")
+    finally:
+        for tmp_name, _ in staged:
+            try:
+                os.unlink(tmp_name, dir_fd=dir_fd)
+            except OSError as unlink_exc:
+                if unlink_exc.errno != errno.ENOENT:
+                    pass
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -615,8 +652,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     dir_fd = _open_scaffold_dir(target_dir, force=args.force)
     try:
         files = scaffold_files(args.name, args.lang, args.image)
-        for filename, (content, mode) in files.items():
-            _atomic_write_in_dir(dir_fd, filename, content, mode, target_dir)
+        _write_scaffold_files(dir_fd, files, force=args.force, target_dir=target_dir)
     finally:
         os.close(dir_fd)
 
