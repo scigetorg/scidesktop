@@ -83,7 +83,7 @@ queue scidesktop 2 8192
 
 # The user's own catalog wins: LC_COMPUTE_CONFIG, then ~/.lightcone/compute.yaml.
 mkdir -p "${HOME}/.lightcone"
-printf 'allow_local: false\noffers:\n  - {name: mine, provider: slurm, resources: {cpus: 1, memory: 1}, time: {default: 1h}}\n' \
+printf 'allow_local: false\noffers:\n  - {name: mine, provider: slurm, resources: {cpus: 1, memory: 1}, max_nodes: 1, time: {default: 1h}}\n' \
     > "${HOME}/own.yaml"
 [ "$(LC_COMPUTE_CONFIG="${HOME}/own.yaml" offers | cut -d' ' -f1-3)" = "mine 1 1.0" ] \
     || fail "LC_COMPUTE_CONFIG ignored"
@@ -104,7 +104,8 @@ rm -rf "${catalog}"
 mkdir -m 0777 "${catalog}"
 chmod 0777 "${catalog}"
 [ "$(offers 2>/dev/null | cut -d' ' -f1)" = local ] || fail "unsafe directory used"
-lc --version 2>&1 | grep -q "not a private directory" || fail "unsafe directory not reported"
+warning="$(lc --version 2>&1 >/dev/null)"
+[[ "${warning}" == *"not a private directory"* ]] || fail "unsafe directory not reported: ${warning}"
 
 # Nothing root-owned is writable by group or others, and the user can read it all.
 if find /opt/lightcone /usr/local/bin/lc ! -type l \( -perm /022 -o ! -readable \) -print | grep .; then
