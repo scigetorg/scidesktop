@@ -157,6 +157,182 @@ print(f'taskbar {small} px at 96 DPI, {big} px at 192, {back} px back at 96')
 sys.exit(0 if small and big > small and back == small else 1)" 2>&1 | sed 's/^/        /'
 [ "${PIPESTATUS[0]}" = "0" ] && pass "IceWM's taskbar follows the desktop DPI" \
     || fail "IceWM's taskbar follows the desktop DPI"
+# Every IceWM toolbar launcher (including Terminal and Files) has an existing
+# icon file and renders pixels that visibly differ from the empty taskbar
+# background rather than a blank slot.
+docker exec "${NAME}" "${SELKIES_PY:-python3}" -c "${XPY}
+import re, sys, time
+from collections import Counter
+from Xlib import error as xerror
+tb_icons = []
+for line in open('/etc/X11/icewm/toolbar'):
+    m = re.match(r'^prog\s+\"([^\"]+)\"\s+(\S+)\s+(.+)$', line.strip())
+    if m:
+        tb_icons.append((m.group(1), m.group(2), m.group(3)))
+missing_files = [f'{n}:{p}' for n, p, _ in tb_icons if not (p.startswith('/') and os.path.isfile(p) and os.path.getsize(p) > 0)]
+if missing_files:
+    print('missing toolbar icon files:', ', '.join(missing_files))
+    sys.exit(1)
+expected = [n for n, _, _ in tb_icons]
+depth = r.get_geometry().depth
+bpp = next((fmt.bits_per_pixel for fmt in d.display.info.pixmap_formats if fmt.depth == depth), 32)
+stride = max(1, bpp // 8)
+def pixels_of(win):
+    g = win.get_geometry()
+    if g.width <= 0 or g.height <= 0:
+        return []
+    pt = r.translate_coords(win, 0, 0)
+    raw = r.get_image(pt.x, pt.y, g.width, g.height, X.ZPixmap, 0xffffffff).data
+    if isinstance(raw, str):
+        raw = raw.encode('latin-1')
+    return [raw[i:i+min(3, stride)] for i in range(0, len(raw), stride)]
+def find_win(w, name):
+    if w.get_wm_name() == name:
+        return w
+    for c in w.query_tree().children:
+        res = find_win(c, name)
+        if res:
+            return res
+    return None
+diff_counts = {}
+for _ in range(50):
+    try:
+        tb = find_win(r, 'IceToolbar')
+        pane = find_win(r, 'TaskPane')
+        if tb is not None and pane is not None:
+            pane_px = pixels_of(pane)
+            if not pane_px:
+                time.sleep(0.1)
+                continue
+            bg = Counter(pane_px).most_common(1)[0][0]
+            cur = {}
+            for btn in tb.query_tree().children:
+                name = btn.get_wm_name()
+                px = pixels_of(btn)
+                if not px:
+                    continue
+                cur[name] = sum(1 for p in px if p != bg)
+            diff_counts = cur
+            if expected and all(diff_counts.get(n, 0) >= 64 for n in expected):
+                break
+    except xerror.XError:
+        pass
+    time.sleep(0.1)
+blank = [n for n in expected if diff_counts.get(n, 0) < 64]
+print('toolbar buttons:', ', '.join(f'{n}={diff_counts.get(n, 0)} icon px' for n in expected))
+sys.exit(0 if expected and 'Terminal' in expected and not blank else 1)" 2>&1 | sed 's/^/        /'
+[ "${PIPESTATUS[0]}" = "0" ] && pass "IceWM toolbar icons (including Terminal) render visibly" \
+    || fail "IceWM toolbar icons (including Terminal) render visibly"
+
+# Clicking the Terminal taskbar button opens xfce4-terminal with an interactive
+# bash shell where `ml` can load a module without CVMFS.
+docker exec -u "${NB_USER}" "${NAME}" bash -c '
+    set -euo pipefail
+    mod_dir=$(mktemp -d /tmp/smoke-mod.XXXXXX)
+    out_file="${mod_dir}/out"
+    trap "rm -rf \"\${mod_dir}\"" EXIT
+    mkdir -p "${mod_dir}/smokemod"
+    printf "setenv(\"SCIDESKTOP_SMOKE_ML\", \"ml_ok\")\n" > "${mod_dir}/smokemod/1.0.lua"
+    "'"${SELKIES_PY:-python3}"'" - "${mod_dir}" "${out_file}" <<'\''PY'\''
+import os, sys, time, selkies
+sys.path.insert(0, os.path.dirname(selkies.__file__))
+from Xlib import X, XK, display as xd, error as xerror
+from Xlib.ext import xtest
+
+mod_dir, out_file = sys.argv[1], sys.argv[2]
+d = xd.Display(":20")
+r = d.screen().root
+cl_atom = d.intern_atom("_NET_CLIENT_LIST")
+active_atom = d.intern_atom("_NET_ACTIVE_WINDOW")
+
+def find_win(w, name):
+    if w.get_wm_name() == name:
+        return w
+    for c in w.query_tree().children:
+        res = find_win(c, name)
+        if res:
+            return res
+    return None
+
+def clients():
+    p = r.get_full_property(cl_atom, X.AnyPropertyType)
+    return list(p.value) if p else []
+
+before = set(clients())
+btn = find_win(r, "Terminal")
+assert btn is not None, "Terminal toolbar button not found"
+g = btn.get_geometry()
+pt = r.translate_coords(btn, g.width // 2, g.height // 2)
+xtest.fake_input(d, X.MotionNotify, x=pt.x, y=pt.y)
+xtest.fake_input(d, X.ButtonPress, 1)
+xtest.fake_input(d, X.ButtonRelease, 1)
+d.sync()
+
+term_wid = None
+for _ in range(100):
+    for wid in clients():
+        if wid in before:
+            continue
+        try:
+            cls = d.create_resource_object("window", wid).get_wm_class() or ()
+        except xerror.XError:
+            continue
+        if any("xfce4-terminal" in c.lower() for c in cls):
+            term_wid = wid
+            break
+    if term_wid is not None:
+        break
+    time.sleep(0.1)
+assert term_wid is not None, "xfce4-terminal window did not open after clicking Terminal"
+
+# Wait briefly for bash inside xfce4-terminal to initialize and focus the window.
+term_win = d.create_resource_object("window", term_wid)
+for _ in range(50):
+    p = r.get_full_property(active_atom, X.AnyPropertyType)
+    if p and p.value and p.value[0] == term_wid:
+        break
+    time.sleep(0.1)
+time.sleep(1.5)
+
+shift_kc = d.keysym_to_keycode(XK.XK_Shift_L)
+SPECIAL = {
+    "\n": XK.XK_Return, " ": XK.XK_space, "/": XK.XK_slash, ".": XK.XK_period,
+    "-": XK.XK_minus, "_": XK.XK_underscore, ">": XK.XK_greater, ";": XK.XK_semicolon,
+    "$": XK.XK_dollar, "=": XK.XK_equal, "\"": XK.XK_quotedbl,
+}
+def send_text(text):
+    for ch in text:
+        ks = SPECIAL.get(ch, XK.string_to_keysym(ch))
+        codes = list(d.keysym_to_keycodes(ks))
+        assert codes, f"no keycode for {ch!r} (keysym {ks})"
+        kc, idx = codes[0]
+        need_shift = (idx % 2 == 1)
+        if need_shift:
+            xtest.fake_input(d, X.KeyPress, shift_kc)
+        xtest.fake_input(d, X.KeyPress, kc)
+        xtest.fake_input(d, X.KeyRelease, kc)
+        if need_shift:
+            xtest.fake_input(d, X.KeyRelease, shift_kc)
+    d.sync()
+
+cmd = f"ml use {mod_dir}; ml load smokemod; printenv SCIDESKTOP_SMOKE_ML > {out_file}; exit\n"
+send_text(cmd)
+
+for _ in range(100):
+    if os.path.exists(out_file) and os.path.getsize(out_file) > 0:
+        break
+    time.sleep(0.1)
+assert os.path.exists(out_file), "command in clicked Terminal did not produce output"
+val = open(out_file).read().strip()
+assert val == "ml_ok", f"expected ml_ok, got {val!r}"
+for _ in range(50):
+    if term_wid not in clients():
+        break
+    time.sleep(0.1)
+PY
+' 2>&1 | sed 's/^/        /'
+[ "${PIPESTATUS[0]}" = "0" ] && pass "clicking Terminal toolbar button opens bash with working ml load" \
+    || fail "clicking Terminal toolbar button opens bash with working ml load"
 
 # 5. Real pixels. A desktop that fails to draw still serves HTTP, so read the
 #    framebuffer rather than trusting the status code.
@@ -194,17 +370,17 @@ docker exec "${NAME}" bash -lc 'case ":${XDG_DATA_DIRS}:" in *:/opt/sciget:*) ex
     && pass "sciget applications on login-shell data path" \
     || fail "sciget applications on login-shell data path"
 # Interactive shells, login (JupyterLab terminal) and not (desktop terminal),
-# start without warnings and have module and mamba.
+# start without warnings and have module, ml and mamba.
 for mode in -ic -lic; do
     out=$(docker exec -u "$(docker exec "${NAME}" printenv NB_USER 2>/dev/null || echo jovyan)" -w /tmp "${NAME}" \
-        bash "${mode}" 'type -t module >/dev/null && type -t mamba >/dev/null && echo SHELL_OK' 2>&1 \
+        bash "${mode}" 'type -t module >/dev/null && type -t ml >/dev/null && type -t mamba >/dev/null && echo SHELL_OK' 2>&1 \
         | sed 's/\x1b\[[0-9;]*m//g' \
         | grep -v -e 'cannot set terminal process group' -e 'no job control' \
         | grep -vxF -f <(docker exec "${NAME}" cat /tmp/.scidesktop-containers-unavailable 2>/dev/null))
     if [ "$(printf '%s' "${out}")" = SHELL_OK ]; then
-        pass "bash ${mode}: clean, module and mamba"
+        pass "bash ${mode}: clean, module, ml and mamba"
     else
-        fail "bash ${mode}: clean, module and mamba"; printf '%s\n' "${out}" | head -5 | sed 's/^/        /'
+        fail "bash ${mode}: clean, module, ml and mamba"; printf '%s\n' "${out}" | head -5 | sed 's/^/        /'
     fi
 done
 # sciget arrives configured from its system layer, with nothing copied into

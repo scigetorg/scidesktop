@@ -66,6 +66,25 @@ for l in libGL.so libEGL.so libGLESv2.so libdrm.so libva.so libva-drm.so libva-x
 # desktop
 for b in icewm-session icewm thunar xfce4-terminal xsettingsd; do check "desktop: ${b}" has "${b}"; done
 check "desktop: IceWM theme" test -f /etc/X11/icewm/themes/Arc-Dark/default.theme
+check "desktop: IceWM toolbar launchers" bash -c '
+    set -euo pipefail
+    tb=/etc/X11/icewm/toolbar
+    test -f "${tb}"
+    check_launcher() {
+        local label="$1" cmd="$2" found=0 icon=""
+        while IFS= read -r line; do
+            if [[ "${line}" =~ ^[[:space:]]*prog[[:space:]]+\"([^\"]+)\"[[:space:]]+([^[:space:]]+)[[:space:]]+([^[:space:]]+)([[:space:]]|$) ]]; then
+                if [ "${BASH_REMATCH[1]}" = "${label}" ] && [ "${BASH_REMATCH[3]}" = "${cmd}" ]; then
+                    icon="${BASH_REMATCH[2]}"
+                    found=1
+                    break
+                fi
+            fi
+        done < "${tb}"
+        [ "${found}" -eq 1 ] && [[ "${icon}" = /* ]] && test -s "${icon}"
+    }
+    check_launcher "Terminal" "xfce4-terminal"
+    check_launcher "Files" "thunar"'
 
 # audio
 for b in pipewire pipewire-pulse wireplumber; do check "audio: ${b}" has "${b}"; done
