@@ -26,7 +26,7 @@ images/
                    FROM scidesktop, plus sciget-molecular-imaging,
                    vscode-niivue, jupyterlab-niivue and
                    molecular-imaging-env: molecular imaging
-  genomicsdesktop/ FROM scidesktop, plus sciget-datascience, viash-hub,
+  genomicsdesktop/ FROM scidesktop, plus sciget-genomics, viash-hub,
                    genomics-env and genomics-agents: genomics and single-cell
   aidesktop/       FROM scidesktop, plus sciget-datascience and ai-ready:
                    datascience
@@ -49,12 +49,12 @@ images/
 | `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | no | no | no | yes |
 | `sciget-microscopy`, `microscopy-env` ([tool catalogs](#tool-catalogs)) | no | yes | no | no | no | no | no | no | no |
 | `jupyterlab-neuroglancer` ([viewers.md](viewers.md)) | no | yes | no | yes | no | no | no | no | no |
-| `sciget-datascience` ([tool catalogs](#tool-catalogs)) | no | no | yes | no | no | no | yes | yes | no |
+| `sciget-datascience` ([tool catalogs](#tool-catalogs)) | no | no | yes | no | no | no | no | yes | no |
 | `datascience-env` | no | no | yes | no | no | no | no | no | no |
 | `sciget-dermatology`, `dermatology-env` ([tool catalogs](#tool-catalogs)) | no | no | no | yes | no | no | no | no | no |
 | `sciget-preclinical`, `preclinical-env` ([tool catalogs](#tool-catalogs)) | no | no | no | no | yes | no | no | no | no |
 | `sciget-molecular-imaging`, `molecular-imaging-env` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | yes | no | no | no |
-| `viash-hub`, `genomics-env`, `genomics-agents` | no | no | no | no | no | no | yes | no | no |
+| `sciget-genomics`, `viash-hub`, `genomics-env`, `genomics-agents` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | no | yes | no | no |
 | `jupyterlab-niivue`, `vscode-niivue` ([viewers.md](viewers.md)) | no | no | no | no | yes | yes | no | no | yes |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | no | no | no | no | no | yes | no |
 | `jupyterlab-freebrowse`, `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | no | yes |
@@ -153,15 +153,16 @@ over `/etc/sciget/catalogs.json`:
 
 | Component | Catalogs | Also |
 | --- | --- | --- |
-| `sciget-all` (in `scidesktop`) | `neuroimaging`, `microscopy`, `datascience`, `dermatology`, `preclinical`, `molecular-imaging` | the module folders of containers on the Neurodesk CVMFS repository |
+| `sciget-all` (in `scidesktop`) | `neuroimaging`, `microscopy`, `datascience`, `dermatology`, `preclinical`, `molecular-imaging`, `genomics` | the module folders of containers on the Neurodesk CVMFS repository |
 | `sciget-neuroimaging` | `neuroimaging` | |
 | `sciget-microscopy` | `microscopy` | |
 | `sciget-datascience` | `datascience` | |
 | `sciget-dermatology` | `dermatology` | |
 | `sciget-preclinical` | `preclinical` | |
 | `sciget-molecular-imaging` | `molecular-imaging` | |
+| `sciget-genomics` | `genomics` | |
 
-`scidesktop` therefore offers neuroimaging, microscopy, datascience, dermatology, preclinical and molecular-imaging tools out
+`scidesktop` therefore offers neuroimaging, microscopy, datascience, dermatology, preclinical, molecular-imaging and genomics tools out
 of the box (`test/sciget-all-smoke.sh`). An image with `sciget-microscopy`
 overrides `/etc/sciget/catalogs.json` so only the `microscopy` catalog is
 configured and every offered tool comes from it
@@ -170,9 +171,10 @@ configured and every offered tool comes from it
 configures only the `datascience` catalog (`test/sciget-datascience-smoke.sh`);
 `sciget-dermatology` configures only the `dermatology` catalog
 (`test/sciget-dermatology-smoke.sh`); `sciget-preclinical` configures only the
-`preclinical` catalog (`test/sciget-preclinical-smoke.sh`); and
+`preclinical` catalog (`test/sciget-preclinical-smoke.sh`);
 `sciget-molecular-imaging` configures only the `molecular-imaging` catalog
-(`test/sciget-molecular-imaging-smoke.sh`). Copying two domain catalog components into
+(`test/sciget-molecular-imaging-smoke.sh`); and `sciget-genomics` configures
+only the `genomics` catalog (`test/sciget-genomics-smoke.sh`). Copying two domain catalog components into
 one image still fails rule L1.
 
 These catalogs are published by the

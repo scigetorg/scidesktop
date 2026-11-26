@@ -1,0 +1,8 @@
+[
+  {
+    "name": "genomics",
+    "url": "https://apps-catalog.scigetorg.workers.dev/genomics/apps.json",
+    "use": true,
+    "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
+  }
+]

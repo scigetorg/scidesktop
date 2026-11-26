@@ -255,6 +255,7 @@ group "test" {
     "sciget-dermatology-test",
     "sciget-preclinical-test",
     "sciget-molecular-imaging-test",
+    "sciget-genomics-test",
     "eessi-cvmfs-test",
     "jupyterlab-niivue-test",
     "jupyterlab-freebrowse-test",
@@ -586,6 +587,19 @@ target "sciget-molecular-imaging" {
 
 target "sciget-molecular-imaging-test" {
   inherits = ["sciget-molecular-imaging"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+target "sciget-genomics" {
+  inherits = ["_component"]
+  context  = "components/sciget-genomics"
+  target   = "component"
+  contexts = { sciget = "target:sciget" }
+}
+
+target "sciget-genomics-test" {
+  inherits = ["sciget-genomics"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1363,11 +1377,11 @@ target "genomicsdesktop" {
   inherits = ["_common"]
   context  = "images/genomicsdesktop"
   contexts = {
-    scidesktop-base    = "target:scidesktop"
-    sciget-datascience = "target:sciget-datascience"
-    viash-hub          = "target:viash-hub"
-    genomics-env       = "target:genomics-env"
-    genomics-agents    = "target:genomics-agents"
+    scidesktop-base = "target:scidesktop"
+    sciget-genomics = "target:sciget-genomics"
+    viash-hub       = "target:viash-hub"
+    genomics-env    = "target:genomics-env"
+    genomics-agents = "target:genomics-agents"
   }
   tags   = [GENOMICSDESKTOP_IMAGE]
   output = ["type=docker"]

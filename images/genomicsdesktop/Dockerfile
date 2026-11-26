@@ -10,9 +10,8 @@
 # launcher tiles and checks; changes to them belong in components/, where
 # other images can copy them too (docs/images.md).
 #
-#   sciget-datascience  narrows sciget to the live datascience catalog (RStudio,
-#                       IRkernel, Nextflow, DataLad, rclone, Globus) until a
-#                       dedicated genomics domain is published in apps-catalog
+#   sciget-genomics     narrows sciget to the genomics catalog (and syncs
+#                       genomics/eessi.json for curated EESSI genomics tools)
 #   viash-hub           curated Viash Hub & OpenPipelines workflow catalog and
 #                       the `viash-catalog` CLI (discovery, Nextflow/Apptainer
 #                       commands, Viash component scaffolding & container bridge)
@@ -30,7 +29,7 @@
 
 FROM scidesktop-base
 
-COPY --link --from=sciget-datascience / /
+COPY --link --from=sciget-genomics / /
 COPY --link --from=viash-hub / /
 COPY --link --from=genomics-env / /
 COPY --link --from=genomics-agents / /
