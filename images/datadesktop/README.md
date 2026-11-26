@@ -9,8 +9,8 @@
 Intersect Australia's
 [AI Ready workshop](https://github.com/IntersectAustralia/ai-ready-containers):
 the workshop's notebooks and kernel, and an Airflow, MLflow and PostgreSQL of
-its own in every session. A session opens on the **AI Ready Workshop** page,
-which links JupyterLab, Airflow, MLflow and the desktop
+its own in every session. A session opens JupyterLab, whose launcher has
+Airflow and MLflow tiles; the workshop page is at `/ai-ready/`
 ([docs/ai-ready.md](../../docs/ai-ready.md)).
 
 | Component | What it adds |

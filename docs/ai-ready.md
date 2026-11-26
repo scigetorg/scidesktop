@@ -9,9 +9,10 @@ component, `components/ai-ready`, which the image copies
 
 ## Using a session
 
-A session opens the **AI Ready Workshop** page. It links JupyterLab, Airflow,
-MLflow and the desktop; each opens in a new browser tab. JupyterLab's launcher
-has the same Airflow and MLflow links as tiles under **AI Ready**.
+A session opens JupyterLab. Its launcher has **Airflow** and **MLflow** tiles
+under **AI Ready**, beside the desktop's. The **AI Ready Workshop** page at
+`<session>/ai-ready/` links JupyterLab, Airflow, MLflow and the desktop; each
+opens in a new browser tab.
 
 Airflow and MLflow start in the background and are ready about half a minute
 after the session. Until then their pages show an error; reload them.

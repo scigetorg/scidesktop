@@ -13,8 +13,8 @@
 #                      seaborn, plotly, altair, sqlalchemy)
 #   ai-ready           Intersect Australia's AI Ready workshop: its notebooks
 #                      and kernel, plus Airflow, MLflow and PostgreSQL in every
-#                      session; the workshop page is the landing page
-#                      (docs/ai-ready.md)
+#                      session; JupyterLab stays the landing page and its
+#                      launcher opens Airflow and MLflow (docs/ai-ready.md)
 #
 # Slurm (+ jupyterlab-slurm), VS Code (+ core extensions), DataLad,
 # workflow engines (Nextflow, nf-test, Snakemake), VirtualGL, scigethelpers,
