@@ -19,6 +19,8 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 BAKE = ROOT / "docker-bake.hcl"
 IMAGES = ROOT / "images"
@@ -220,100 +222,88 @@ def static():
                 fail("S7", f"{rel(env.parent)}: no {lock.name} for {arch}; run ./lock")
 
     ci_text = CI.read_text()
-    ci = sorted(re.findall(r"^ +- arch: (\S+)$", ci_text, re.M))
+    ci_doc = yaml.safe_load(ci_text)
+    if not isinstance(ci_doc, dict):
+        fail("S6", f"{rel(CI)}: workflow YAML did not parse as a mapping")
+        ci_doc = {}
+
+    jobs = ci_doc.get("jobs") or {}
+    build_job = jobs.get("build") or {}
+    build_include = ((build_job.get("strategy") or {}).get("matrix") or {}).get("include") or []
+    ci = sorted(str(entry["arch"]) for entry in build_include if isinstance(entry, dict) and "arch" in entry)
     if ci != sorted(arches):
         fail("S7", f"{rel(CI)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
                    f"components/target-arch lists {', '.join(arches)}")
-    def yaml_strip_comment(line: str) -> str:
-        in_sq = in_dq = False
-        for idx, ch in enumerate(line):
-            if ch == "'" and not in_dq:
-                in_sq = not in_sq
-            elif ch == '"' and not in_sq:
-                in_dq = not in_dq
-            elif ch == "#" and not in_sq and not in_dq and (idx == 0 or line[idx - 1].isspace()):
-                return line[:idx].rstrip()
-        return line.rstrip()
 
-    def yaml_job_block(text: str, job_name: str) -> str:
-        m = re.search(rf"^  {re.escape(job_name)}:\s*\n", text, re.M)
-        if not m:
-            return ""
-        rest = text[m.end():]
-        nxt = re.search(r"^(?:  [A-Za-z0-9_-]+:|[A-Za-z0-9_-]+:)", rest, re.M)
-        return rest[:nxt.start()] if nxt else rest
+    def strip_shell_comments(script: str) -> str:
+        out = []
+        for line in script.splitlines():
+            in_sq = in_dq = False
+            cut = len(line)
+            for idx, ch in enumerate(line):
+                if ch == "'" and not in_dq:
+                    in_sq = not in_sq
+                elif ch == '"' and not in_sq:
+                    in_dq = not in_dq
+                elif ch == "#" and not in_sq and not in_dq and (idx == 0 or line[idx - 1].isspace()):
+                    cut = idx
+                    break
+            out.append(line[:cut])
+        return "\n".join(out)
 
-    def yaml_step_block(job_block: str, step_name_prefix: str) -> str:
-        m = re.search(rf"^      - name:\s+{re.escape(step_name_prefix)}[^\n]*\n", job_block, re.M)
-        if not m:
-            return ""
-        rest = job_block[m.end():]
-        nxt = re.search(r"^      - ", rest, re.M)
-        return rest[:nxt.start()] if nxt else rest
-
-    pub_m = re.search(r"^env:\n(?:[ \t].*\n)*?^  PUBLISH:\s+(.+)$", ci_text, re.M)
-    if not pub_m:
-        fail("S6", f"{rel(CI)}: could not parse env.PUBLISH list")
+    publish_raw = (ci_doc.get("env") or {}).get("PUBLISH")
+    if not isinstance(publish_raw, str) or not publish_raw.split():
+        fail("S6", f"{rel(CI)}: env.PUBLISH is missing or empty")
     else:
-        pub_imgs = yaml_strip_comment(pub_m.group(1)).split()
+        pub_imgs = publish_raw.split()
 
-        # Attestation matrix scoped strictly to jobs.attest (inline or block YAML, comments stripped)
-        att_block = yaml_job_block(ci_text, "attest")
-        att_imgs = None
-        if att_block:
-            att_lines = [yaml_strip_comment(ln) for ln in att_block.splitlines()]
-            for i, ln in enumerate(att_lines):
-                im = re.match(r"^(\s+)image:\s*(.*)$", ln)
-                if not im:
-                    continue
-                indent, val = len(im.group(1)), im.group(2).strip()
-                if val.startswith("[") and val.endswith("]"):
-                    att_imgs = [s.strip().strip("'\"") for s in val[1:-1].split(",") if s.strip()]
-                elif val == "":
-                    items = []
-                    for sub in att_lines[i + 1:]:
-                        if not sub.strip():
-                            continue
-                        sub_indent = len(sub) - len(sub.lstrip())
-                        if sub_indent <= indent:
-                            break
-                        bm = re.match(r"^\s+-\s+(\S+)$", sub)
-                        if bm:
-                            items.append(bm.group(1).strip("'\""))
-                    att_imgs = items
-                break
-        if not att_imgs:
-            fail("S6", f"{rel(CI)}: could not parse jobs.attest.strategy.matrix.image")
-        elif set(pub_imgs) != set(att_imgs):
-            fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match attest matrix ({', '.join(att_imgs)})")
+        # Attestation matrix: jobs.attest.strategy.matrix.image
+        att_imgs = (((jobs.get("attest") or {}).get("strategy") or {}).get("matrix") or {}).get("image")
+        if not isinstance(att_imgs, list) or not att_imgs:
+            fail("S6", f"{rel(CI)}: jobs.attest.strategy.matrix.image is missing or empty")
+        elif set(pub_imgs) != {str(x) for x in att_imgs}:
+            fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match attest matrix ({', '.join(map(str, att_imgs))})")
 
-        # Browser smoke loop scoped strictly to the Browser & WebGL2 smoke step in jobs.build
-        build_block = yaml_job_block(ci_text, "build")
-        browser_step = yaml_step_block(build_block, "Browser & WebGL2 smoke")
-        brw_m = re.search(
-            r"^\s+for image in ([^;]+); do$",
-            "\n".join(yaml_strip_comment(ln) for ln in browser_step.splitlines()),
-            re.M,
-        )
-        if not brw_m:
-            fail("S6", f"{rel(CI)}: could not parse Browser & WebGL2 smoke image loop")
+        # Browser smoke step(s): every step in jobs.build whose `run` invokes ./test/browser-smoke.sh
+        build_steps = build_job.get("steps") or []
+        browser_steps = [
+            s for s in build_steps
+            if isinstance(s, dict) and isinstance(s.get("run"), str)
+            and "./test/browser-smoke.sh" in strip_shell_comments(s["run"])
+        ]
+        if not browser_steps:
+            fail("S6", f"{rel(CI)}: no step in jobs.build invokes ./test/browser-smoke.sh")
         else:
-            brw_imgs = brw_m.group(1).split()
-            if set(pub_imgs) != set(brw_imgs):
-                fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match browser-smoke loop ({', '.join(brw_imgs)})")
+            for step in browser_steps:
+                code = strip_shell_comments(step["run"])
+                brw_m = re.search(r"^\s*for image in ([^;]+); do$", code, re.M)
+                if not brw_m:
+                    fail("S6", f"{rel(CI)}: step {step.get('name')!r} runs browser-smoke.sh without a parseable `for image in ...; do` loop")
+                else:
+                    brw_imgs = brw_m.group(1).split()
+                    if set(pub_imgs) != set(brw_imgs):
+                        fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match browser-smoke loop in {step.get('name')!r} ({', '.join(brw_imgs)})")
 
-        # Installed Python pip-audit scoped strictly to the Vulnerability scan step (ignoring comments)
-        vuln_step = yaml_step_block(build_block, "Vulnerability scan")
-        vuln_code = "\n".join(yaml_strip_comment(ln) for ln in vuln_step.splitlines())
-        audited = set(re.findall(r'"([a-z0-9-]+):ci:(/opt/[^"]+)"', vuln_code))
-        for img in pub_imgs:
-            if img not in targets:
-                continue
-            for comp in sorted(image_components(targets, img)):
-                if comp.endswith("-env") and comp != "jupyter-env":
-                    expected_spec = (img, f"/opt/{comp}/bin/python")
-                    if expected_spec not in audited:
-                        fail("S6", f"{rel(CI)}: published image {img} holds {comp}, but pip-audit omits {expected_spec[0]}:ci:{expected_spec[1]}")
+        # Installed Python pip-audit step(s): every step in jobs.build invoking pip-audit
+        audit_steps = [
+            s for s in build_steps
+            if isinstance(s, dict) and isinstance(s.get("run"), str)
+            and "pip-audit" in strip_shell_comments(s["run"])
+        ]
+        if not audit_steps:
+            fail("S6", f"{rel(CI)}: no step in jobs.build invokes pip-audit")
+        else:
+            for step in audit_steps:
+                vuln_code = strip_shell_comments(step["run"])
+                audited = set(re.findall(r'"([a-z0-9-]+):ci:(/opt/[^"]+)"', vuln_code))
+                for img in pub_imgs:
+                    if img not in targets:
+                        continue
+                    for comp in sorted(image_components(targets, img)):
+                        if comp.endswith("-env") and comp != "jupyter-env":
+                            expected_spec = (img, f"/opt/{comp}/bin/python")
+                            if expected_spec not in audited:
+                                fail("S6", f"{rel(CI)}: published image {img} holds {comp}, but pip-audit step {step.get('name')!r} omits {expected_spec[0]}:ci:{expected_spec[1]}")
 
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is
