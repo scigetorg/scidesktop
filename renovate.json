@@ -20,6 +20,7 @@
       "/^components/ai-ready/requirements\\.in$/",
       "/^components/ai-ready/airflow-requirements\\.in$/",
       "/^components/datalad/requirements\\.in$/",
+      "/^components/lightcone/requirements\\.in$/",
       "/^components/workflow-engines/requirements\\.in$/",
       "/^components/microscopy-env/requirements\\.in$/",
       "/^components/datascience-env/requirements\\.in$/",
@@ -217,6 +218,16 @@
       "groupName": "component datalad",
       "addLabels": [
         "component:datalad"
+      ]
+    },
+    {
+      "description": "Component lightcone: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/lightcone/**"
+      ],
+      "groupName": "component lightcone",
+      "addLabels": [
+        "component:lightcone"
       ]
     },
     {

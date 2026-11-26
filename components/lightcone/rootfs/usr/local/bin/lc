@@ -1,0 +1,118 @@
+#!/opt/lightcone/bin/python -I
+"""Lightcone's `lc`, with a compute catalog that fits this session's Slurm queue.
+
+The queue is sized per session (components/slurm), so a fixed catalog would
+ask some sessions for a node they do not have, and Slurm would fail the job.
+When the user has no catalog of their own (LC_COMPUTE_CONFIG unset and no
+~/.lightcone/compute.yaml) and the session's queue answers `sinfo`, this
+writes one for the queue as it is now and points LC_COMPUTE_CONFIG at it.
+Otherwise `lc` runs unchanged.
+"""
+
+import os
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+import yaml
+
+LC = "/opt/lightcone/bin/lc"
+PYTHON = "/opt/lightcone/bin/python"
+SESSION_SLURM_CONF = "/etc/slurm/slurm.conf"
+STANDARD_CPUS = 2
+STANDARD_MEMORY_MB = 8192
+
+
+def catalog(partition, cpus, memory_mb):
+    """`standard` is Neurodesktop's 2 CPUs and 8 GiB, cut to the node; `node` is all of it."""
+    shapes = [("standard", min(STANDARD_CPUS, cpus), min(STANDARD_MEMORY_MB, memory_mb))]
+    if shapes[0][1:] != (cpus, memory_mb):
+        shapes.append(("node", cpus, memory_mb))
+    return {
+        "allow_local": False,
+        "offers": [
+            {
+                "name": name,
+                "provider": "slurm",
+                "resources": {"cpus": offer_cpus, "memory": f"{offer_memory}MB"},
+                "max_nodes": 1,
+                "time": {"default": "2h"},
+                "config": {"partition": partition, "python": PYTHON, "task_slots_per_node": 1},
+            }
+            for name, offer_cpus, offer_memory in shapes
+        ],
+    }
+
+
+def session_queue():
+    """(partition, CPUs, MB) of the session queue's default partition, or None."""
+    # A cluster the session did not start (an HPC login node) has nodes
+    # without this image's Python; its catalog is the site's to write.
+    if os.environ.get("SLURM_CONF", SESSION_SLURM_CONF) != SESSION_SLURM_CONF:
+        return None
+    try:
+        result = subprocess.run(
+            ["sinfo", "--noheader", "--format=%P %c %m"],
+            capture_output=True, text=True, timeout=10, check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    rows = [line.split() for line in result.stdout.splitlines()]
+    rows = [row for row in rows if len(row) == 3 and row[1].isdigit() and row[2].isdigit()]
+    default = [row for row in rows if row[0].endswith("*")] or rows
+    if not default:
+        return None
+    partition, cpus, memory_mb = default[0]
+    return partition.rstrip("*"), int(cpus), int(memory_mb)
+
+
+def private_directory():
+    """The user's own directory for the catalog, or None if someone else could change it."""
+    base = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+    path = Path(base) / f"scidesktop-lightcone-{os.getuid()}"
+    try:
+        path.mkdir(mode=0o700, exist_ok=True)
+        info = path.lstat()
+    except OSError:
+        return None
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
+        print(f"lc: not writing a compute catalog to {path}: it is not a private "
+              "directory of this user", file=sys.stderr)
+        return None
+    return path
+
+
+def write_catalog():
+    """Write the session queue's catalog and return its path, or None to leave lc alone."""
+    if "LC_COMPUTE_CONFIG" in os.environ:
+        return None
+    if Path("~/.lightcone/compute.yaml").expanduser().exists():
+        return None
+    queue = session_queue()
+    if queue is None:
+        return None
+    directory = private_directory()
+    if directory is None:
+        return None
+    path = directory / "compute.yaml"
+    # Concurrent lc commands each write their own file and swap it in whole.
+    fd, temporary = tempfile.mkstemp(dir=directory, prefix=".compute-", suffix=".yaml")
+    try:
+        with os.fdopen(fd, "w") as file:
+            file.write("# Written by /usr/local/bin/lc for this session's Slurm queue.\n"
+                       "# Your own ~/.lightcone/compute.yaml or LC_COMPUTE_CONFIG replaces it.\n")
+            yaml.safe_dump(catalog(*queue), file, sort_keys=False)
+        os.replace(temporary, path)
+    except BaseException:
+        os.unlink(temporary)
+        raise
+    return path
+
+
+if __name__ == "__main__":
+    generated = write_catalog()
+    if generated is not None:
+        os.environ["LC_COMPUTE_CONFIG"] = str(generated)
+    os.execv(LC, [LC, *sys.argv[1:]])

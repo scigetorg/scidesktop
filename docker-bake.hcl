@@ -268,6 +268,7 @@ group "test" {
     "t3-connect-test",
     "code-server-test",
     "datalad-test",
+    "lightcone-test",
     "neurodesk-cvmfs-test",
     "neurodesk-agents-test",
     "scigethelpers-cli-test",
@@ -849,6 +850,21 @@ target "datalad-test" {
   output   = ["type=cacheonly"]
 }
 
+# Lightcone's lc in an isolated venv backed by jupyter-env, with a compute
+# catalog sized to the session's Slurm queue.
+target "lightcone" {
+  inherits = ["_component"]
+  context  = "components/lightcone"
+  target   = "component"
+  contexts = { jupyter-env = "target:jupyter-env" }
+}
+
+target "lightcone-test" {
+  inherits = ["lightcone"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
 # Optional: the Neurodesk CVMFS repository's configuration and public key.
 target "neurodesk-cvmfs" {
   inherits = ["_component"]
@@ -1287,6 +1303,7 @@ target "scidesktop" {
     scigethelpers-cli     = "target:scigethelpers-cli"
     jupyterlab-slurm      = "target:jupyterlab-slurm"
     workflow-engines      = "target:workflow-engines"
+    lightcone             = "target:lightcone"
     sciget-all            = "target:sciget-all"
     eessi-cvmfs           = "target:eessi-cvmfs"
     coding-agents         = "target:coding-agents"
