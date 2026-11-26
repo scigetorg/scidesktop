@@ -109,11 +109,55 @@ The queue is not started when the session runs under a user ID that does not
 own and write `/run/slurm` and `/run/slurmctld` (an arbitrary non-root UID, or
 `/run` mounted over). The container log says so.
 
+## Lightcone
+
+[Lightcone](https://github.com/LightconeResearch/lightcone-cli)'s `lc`
+(lightcone-cli, with `astra-tools` and `astra-spec`) runs analyses on this
+queue. It is the `lightcone` component, part of the base image, in its own
+environment at `/opt/lightcone` so its Dask dependencies stay out of the
+Jupyter environment. Upstream `lc` is installed unchanged; neurodesktop's
+module adapter and `neurodesk-lc-materialize` are not ported.
+
+```sh
+lc compute resources                   # the shapes lc can ask the queue for
+lc compute launch --cpus 2 --memory 8  # an allocation; prints its ID
+lc materialize <id> baseline/answer    # builds an output on it
+lc compute down <id>
+```
+
+**The catalog follows the queue.** `lc` only launches an allocation whose
+CPUs and memory equal one of its catalog's offers, and Slurm fails a job
+larger than the node. The queue is sized per session, so no fixed catalog
+fits every session: neurodesktop's 2 CPUs and 8 GiB fail on a 4 GB container
+([neurodesk/neurodesktop#1393](https://github.com/neurodesk/neurodesktop/issues/1393)).
+`/usr/local/bin/lc` therefore writes a catalog from `sinfo` before it runs the
+real `lc`, with two offers on the queue's default partition:
+
+| Offer | CPUs | Memory |
+| --- | --- | --- |
+| `standard` | 2, or the node's if fewer | 8 GiB, or the node's if less |
+| `node` | the node's | the node's; left out when it equals `standard` |
+
+So `lc compute launch --cpus 2 --memory 8` works on any node at least that
+size. The workers run `/opt/lightcone/bin/python`, one task at a time, for at
+most 2 hours by default; local compute is off. The file is
+`${XDG_RUNTIME_DIR:-/tmp}/scidesktop-lightcone-<uid>/compute.yaml`, rewritten
+at each `lc` command, in a directory only the user can write (`lc` warns and
+writes nothing if the directory is anyone else's or writable by others).
+
+**Your own catalog wins.** `lc` writes nothing and runs unchanged when
+`LC_COMPUTE_CONFIG` is set, when `~/.lightcone/compute.yaml` exists, when
+`sinfo` does not answer, or when `SLURM_CONF` names another cluster's
+configuration: its nodes do not have this image's Python, so its catalog is
+the site's to write. To keep a shape of your own, copy the generated file to
+`~/.lightcone/compute.yaml` and edit it.
+
 ## Checks
 
 ```sh
-docker buildx bake slurm-test
+docker buildx bake slurm-test lightcone-test
 ./test/slurm-smoke.sh scidesktop
+./test/lightcone-smoke.sh scidesktop   # lc on a 4 GB container's queue
 ```
 
 ## Licence

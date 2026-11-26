@@ -157,7 +157,9 @@ wrappers and a container with `ipykernel`.
 The commands neurodesktop has and this image does not: `jobs`,
 `update`, `test`, `t3`, `agent preflight`, `astra` and `lightcone
 materialize`. Each depends on a part of neurodesktop that was not ported
-([Not in this change](#not-in-this-change)).
+([Not in this change](#not-in-this-change)). Lightcone itself is here:
+upstream `lc materialize` builds outputs on the session's queue
+([slurm.md](slurm.md#lightcone)), without Neurodesk's module execution.
 
 ## Coding agents
 
@@ -271,9 +273,9 @@ Each of these is deliberately left out or deferred:
 | --- | --- |
 | Notebook Intelligence | A second chat panel with patches of its own; Jupyter AI covers chat |
 | SSH into the session (`openssh-server`, `jupyter-sshd-proxy`) | Needs a separate SSH daemon and port/auth surface |
-| `neurodesk jobs`, `update`, `test`, `t3`, `agent preflight`, `astra`, `lightcone materialize` | Tied to remote-job/Tailscale/ASTRA/Lightcone workflows outside scidesktop |
+| `neurodesk jobs`, `update`, `test`, `t3`, `agent preflight`, `astra`, `lightcone materialize` | Tied to remote-job/Tailscale/ASTRA workflows outside scidesktop. Upstream `lc materialize` replaces `lightcone materialize` ([slurm.md](slurm.md#lightcone)) |
 | TinyTeX, Firefox, Nextcloud GUI client | Deliverable as user installs or sciget containers |
-| ASTRA and Lightcone tools | Neurodesk-hosted preview tooling |
+| ASTRA view tools, the Lightcone module adapter (`patch_modules.py`) and `neurodesk-lc-materialize` | Neurodesk-hosted preview tooling. Upstream `lc` with `astra-tools` and `astra-spec` is the `lightcone` component ([slurm.md](slurm.md#lightcone)) |
 
 ### Brain Researcher
 

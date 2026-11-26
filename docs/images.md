@@ -39,7 +39,7 @@ images/
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | core base (`startup`, `lmod`, `apptainer`, `selkies`, `jupyter-env`, `sciget`, `slurm`, `jupyterlab-slurm`) | yes | yes | yes | yes | yes | yes | yes | yes |
 | `eessi-cvmfs` (EESSI `software.eessi.io` CVMFS config, Lmod hook, `eessi-launch`, `eessi-catalog` syncing `<domain>/eessi.json`, explicit **EESSI** desktop launchers) | yes | yes | yes | yes | yes | yes | yes | yes |
-| `virtualgl`, `datalad`, `workflow-engines`, `scigethelpers-cli` | yes | yes | yes | yes | yes | yes | yes | yes |
+| `virtualgl`, `datalad`, `workflow-engines`, `lightcone`, `scigethelpers-cli` | yes | yes | yes | yes | yes | yes | yes | yes |
 | `rclone`, `gh`, `aria2`, `tcsh` (data transfer, GitHub CLI and C shell) | yes | yes | yes | yes | yes | yes | yes | yes |
 | `code-server`, `vscode-core` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes | yes | yes | yes | yes |
 | `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed |
