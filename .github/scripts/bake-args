@@ -9,6 +9,10 @@
 # tagged <image>:<tag>. The lists come from the folders: a new component or
 # image needs no change here or in the workflows. `no-cache` names no cache
 # at all, for a build that must not depend on what the cache still holds.
+#
+# Writing the cache is best effort (ignore-error): GitHub throttles cache
+# writes per repository, and a build that passed must not fail because its
+# layers could not be saved for the next one.
 set -euo pipefail
 arch="${1:?usage: bake-args <arch> <tag> [write-cache|no-cache]}"
 tag="${2:?usage: bake-args <arch> <tag> [write-cache|no-cache]}"
@@ -18,13 +22,13 @@ for dockerfile in components/*/Dockerfile images/*/Dockerfile; do
     [ "${3:-}" != no-cache ] || continue
     echo "--set=${target}.cache-from=type=gha,scope=${target}-${arch}"
     if [ "${3:-}" = write-cache ]; then
-        echo "--set=${target}.cache-to=type=gha,scope=${target}-${arch},mode=max"
+        echo "--set=${target}.cache-to=type=gha,scope=${target}-${arch},mode=max,ignore-error=true"
     fi
 done
 if [ "${3:-}" != no-cache ]; then
     echo "--set=os-ubuntu-build.cache-from=type=gha,scope=os-ubuntu-build-${arch}"
     if [ "${3:-}" = write-cache ]; then
-        echo "--set=os-ubuntu-build.cache-to=type=gha,scope=os-ubuntu-build-${arch},mode=max"
+        echo "--set=os-ubuntu-build.cache-to=type=gha,scope=os-ubuntu-build-${arch},mode=max,ignore-error=true"
     fi
 fi
 for dockerfile in images/*/Dockerfile; do
