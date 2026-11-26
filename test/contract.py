@@ -238,6 +238,7 @@ def static():
     def strip_shell_comments_and_heredocs(script: str) -> str:
         out = []
         heredoc_queue: list[tuple[str, bool]] = []
+        in_sq = in_dq = False
         for line in script.splitlines():
             if heredoc_queue:
                 delim, strip_tabs = heredoc_queue[0]
@@ -245,85 +246,85 @@ def static():
                 if candidate == delim:
                     heredoc_queue.pop(0)
                 continue
-            in_sq = in_dq = escaped = False
-            cut = len(line)
-            for idx, ch in enumerate(line):
-                if escaped:
-                    escaped = False
-                    continue
-                if ch == "\\" and not in_sq:
-                    escaped = True
-                elif ch == "'" and not in_dq:
-                    in_sq = not in_sq
-                elif ch == '"' and not in_sq:
-                    in_dq = not in_dq
-                elif ch == "#" and not in_sq and not in_dq and (idx == 0 or line[idx - 1].isspace()):
-                    cut = idx
-                    break
-            cleaned = line[:cut]
-            out.append(cleaned)
-            # Scan unquoted text for << or <<- heredoc operators (not <<< here-strings).
-            in_sq = in_dq = escaped = False
+            escaped = False
+            cleaned_chars = []
             i = 0
-            n = len(cleaned)
+            n = len(line)
             while i < n:
-                ch = cleaned[i]
+                ch = line[i]
                 if escaped:
+                    cleaned_chars.append(ch)
                     escaped = False
                     i += 1
                     continue
                 if ch == "\\" and not in_sq:
+                    cleaned_chars.append(ch)
                     escaped = True
                     i += 1
                     continue
                 if ch == "'" and not in_dq:
                     in_sq = not in_sq
+                    cleaned_chars.append(ch)
                     i += 1
                     continue
                 if ch == '"' and not in_sq:
                     in_dq = not in_dq
+                    cleaned_chars.append(ch)
                     i += 1
                     continue
-                if not in_sq and not in_dq and cleaned.startswith("<<", i):
-                    if (i > 0 and cleaned[i - 1] == "<") or (i + 2 < n and cleaned[i + 2] == "<"):
-                        while i < n and cleaned[i] == "<":
+                if ch == "#" and not in_sq and not in_dq and (i == 0 or line[i - 1].isspace()):
+                    break
+                if not in_sq and not in_dq and line.startswith("<<", i):
+                    if (i > 0 and line[i - 1] == "<") or (i + 2 < n and line[i + 2] == "<"):
+                        while i < n and line[i] == "<":
+                            cleaned_chars.append(line[i])
                             i += 1
                         continue
+                    cleaned_chars.append("<<")
                     i += 2
-                    strip_tabs = i < n and cleaned[i] == "-"
+                    strip_tabs = i < n and line[i] == "-"
                     if strip_tabs:
+                        cleaned_chars.append("-")
                         i += 1
-                    while i < n and cleaned[i] in " \t":
+                    while i < n and line[i] in " \t":
+                        cleaned_chars.append(line[i])
                         i += 1
                     delim_chars = []
                     d_sq = d_dq = d_esc = False
                     while i < n:
-                        c = cleaned[i]
+                        c = line[i]
                         if d_esc:
                             delim_chars.append(c)
+                            cleaned_chars.append(c)
                             d_esc = False
                             i += 1
                             continue
                         if c == "\\" and not d_sq:
+                            cleaned_chars.append(c)
                             d_esc = True
                             i += 1
                             continue
                         if c == "'" and not d_dq:
                             d_sq = not d_sq
+                            cleaned_chars.append(c)
                             i += 1
                             continue
                         if c == '"' and not d_sq:
                             d_dq = not d_dq
+                            cleaned_chars.append(c)
                             i += 1
                             continue
                         if not d_sq and not d_dq and c in " \t;|&()<>":
                             break
                         delim_chars.append(c)
+                        cleaned_chars.append(c)
                         i += 1
                     if delim_chars:
                         heredoc_queue.append(("".join(delim_chars), strip_tabs))
                     continue
+                cleaned_chars.append(ch)
                 i += 1
+            out.append("".join(cleaned_chars))
         return "\n".join(out)
 
     publish_raw = (ci_doc.get("env") or {}).get("PUBLISH")
