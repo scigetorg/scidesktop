@@ -5,8 +5,10 @@
 #
 # Verifies offline (`--network none`):
 #   - `viash-catalog list`, `info`, `run-cmd`, `json` read the curated catalog
-#   - `viash-catalog init` scaffolds both a native Python component and an
-#     OCI container-bridged (`--image`) Bash component
+#     and enforce architecture compatibility + package flag validation
+#   - `viash-catalog init --image` exports the exact supplied container via
+#     Viash's Nextflow `directives.container` (not `<name>:latest`)
+#   - `viash-catalog init --force` refuses to overwrite symlink targets
 #   - `viash test --engine native`, `viash run`, and `viash build --runner nextflow`
 #     compile and run cleanly offline with `/etc/scidesktop/nextflow/scidesktop.config`
 
@@ -26,26 +28,46 @@ out=$(docker run --rm --network none -e SCIDESKTOP_SLURM=no "${IMAGE}" bash -lc 
 
     viash-catalog list | grep -q "^openpipelines" && echo "list_openpipelines=ok"
     viash-catalog list --domain genomics | grep -q "^biobox" && echo "list_biobox=ok"
-    viash-catalog info openpipelines | grep -q "openpipelines-bio/openpipeline" && echo "info=ok"
-    viash-catalog run-cmd openpipelines multiomics/process_samples --slurm \
-        | grep -q -- "-c /etc/scidesktop/nextflow/scidesktop.config -profile apptainer,slurm" \
+    viash-catalog info openpipelines --arch amd64 | grep -q "openpipelines-bio/openpipeline" && echo "info=ok"
+    viash-catalog run-cmd openpipelines multiomics/process_samples --slurm --arch amd64 \
+        | grep -q -- "NXF_SYNTAX_PARSER=v1 nextflow run openpipelines-bio/openpipeline.*-c /etc/scidesktop/nextflow/scidesktop.config -profile apptainer,slurm" \
         && echo "run_cmd=ok"
+    if ! viash-catalog run-cmd openpipelines qc/qc --arch arm64 >/dev/null 2>&1 \
+        && viash-catalog run-cmd openpipelines qc/qc --arch arm64 --allow-unsupported-arch >/dev/null 2>"${work}/arm.err" \
+        && grep -qi "warning:" "${work}/arm.err"; then
+        echo "arch_guard=ok"
+    fi
     viash-catalog json | /opt/conda/bin/python3 -c '\''
 import json, sys
 d = json.load(sys.stdin)
 assert d["schemaVersion"] == 1
 ids = {p["id"] for p in d["packages"]}
 assert {"openpipelines", "openpipelines-spatial", "biobox", "openproblems-batch-integration"} <= ids, ids
+assert all(p["architectures"] for p in d["packages"])
 print("json=ok")
 '\''
 
-    # Scaffold a Python component bridging an existing container image for Nextflow export
-    viash-catalog init seq_qc --dir "${work}/seq_qc" --lang python \
-        --image ghcr.io/scigetorg/scidesktop:latest >/dev/null
-    grep -q "image: ghcr.io/scigetorg/scidesktop:latest" "${work}/seq_qc/config.vsh.yaml" \
-        && echo "init_bridge=ok"
+    # Symlink overwrite protection
+    mkdir -p "${work}/sym_dir"
+    echo keep > "${work}/outside.txt"
+    ln -s "${work}/outside.txt" "${work}/sym_dir/config.vsh.yaml"
+    if ! viash-catalog init sym_comp --dir "${work}/sym_dir" --force >/dev/null 2>&1 \
+        && [ "$(cat "${work}/outside.txt")" = "keep" ]; then
+        echo "symlink_guard=ok"
+    fi
 
-    # Unit-test and run via native engine offline
+    # Container-bridged scaffold must export the exact supplied container in Nextflow main.nf
+    viash-catalog init bridged_qc --dir "${work}/bridged_qc" --lang python \
+        --image ghcr.io/scigetorg/scidesktop:latest >/dev/null
+    viash build "${work}/bridged_qc/config.vsh.yaml" --runner nextflow \
+        --output "${work}/nf_bridged" >/dev/null 2>&1
+    if grep -q "\"container\" : \"ghcr.io/scigetorg/scidesktop:latest\"" "${work}/nf_bridged/main.nf" \
+        && ! grep -q "\"container\" : \"bridged_qc:latest\"" "${work}/nf_bridged/main.nf"; then
+        echo "init_bridge=ok"
+    fi
+
+    # Native Python component: unit-test, run, and execute Nextflow VDSL3 module offline
+    viash-catalog init seq_qc --dir "${work}/seq_qc" --lang python >/dev/null
     viash test "${work}/seq_qc/config.vsh.yaml" --engine native >/dev/null 2>&1 \
         && echo "viash_test=ok"
     printf ">s1\nACGT\n" > "${work}/in.fa"
@@ -55,7 +77,6 @@ print("json=ok")
         && grep -qxF "lines=2" "${work}/run_out.txt" \
         && echo "viash_run=ok"
 
-    # Compile to a Nextflow VDSL3 module and execute offline with scidesktop.config
     viash build "${work}/seq_qc/config.vsh.yaml" --engine native --runner nextflow \
         --output "${work}/nf_seq_qc" >/dev/null 2>&1
     NXF_OFFLINE=true NXF_SYNTAX_PARSER=v1 nextflow run "${work}/nf_seq_qc/main.nf" \
@@ -73,8 +94,10 @@ has "list_openpipelines=ok" && pass "viash-catalog lists openpipelines" || fail 
 has "list_biobox=ok" && pass "viash-catalog filters genomics domain (biobox)" || fail "viash-catalog filters genomics domain (biobox)"
 has "info=ok" && pass "viash-catalog info shows openpipelines metadata" || fail "viash-catalog info shows openpipelines metadata"
 has "run_cmd=ok" && pass "viash-catalog run-cmd emits Apptainer+Slurm Nextflow command" || fail "viash-catalog run-cmd emits Apptainer+Slurm Nextflow command"
-has "json=ok" && pass "viash-catalog json emits valid v1 catalog" || fail "viash-catalog json emits valid v1 catalog"
-has "init_bridge=ok" && pass "viash-catalog init bridges container image in config.vsh.yaml" || fail "viash-catalog init bridges container image in config.vsh.yaml"
+has "arch_guard=ok" && pass "viash-catalog rejects unsupported arch by default and warns on override" || fail "viash-catalog rejects unsupported arch by default and warns on override"
+has "json=ok" && pass "viash-catalog json emits valid v1 catalog with architectures" || fail "viash-catalog json emits valid v1 catalog with architectures"
+has "symlink_guard=ok" && pass "viash-catalog init --force refuses symlink overwrite" || fail "viash-catalog init --force refuses symlink overwrite"
+has "init_bridge=ok" && pass "viash-catalog init --image exports exact container directive in Nextflow main.nf" || fail "viash-catalog init --image exports exact container directive in Nextflow main.nf"
 has "viash_test=ok" && pass "viash test runs scaffolded component offline" || fail "viash test runs scaffolded component offline"
 has "viash_run=ok" && pass "viash run executes scaffolded component offline" || fail "viash run executes scaffolded component offline"
 has "viash_nextflow=ok" && pass "viash build -> nextflow run executes offline with scidesktop.config" || fail "viash build -> nextflow run executes offline with scidesktop.config"

@@ -141,10 +141,13 @@ workflow {
 }
 NF
     cd "${work}"
-    NXF_OFFLINE=true nextflow run "${work}/slurm.nf" \
+    nf_slurm_log="$(NXF_OFFLINE=true nextflow run "${work}/slurm.nf" \
         -c "${SCIDESKTOP_NEXTFLOW_CONFIG}" -profile slurm \
-        -work-dir "${work}/nf-slurm-work" >/dev/null 2>&1
-    grep -rq "nextflow-slurm-ok" "${work}/nf-slurm-work" && echo "nextflow_slurm_run=ok"
+        -work-dir "${work}/nf-slurm-work" 2>&1)"
+    nf_slurm_out="$(find "${work}/nf-slurm-work" -type f -name nf-slurm.txt -exec cat {} +)"
+    if grep -q "executor >  slurm" <<<"${nf_slurm_log}" && [ "${nf_slurm_out}" = "nextflow-slurm-ok" ]; then
+        echo "nextflow_slurm_run=ok"
+    fi
 ' 2>/dev/null)
 
 has() { printf '%s\n%s\n' "${out}" "${slurm_out}" | grep -qxF "$1"; }
@@ -172,6 +175,6 @@ if [ "${FAILED}" -eq 0 ]; then
     echo "workflow-engines smoke: all checks passed"
 else
     echo "workflow-engines smoke: ${FAILED} check(s) failed; output:"
-    printf '%s\n' "${out}" | sed 's/^/        /'
+    printf '%s\n%s\n' "${out}" "${slurm_out}" | sed 's/^/        /'
 fi
 exit "${FAILED}"

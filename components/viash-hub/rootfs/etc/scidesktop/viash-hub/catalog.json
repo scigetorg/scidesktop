@@ -10,6 +10,7 @@
       "version": "v4.2.0",
       "license": "MIT",
       "domains": ["genomics", "cellular-biology"],
+      "architectures": ["amd64"],
       "formats": [".h5mu", ".h5ad", "10x-mtx", "fastq"],
       "homepage": "https://openpipelines.bio",
       "viash_hub_url": "https://viash-hub.com/packages/openpipeline",
@@ -18,46 +19,57 @@
       "workflows": {
         "multiomics/process_samples": {
           "main_script": "target/nextflow/workflows/multiomics/process_samples/main.nf",
+          "architectures": ["amd64"],
           "description": "End-to-end multi-sample single-cell multi-omics processing pipeline"
         },
         "multiomics/process_singlesample": {
           "main_script": "target/nextflow/workflows/multiomics/process_singlesample/main.nf",
+          "architectures": ["amd64"],
           "description": "Single-sample single-cell multi-omics QC, filtering and normalization"
         },
         "rna/rna_singlesample": {
           "main_script": "target/nextflow/workflows/rna/rna_singlesample/main.nf",
+          "architectures": ["amd64"],
           "description": "Single-sample scRNA-seq preprocessing and quality control"
         },
         "rna/rna_multisample": {
           "main_script": "target/nextflow/workflows/rna/rna_multisample/main.nf",
+          "architectures": ["amd64"],
           "description": "Multi-sample scRNA-seq merging, normalization and dimensionality reduction"
         },
         "qc/qc": {
           "main_script": "target/nextflow/workflows/qc/qc/main.nf",
+          "architectures": ["amd64"],
           "description": "Single-cell quality control metrics calculation on MuData (.h5mu)"
         },
         "integration/harmony_leiden": {
           "main_script": "target/nextflow/workflows/integration/harmony_leiden/main.nf",
+          "architectures": ["amd64"],
           "description": "Harmony batch integration, neighbors, Leiden clustering and UMAP"
         },
         "integration/scvi_leiden": {
           "main_script": "target/nextflow/workflows/integration/scvi_leiden/main.nf",
+          "architectures": ["amd64"],
           "description": "scVI variational autoencoder batch integration and Leiden clustering"
         },
         "annotation/celltypist": {
           "main_script": "target/nextflow/workflows/annotation/celltypist/main.nf",
+          "architectures": ["amd64"],
           "description": "Automated cell-type annotation with CellTypist"
         },
         "differential_expression/pseudobulk_deseq2": {
           "main_script": "target/nextflow/workflows/differential_expression/pseudobulk_deseq2/main.nf",
+          "architectures": ["amd64"],
           "description": "Pseudobulk differential gene expression analysis with DESeq2"
         },
         "ingestion/demux": {
           "main_script": "target/nextflow/workflows/ingestion/demux/main.nf",
+          "architectures": ["amd64"],
           "description": "Sequencing run demultiplexing to FASTQ"
         },
         "ingestion/conversion": {
           "main_script": "target/nextflow/workflows/ingestion/conversion/main.nf",
+          "architectures": ["amd64"],
           "description": "Convert raw single-cell matrices (10x, Cell Ranger, AnnData) to MuData (.h5mu)"
         }
       }
@@ -70,6 +82,7 @@
       "version": "v0.1.0",
       "license": "MIT",
       "domains": ["genomics", "cellular-biology", "microscopy"],
+      "architectures": ["amd64"],
       "formats": [".h5mu", ".h5ad", "spatialdata"],
       "homepage": "https://openpipelines.bio",
       "viash_hub_url": "https://viash-hub.com/packages/openpipeline_spatial",
@@ -84,6 +97,7 @@
       "version": "v0.5.0",
       "license": "MIT",
       "domains": ["genomics"],
+      "architectures": ["amd64"],
       "formats": ["fastq", "bam", "cram", "vcf", "bed", "gff"],
       "homepage": "https://github.com/viash-hub/biobox",
       "viash_hub_url": "https://viash-hub.com/packages/biobox",
@@ -98,6 +112,7 @@
       "version": "v2.0.0",
       "license": "MIT",
       "domains": ["genomics", "cellular-biology"],
+      "architectures": ["amd64"],
       "formats": [".h5ad"],
       "homepage": "https://openproblems.bio",
       "viash_hub_url": "https://github.com/openproblems-bio/task_batch_integration",
@@ -106,14 +121,17 @@
       "workflows": {
         "methods/bbknn": {
           "main_script": "target/nextflow/methods/bbknn/main.nf",
+          "architectures": ["amd64"],
           "description": "BBKNN batch-balanced k-nearest neighbors integration component"
         },
         "data_processors/process_dataset": {
           "main_script": "target/nextflow/data_processors/process_dataset/main.nf",
+          "architectures": ["amd64"],
           "description": "Prepare standardized AnnData (.h5ad) benchmark inputs"
         },
         "data_processors/process_integration": {
           "main_script": "target/nextflow/data_processors/process_integration/main.nf",
+          "architectures": ["amd64"],
           "description": "Post-process integrated embeddings for benchmark scoring"
         }
       }

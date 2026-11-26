@@ -156,7 +156,7 @@ jobs:
         if: matrix.arch == 'amd64'
         run: |
           failed=0
-          for image in scidesktop microdesktop datadesktop dermdesktop preclinicaldesktop moleculardesktop aidesktop neurodesktop; do
+          for image in scidesktop microdesktop datadesktop dermdesktop preclinicaldesktop moleculardesktop genomicsdesktop aidesktop neurodesktop; do
               echo "::group::browser-smoke ${image}"
               ./test/browser-smoke.sh "${image}:ci" || failed=1
               echo "::endgroup::"
@@ -224,6 +224,7 @@ jobs:
               "dermdesktop:ci:/opt/dermatology-env/bin/python" \
               "preclinicaldesktop:ci:/opt/preclinical-env/bin/python" \
               "moleculardesktop:ci:/opt/molecular-imaging-env/bin/python" \
+              "genomicsdesktop:ci:/opt/genomics-env/bin/python" \
               "aidesktop:ci:/opt/ai-ready/env/bin/python" \
               "aidesktop:ci:/opt/ai-ready/airflow/bin/python" \
               "neurodesktop:ci:/opt/neuroimaging-env/bin/python"; do
@@ -318,7 +319,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, aidesktop, neurodesktop]
+        image: [scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, genomicsdesktop, aidesktop, neurodesktop]
     permissions:
       contents: read
       packages: write

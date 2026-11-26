@@ -190,6 +190,21 @@ session_apps_dir() {
     done
     exec {lock_fd}>&-
 
+    # Merge any image-bundled domain launchers whose filename is not already
+    # provided by the synced catalog (live synced entries win by filename).
+    if [ -d "${STATIC_APPS_DIR}" ]; then
+        local base
+        for f in "${STATIC_APPS_DIR}"/*.desktop; do
+            [ -f "${f}" ] || continue
+            base="$(basename "${f}")"
+            if [ ! -e "${session_dir}/${base}" ]; then
+                cp -- "${f}" "${session_dir}/${base}"
+                chmod 0644 "${session_dir}/${base}"
+                copied=$((copied + 1))
+            fi
+        done
+    fi
+
     if [ "${copied}" -eq 0 ]; then
         cleanup_staging
         if [ -d "${STATIC_APPS_DIR}" ]; then
@@ -573,13 +588,26 @@ show_catalog() {
     if [ -n "${apps_dir}" ] && [ -d "${apps_dir}" ]; then
         echo
         echo "Desktop launchers (shown in JupyterLab EESSI section when EESSI is mounted):"
-        local f name exec_cmd
+        local f base name exec_cmd
+        local -A seen_launchers=()
         for f in "${apps_dir}"/*.desktop; do
             [ -f "${f}" ] || continue
+            base="$(basename "${f}")"
+            seen_launchers["${base}"]=1
             name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
             exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
             printf '  - %-32s %s\n' "${name}" "${exec_cmd}"
         done
+        if [ "${apps_dir}" != "${STATIC_APPS_DIR}" ] && [ -d "${STATIC_APPS_DIR}" ]; then
+            for f in "${STATIC_APPS_DIR}"/*.desktop; do
+                [ -f "${f}" ] || continue
+                base="$(basename "${f}")"
+                [ -z "${seen_launchers[${base}]+x}" ] || continue
+                name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
+                exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
+                printf '  - %-32s %s\n' "${name}" "${exec_cmd}"
+            done
+        fi
     fi
 
     if [ -n "${expected}" ] && cache_matches_sources_for "${expected}"; then
@@ -593,6 +621,20 @@ show_catalog() {
             | ($t.apps | to_entries | sort_by(.key)[]
                 | "  - \($t.package) [\(.value.stack)\(if .value.gpu then ", GPU" else "" end)]: \(.value.module)")
         ' "${ns_dir}/current/merged.json"
+        if [ -d "${STATIC_CATALOG_DIR}" ]; then
+            local has_notes=0 f base
+            for f in "${STATIC_CATALOG_DIR}"/*.txt; do
+                [ -f "${f}" ] || continue
+                base="$(basename "${f}")"
+                [ "${base}" = "10-base.txt" ] && continue
+                if [ "${has_notes}" -eq 0 ]; then
+                    echo
+                    echo "Domain EESSI catalog notes for this image:"
+                    has_notes=1
+                fi
+                cat "${f}"
+            done
+        fi
     elif [ -d "${STATIC_CATALOG_DIR}" ]; then
         echo
         echo "Curated EESSI modules for this image:"

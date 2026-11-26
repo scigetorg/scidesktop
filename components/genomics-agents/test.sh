@@ -23,6 +23,14 @@ echo mine > "${HOME}/.codex/AGENTS.md.new" && mv "${HOME}/.codex/AGENTS.md.new" 
 /usr/local/bin/before-notebook.d/25-home-defaults
 [ "$(cat "${HOME}/.codex/AGENTS.md")" = mine ]
 
+# Switching domain images with a persistent home refreshes dangling image-managed
+# /opt/*-agents/* symlinks while preserving custom user symlinks.
+ln -sf /opt/neurodesk-agents/AGENTS.md "${HOME}/.claude/CLAUDE.md"
+ln -sf /tmp/user-custom-agents-missing.md "${HOME}/.config/opencode/AGENTS.md"
+/usr/local/bin/before-notebook.d/25-home-defaults
+[ "$(readlink "${HOME}/.claude/CLAUDE.md")" = "${component}/AGENTS.md" ]
+[ "$(readlink "${HOME}/.config/opencode/AGENTS.md")" = "/tmp/user-custom-agents-missing.md" ]
+
 # No secret, token or preset model is shipped.
 if grep -rnE '"model"|sk-[A-Za-z0-9]{8}|Bearer ' "${component}"; then
     echo "genomics-agents unexpectedly presets a model or carries a credential" >&2

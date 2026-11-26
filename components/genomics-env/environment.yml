@@ -36,7 +36,8 @@ dependencies:
   - ipywidgets==8.1.9
   - anywidget==0.11.0
   - ipycanvas==0.14.3
-  # Pinned in conda to satisfy botocore (<3.0.0) and nf-core (<=3.0.52) without
-  # pip overwriting conda-installed packages.
+  # Pinned in conda so pip never overwrites conda-installed packages
+  # (botocore requires python-dateutil<3.0.0; nf-core/questionary requires
+  # prompt-toolkit<=3.0.52).
   - python-dateutil==2.9.0.post0
   - prompt-toolkit==3.0.52

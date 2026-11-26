@@ -37,7 +37,10 @@ pinned Nextflow commands:
   (`.h5mu`, `.h5ad`, FASTQ/BAM/VCF), and available workflows.
 - `viash-catalog run-cmd <id> [workflow] [--slurm]` prints the exact pinned
   `nextflow run ... -c /etc/scidesktop/nextflow/scidesktop.config -profile apptainer`
-  command.
+  command and checks container architecture compatibility (upstream OpenPipelines
+  and OpenProblems GHCR images currently publish `amd64` manifests only; on
+  `arm64` hosts prefer native EESSI/2025.06 modules, the `genomics` kernel, or
+  custom Viash components).
 - Before launching a Viash or Nextflow pipeline, inspect its `config.vsh.yaml`
   or `nextflow_schema.json` (or run `--help`) to validate parameter names,
   types, and required inputs instead of guessing flags.

@@ -219,10 +219,23 @@ def static():
             if not lock.is_file():
                 fail("S7", f"{rel(env.parent)}: no {lock.name} for {arch}; run ./lock")
 
-    ci = sorted(re.findall(r"^ +- arch: (\S+)$", CI.read_text(), re.M))
+    ci_text = CI.read_text()
+    ci = sorted(re.findall(r"^ +- arch: (\S+)$", ci_text, re.M))
     if ci != sorted(arches):
         fail("S7", f"{rel(CI)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
                    f"components/target-arch lists {', '.join(arches)}")
+    pub_m = re.search(r"^  PUBLISH:\s+(.+)$", ci_text, re.M)
+    att_m = re.search(r"^        image:\s+\[([^\]]+)\]$", ci_text, re.M)
+    brw_m = re.search(r"^          for image in ([^;]+); do$", ci_text, re.M)
+    if pub_m and att_m:
+        pub_imgs = pub_m.group(1).split()
+        att_imgs = [s.strip() for s in att_m.group(1).split(",") if s.strip()]
+        if set(pub_imgs) != set(att_imgs):
+            fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match attest matrix ({', '.join(att_imgs)})")
+        if brw_m:
+            brw_imgs = brw_m.group(1).split()
+            if set(pub_imgs) != set(brw_imgs):
+                fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match browser-smoke loop ({', '.join(brw_imgs)})")
 
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is

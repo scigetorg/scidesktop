@@ -23,8 +23,8 @@ COPY --from=rootfs /rootfs/ /
 
 # On the OS layer with workflow-engines (viash, nextflow, scidesktop.config)
 # and jupyter-env's Python (/opt/conda). Runs offline: verifies catalog schema,
-# CLI subcommands, component scaffolding (native + OCI container bridge),
-# viash test, viash build (executable + nextflow) and offline Nextflow execution.
+# architecture guards, malformed override rejection, symlink safety, container
+# bridging (`directives.container`), viash test, viash build and offline Nextflow.
 FROM os AS test
 COPY --from=workflow-engines / /
 COPY --from=component / /
@@ -36,12 +36,28 @@ RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     && trap 'rm -rf "${HOME}"' EXIT \
     && viash-catalog list | grep -q '^openpipelines' \
     && viash-catalog list --domain genomics | grep -q '^biobox' \
-    && viash-catalog info openpipelines | grep -q 'openpipelines-bio/openpipeline' \
-    && viash-catalog run-cmd openpipelines qc/qc --slurm | grep -q -- '-profile apptainer,slurm' \
-    && viash-catalog json | /opt/conda/bin/python3 -c 'import json, sys; d = json.load(sys.stdin); assert d["schemaVersion"] == 1 and len(d["packages"]) >= 4' \
-    && viash-catalog init count_lines --dir "${HOME}/count_lines" --lang python \
+    && viash-catalog info openpipelines --arch amd64 | grep -q 'openpipelines-bio/openpipeline' \
+    && viash-catalog run-cmd openpipelines qc/qc --slurm --arch amd64 | grep -q -- 'NXF_SYNTAX_PARSER=v1 nextflow run openpipelines-bio/openpipeline.*-profile apptainer,slurm' \
+    && ! viash-catalog run-cmd openpipelines qc/qc --arch arm64 >/dev/null 2>&1 \
+    && viash-catalog run-cmd openpipelines qc/qc --arch arm64 --allow-unsupported-arch 2>"${HOME}/arm_warn.txt" | grep -q -- '-profile apptainer' \
+    && grep -qi 'warning:' "${HOME}/arm_warn.txt" \
+    && ! viash-catalog run-cmd biobox --slurm --arch amd64 >/dev/null 2>&1 \
+    && viash-catalog run-cmd biobox --arch amd64 --revision 0123456789abcdef | grep -q 'git -C biobox checkout 0123456789abcdef' \
+    && viash-catalog json | /opt/conda/bin/python3 -c 'import json, sys; d = json.load(sys.stdin); assert d["schemaVersion"] == 1 and len(d["packages"]) >= 4 and all(p["architectures"] for p in d["packages"])' \
+    && ! viash-catalog init null --dir "${HOME}/bad_null" >/dev/null 2>&1 \
+    && ! viash-catalog init ok_name --dir "${HOME}/bad_img" --image 'bad::ref' >/dev/null 2>&1 \
+    && printf '{"schemaVersion":1,"packages":[{"id":"bad","name":"Bad","kind":"nextflow-workflow","repository":"a/b","version":"v1","domains":["genomics"],"architectures":["amd64"],"description":"x","default_workflow":"missing","workflows":{"w":{"main_script":"a.nf","description":"d"}}}]}\n' > "${HOME}/bad-cat.json" \
+    && ! VIASH_CATALOG_FILE="${HOME}/bad-cat.json" viash-catalog list >/dev/null 2>&1 \
+    && mkdir -p "${HOME}/sym_test" && echo keep > "${HOME}/outside.txt" && ln -s "${HOME}/outside.txt" "${HOME}/sym_test/config.vsh.yaml" \
+    && ! viash-catalog init sym_comp --dir "${HOME}/sym_test" --force >/dev/null 2>&1 \
+    && [ "$(cat "${HOME}/outside.txt")" = "keep" ] \
+    && viash-catalog init bridged_qc --dir "${HOME}/bridged_qc" --lang python \
         --image ghcr.io/scigetorg/scidesktop:latest \
-    && grep -q 'image: ghcr.io/scigetorg/scidesktop:latest' "${HOME}/count_lines/config.vsh.yaml" \
+    && viash test "${HOME}/bridged_qc/config.vsh.yaml" --engine native \
+    && viash build "${HOME}/bridged_qc/config.vsh.yaml" --runner nextflow --output "${HOME}/nf_bridged" \
+    && grep -q '"container" : "ghcr.io/scigetorg/scidesktop:latest"' "${HOME}/nf_bridged/main.nf" \
+    && ! grep -q '"container" : "bridged_qc:latest"' "${HOME}/nf_bridged/main.nf" \
+    && viash-catalog init count_lines --dir "${HOME}/count_lines" --lang python \
     && viash test "${HOME}/count_lines/config.vsh.yaml" --engine native \
     && viash build "${HOME}/count_lines/config.vsh.yaml" --engine native --runner nextflow \
         --output "${HOME}/nf_mod" \

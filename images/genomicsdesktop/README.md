@@ -22,6 +22,12 @@ Viash, OpenPipelines, and EESSI genomics modules (`SAMtools`, `BCFtools`,
 | `genomics-env` | locked Python 3.13 genomics & single-cell kernel (`/opt/genomics-env`) and EESSI genomics catalog/launchers |
 | `genomics-agents` | coding-agent instructions (`/opt/genomics-agents/AGENTS.md`) for Codex, Claude Code, OpenCode and T3 Code |
 
+> **Architecture note:** `genomicsdesktop`, the `genomics` Python kernel,
+> Viash, Nextflow, Snakemake, and EESSI/2025.06 bioinformatics modules run
+> natively on both `amd64` and `arm64`. Curated upstream OpenPipelines and
+> OpenProblems GHCR images currently publish `amd64` manifests only;
+> `viash-catalog run-cmd` checks architecture compatibility automatically.
+
 ```sh
 docker buildx bake genomicsdesktop
 ./test/image-smoke.sh genomicsdesktop

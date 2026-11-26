@@ -184,15 +184,21 @@ if grep -q '"app-eessi-r-bioconductor"' <<<"${servers}"; then
 else
     fail "JupyterLab launcher registers app-eessi-r-bioconductor when EESSI is mounted"
 fi
-
-if docker exec "${NAME}" bash -c '
-    test -r /etc/scidesktop/eessi-catalog.d/20-genomics.txt \
-    && test -r /etc/scidesktop/eessi-apps.d/eessi-fastqc.desktop \
-    && grep -q "SAMtools" /etc/scidesktop/eessi-catalog.d/20-genomics.txt
-' 2>/dev/null; then
-    pass "EESSI genomics catalog notes and fallback FastQC launcher are installed"
+if grep -q '"app-eessi-fastqc"' <<<"${servers}"; then
+    pass "JupyterLab launcher keeps merged domain app-eessi-fastqc even after live EESSI sync"
 else
-    fail "EESSI genomics catalog notes and fallback FastQC launcher are installed"
+    fail "JupyterLab launcher keeps merged domain app-eessi-fastqc even after live EESSI sync"
+fi
+
+if docker exec -u jovyan "${NAME}" bash -lc '
+    eessi-catalog list | grep -q "FastQC (EESSI)" \
+    && eessi-catalog list | grep -q "SAMtools" \
+    && EESSI_CACHE_DIR="$(mktemp -d)" eessi-catalog list | grep -q "FastQC (EESSI)" \
+    && EESSI_CACHE_DIR="$(mktemp -d)" eessi-catalog list | grep -q "SAMtools"
+' 2>/dev/null; then
+    pass "eessi-catalog list shows FastQC and genomics notes in both synced and cold-cache modes"
+else
+    fail "eessi-catalog list shows FastQC and genomics notes in both synced and cold-cache modes"
 fi
 
 bad_execs="$(docker exec "${NAME}" bash -c '

@@ -32,8 +32,6 @@ def conda_names(lock_path: Path) -> set[str]:
 
 conda_64 = conda_names(Path("linux-64.lock"))
 conda_arm = conda_names(Path("linux-aarch64.lock"))
-conda_pkgs = conda_64 & conda_arm
-conda_pkgs_any = conda_64 | conda_arm
 conda_to_pypi = {
     "matplotlib-base": "matplotlib",
     "dask-core": "dask",
@@ -41,11 +39,14 @@ conda_to_pypi = {
     "python-igraph": "igraph",
     "pyyaml": "pyyaml",
 }
-for k, v in list(conda_to_pypi.items()):
-    if k in conda_pkgs:
-        conda_pkgs.add(norm(v))
-    if k in conda_pkgs_any:
-        conda_pkgs_any.add(norm(v))
+for k, v in conda_to_pypi.items():
+    if k in conda_64:
+        conda_64.add(norm(v))
+    if k in conda_arm:
+        conda_arm.add(norm(v))
+conda_pkgs = conda_64 & conda_arm
+conda_pkgs_any = conda_64 | conda_arm
+conda_asym = conda_64 ^ conda_arm
 
 explicit = set()
 for line in Path("requirements.in").read_text().splitlines():
@@ -81,6 +82,11 @@ while i < len(raw_lines):
         if pkg in skip:
             dropped.append(pkg)
             continue
+        if pkg in conda_asym:
+            sys.exit(
+                f"ERROR: PyPI dependency {pkg!r} overlaps with a conda package present on only "
+                "one architecture. Pin it in environment.yml so pip never overwrites conda files."
+            )
         out.extend(block)
         kept += 1
     else:
