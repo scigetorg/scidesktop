@@ -20,6 +20,9 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y curl ca-certificates unzip
+# T3 Code's default settings: the Antigravity provider is on, so Gemini models
+# show in the model picker and only the Google sign-in is left to the user.
+COPY rootfs/ /out/
 RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     : "${ANTIGRAVITY_ACP_VERSION:?}" "${ANTIGRAVITY_ACP_SHA256_AMD64:?}" "${ANTIGRAVITY_ACP_SHA256_ARM64:?}" \
     && case "${TARGETARCH}" in \

@@ -101,6 +101,16 @@ assert pi.get(\"opencode\", {}).get(\"config\", {}).get(\"binaryPath\") == \"/op
         && pass "T3 Code seeds bundled Codex (existing CLI mode) and OpenCode" \
         || fail "T3 Code seeds bundled Codex (existing CLI mode) and OpenCode"
 fi
+if in_session "test -r /opt/scidesktop/manifest.d/antigravity-acp.json"; then
+    in_session '/opt/conda/bin/python -c "
+import json, pathlib
+s = json.loads((pathlib.Path.home() / \".t3/userdata/settings.json\").read_text())
+pi = s.get(\"providerInstances\", {})
+assert pi.get(\"antigravity\") == {\"driver\": \"antigravity\", \"enabled\": True}, pi
+"' \
+        && pass "T3 Code turns on the bundled Antigravity provider" \
+        || fail "T3 Code turns on the bundled Antigravity provider"
+fi
 environment=$(in_session "cat ${STATE}/environment-id")
 
 # A stop ends T3 Code cleanly: it removes its runtime file and closes its

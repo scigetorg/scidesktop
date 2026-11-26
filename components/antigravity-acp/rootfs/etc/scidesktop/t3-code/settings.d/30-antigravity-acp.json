@@ -1,0 +1,8 @@
+{
+  "providerInstances": {
+    "antigravity": {
+      "driver": "antigravity",
+      "enabled": true
+    }
+  }
+}
