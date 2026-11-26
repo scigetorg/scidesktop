@@ -55,7 +55,6 @@ NOT_RENOVATED = {
     "PRECLINICALDESKTOP_IMAGE": "output tag",
     "MOLECULARDESKTOP_IMAGE": "output tag",
     "GENOMICSDESKTOP_IMAGE": "output tag",
-    "AIDESKTOP_IMAGE": "output tag",
     "NEURODESKTOP_IMAGE": "output tag",
     "SLURM_TAG": "tracked by its own Renovate rule (github-tags, regex versioning)",
     "SCIGET_COMMIT": "tracked by its own Renovate rule (git-refs on main)",

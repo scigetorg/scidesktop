@@ -1,6 +1,6 @@
 # AI Ready: the workshop image
 
-`aidesktop` adds Intersect Australia's
+`datadesktop` adds Intersect Australia's
 [AI Ready workshop](https://github.com/IntersectAustralia/ai-ready-containers)
 to scidesktop. Every session runs its own Airflow, MLflow and
 PostgreSQL beside JupyterLab and the desktop. All of it comes from one
@@ -9,9 +9,10 @@ component, `components/ai-ready`, which the image copies
 
 ## Using a session
 
-A session opens the **AI Ready Workshop** page. It links JupyterLab, Airflow,
-MLflow and the desktop; each opens in a new browser tab. JupyterLab's launcher
-has the same Airflow and MLflow links as tiles under **AI Ready**.
+A session opens JupyterLab. Its launcher has **Airflow** and **MLflow** tiles
+under **AI Ready**, beside the desktop's. The **AI Ready Workshop** page at
+`<session>/ai-ready/` links JupyterLab, Airflow, MLflow and the desktop; each
+opens in a new browser tab.
 
 Airflow and MLflow start in the background and are ready about half a minute
 after the session. Until then their pages show an error; reload them.
@@ -99,7 +100,7 @@ session needs a restart.
 ## Deploying
 
 ```python
-c.KubeSpawner.image = "ghcr.io/scigetorg/aidesktop:<short-sha>"
+c.KubeSpawner.image = "ghcr.io/scigetorg/datadesktop:<short-sha>"
 c.KubeSpawner.environment = {"AI_READY_PUBLIC_ORIGIN": "https://hub.example.org"}
 ```
 
@@ -116,7 +117,7 @@ pipeline takes about two minutes. Limits are for the whole session, background
 services included: idle, they hold about 1.1 GB. 8 GB and 4 CPUs leave room to train in a pipeline while
 working in JupyterLab.
 
-**Publishing.** CI publishes `ghcr.io/scigetorg/aidesktop` for amd64 and arm64, tagged as
+**Publishing.** CI publishes `ghcr.io/scigetorg/datadesktop` for amd64 and arm64, tagged as
 scidesktop is
 (see [images.md](images.md#ci-and-publishing)). A new GHCR package starts
 private: make it public or give the cluster a pull secret.
@@ -139,9 +140,9 @@ kernel. It fails the build if upstream changes the code it patches.
 Check an image with:
 
 ```sh
-docker buildx bake aidesktop ai-ready-test
-./test/image-smoke.sh aidesktop       # every check, or only the workshop's:
-./test/ai-ready-smoke.sh aidesktop
+docker buildx bake datadesktop ai-ready-test
+./test/image-smoke.sh datadesktop      # every check, or only the workshop's:
+./test/ai-ready-smoke.sh datadesktop
 ```
 
 The locks cover both architectures: a conda lock each, and pip locks whose

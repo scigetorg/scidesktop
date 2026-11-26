@@ -19,7 +19,7 @@ env:
   # Images pushed to GHCR as ghcr.io/<owner>/<image>. Every folder in images/
   # is built and smoke-tested on every architecture; add a name here to
   # publish it too.
-  PUBLISH: scidesktop microdesktop datadesktop dermdesktop preclinicaldesktop moleculardesktop genomicsdesktop aidesktop neurodesktop
+  PUBLISH: scidesktop microdesktop datadesktop dermdesktop preclinicaldesktop moleculardesktop genomicsdesktop neurodesktop
   # This run's images before they are published: <candidate>-<arch>.
   CANDIDATE: run-${{ github.run_id }}
 
@@ -176,8 +176,8 @@ jobs:
             preclinicaldesktop:ci:/opt/preclinical-env/bin/python
             moleculardesktop:ci:/opt/molecular-imaging-env/bin/python
             genomicsdesktop:ci:/opt/genomics-env/bin/python
-            aidesktop:ci:/opt/ai-ready/env/bin/python
-            aidesktop:ci:/opt/ai-ready/airflow/bin/python
+            datadesktop:ci:/opt/ai-ready/env/bin/python
+            datadesktop:ci:/opt/ai-ready/airflow/bin/python
             neurodesktop:ci:/opt/neuroimaging-env/bin/python
         run: |
           set -euo pipefail
@@ -321,7 +321,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, genomicsdesktop, aidesktop, neurodesktop]
+        image: [scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, genomicsdesktop, neurodesktop]
     permissions:
       contents: read
       packages: write

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Generic scientific workflow engines at /opt/workflow-engines, shared across
-# all desktops (scidesktop, microdesktop, aidesktop, neurodesktop, genomicsdesktop, ...):
+# all desktops (scidesktop, microdesktop, datadesktop, neurodesktop, genomicsdesktop, ...):
 #   - Nextflow (Apache-2.0): offline fat distribution executable
 #   - nf-test (MIT): test runner JAR for Nextflow pipelines
 #   - Viash (GPL-3.0): standalone JVM executable for modular pipeline components

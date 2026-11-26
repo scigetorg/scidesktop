@@ -76,7 +76,7 @@ sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc
 useradd --no-log-init --create-home --shell /bin/bash --uid "${NB_UID}" \
     --gid "${NB_GID}" --no-user-group "${NB_USER}"
 # start.sh registers unknown UIDs in /etc/passwd under Kubernetes foreign-UID
-# deployments (--user <uid>:0, required by PostgreSQL initdb in aidesktop).
+# deployments (--user <uid>:0, required by PostgreSQL initdb in datadesktop).
 # Safe because every SUID/SGID bit and POSIX file capability is stripped below
 # and start.sh locks NoNewPrivs=1.
 chmod g+w /etc/passwd

@@ -74,12 +74,15 @@ def ok(message):
 
 
 def tools():
-    body, url = request("")
-    assert url == BASE + "ai-ready/", f"the session opens {url}"
+    _, url = request("")
+    assert url.startswith(BASE + "lab"), f"the session opens {url}, not JupyterLab"
+    ok("the session opens JupyterLab")
+
+    body, _ = request("ai-ready/")
     links = set(re.findall(r'href="([^"]+)" target="_blank"', body.decode()))
     assert links == {BASE_PATH + path for path in
                      ("lab/tree/ai-ready/notebooks", "airflow/", "mlflow/", "desktop/")}, links
-    ok("the session opens the dashboard, which links JupyterLab, Airflow, MLflow and the desktop")
+    ok("the workshop page links JupyterLab, Airflow, MLflow and the desktop")
 
     tiles = {server["name"]: server["launcher_entry"]
              for server in get_json("server-proxy/servers-info")["server_processes"]}

@@ -1,5 +1,6 @@
 # AI Ready's part of the notebook server's configuration: the Airflow and
 # MLflow tiles, the workshop page, and the wait for the services at shutdown.
+# Sessions still open JupyterLab; the workshop page is at /ai-ready/.
 import sys
 
 # The dashboard handler and the service definitions; Jupyter imports them
@@ -29,8 +30,6 @@ c.ServerProxy.servers.update({  # noqa: F821
 })
 c.ServerApp.extra_services.append("ai_ready_dashboard")  # noqa: F821
 c.ServerApp.extra_template_paths.append("/opt/ai-ready/lib")  # noqa: F821
-c.ServerApp.default_url = "/ai-ready/"  # noqa: F821
-c.LabApp.default_url = "/ai-ready/"  # noqa: F821
 
 # Set by the start hook (40-ai-ready.sh); removed here so kernels and
 # terminals do not inherit it.
