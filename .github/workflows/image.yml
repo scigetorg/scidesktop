@@ -156,7 +156,7 @@ jobs:
         if: matrix.arch == 'amd64'
         run: |
           failed=0
-          for image in scidesktop microdesktop datadesktop dermdesktop preclinicaldesktop moleculardesktop genomicsdesktop aidesktop neurodesktop; do
+          for image in ${PUBLISH}; do
               echo "::group::browser-smoke ${image}"
               ./test/browser-smoke.sh "${image}:ci" || failed=1
               echo "::endgroup::"
@@ -166,6 +166,19 @@ jobs:
       # Vulnerability scan of built images (single Trivy pass per image using a
       # SHA-verified binary) plus hashed pip-audit across all Python environments.
       - name: Vulnerability scan (Trivy & Python pip-audit)
+        env:
+          PIP_AUDIT_SPECS: >-
+            scidesktop:ci:/opt/conda/bin/python
+            scidesktop:ci:/opt/selkies/bin/python
+            microdesktop:ci:/opt/microscopy-env/bin/python
+            datadesktop:ci:/opt/datascience-env/bin/python
+            dermdesktop:ci:/opt/dermatology-env/bin/python
+            preclinicaldesktop:ci:/opt/preclinical-env/bin/python
+            moleculardesktop:ci:/opt/molecular-imaging-env/bin/python
+            genomicsdesktop:ci:/opt/genomics-env/bin/python
+            aidesktop:ci:/opt/ai-ready/env/bin/python
+            aidesktop:ci:/opt/ai-ready/airflow/bin/python
+            neurodesktop:ci:/opt/neuroimaging-env/bin/python
         run: |
           set -euo pipefail
           ver="0.76.2"
@@ -216,18 +229,7 @@ jobs:
           python3 -m venv /tmp/pip-audit-venv
           /tmp/pip-audit-venv/bin/pip install --quiet --no-deps --require-hashes \
               -r .github/requirements/pip-audit.txt
-          for spec in \
-              "scidesktop:ci:/opt/conda/bin/python" \
-              "scidesktop:ci:/opt/selkies/bin/python" \
-              "microdesktop:ci:/opt/microscopy-env/bin/python" \
-              "datadesktop:ci:/opt/datascience-env/bin/python" \
-              "dermdesktop:ci:/opt/dermatology-env/bin/python" \
-              "preclinicaldesktop:ci:/opt/preclinical-env/bin/python" \
-              "moleculardesktop:ci:/opt/molecular-imaging-env/bin/python" \
-              "genomicsdesktop:ci:/opt/genomics-env/bin/python" \
-              "aidesktop:ci:/opt/ai-ready/env/bin/python" \
-              "aidesktop:ci:/opt/ai-ready/airflow/bin/python" \
-              "neurodesktop:ci:/opt/neuroimaging-env/bin/python"; do
+          for spec in ${PIP_AUDIT_SPECS}; do
               img="${spec%:*}"
               py="${spec##*:}"
               echo "::group::pip-audit ${img} ${py}"

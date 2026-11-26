@@ -264,46 +264,63 @@ def static():
         elif set(pub_imgs) != {str(x) for x in att_imgs}:
             fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match attest matrix ({', '.join(map(str, att_imgs))})")
 
-        # Browser smoke step(s): every step in jobs.build whose `run` invokes ./test/browser-smoke.sh
+        # Browser smoke step: must loop over ${PUBLISH} and invoke ./test/browser-smoke.sh "${image}:ci".
         build_steps = build_job.get("steps") or []
-        browser_steps = [
-            s for s in build_steps
-            if isinstance(s, dict) and isinstance(s.get("run"), str)
-            and "./test/browser-smoke.sh" in strip_shell_comments(s["run"])
-        ]
-        if not browser_steps:
-            fail("S6", f"{rel(CI)}: no step in jobs.build invokes ./test/browser-smoke.sh")
-        else:
-            for step in browser_steps:
-                code = strip_shell_comments(step["run"])
-                brw_m = re.search(r"^\s*for image in ([^;]+); do$", code, re.M)
-                if not brw_m:
-                    fail("S6", f"{rel(CI)}: step {step.get('name')!r} runs browser-smoke.sh without a parseable `for image in ...; do` loop")
-                else:
-                    brw_imgs = brw_m.group(1).split()
-                    if set(pub_imgs) != set(brw_imgs):
-                        fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match browser-smoke loop in {step.get('name')!r} ({', '.join(brw_imgs)})")
+        browser_ok = False
+        for step in build_steps:
+            if not (isinstance(step, dict) and isinstance(step.get("run"), str)):
+                continue
+            code = strip_shell_comments(step["run"])
+            loop_m = re.search(
+                r"^\s*for\s+image\s+in\s+\$\{PUBLISH\}\s*;\s*do\s*\n(.*?)^\s*done\b",
+                code,
+                re.M | re.S,
+            )
+            if loop_m and re.search(
+                r'^\s*\./test/browser-smoke\.sh\s+"\$\{image\}:ci"(?:\s|$)',
+                loop_m.group(1),
+                re.M,
+            ):
+                browser_ok = True
+                break
+        if not browser_ok:
+            fail("S6", f"{rel(CI)}: jobs.build must have a step looping `for image in ${{PUBLISH}}; do` that runs `./test/browser-smoke.sh \"${{image}}:ci\"`")
 
-        # Installed Python pip-audit step(s): every step in jobs.build invoking pip-audit
-        audit_steps = [
-            s for s in build_steps
-            if isinstance(s, dict) and isinstance(s.get("run"), str)
-            and "pip-audit" in strip_shell_comments(s["run"])
-        ]
-        if not audit_steps:
-            fail("S6", f"{rel(CI)}: no step in jobs.build invokes pip-audit")
+        # Installed Python pip-audit step: must declare env.PIP_AUDIT_SPECS covering
+        # every published image's domain *-env interpreter and execute pip-audit in a loop over it.
+        audit_step = None
+        for step in build_steps:
+            if not (isinstance(step, dict) and isinstance(step.get("run"), str)):
+                continue
+            specs_val = (step.get("env") or {}).get("PIP_AUDIT_SPECS")
+            if not isinstance(specs_val, str):
+                continue
+            code = strip_shell_comments(step["run"])
+            loop_m = re.search(
+                r"^\s*for\s+spec\s+in\s+\$\{PIP_AUDIT_SPECS\}\s*;\s*do\s*\n(.*?)^\s*done\b",
+                code,
+                re.M | re.S,
+            )
+            if loop_m and re.search(
+                r"^\s*/tmp/pip-audit-venv/bin/pip-audit\s+",
+                loop_m.group(1),
+                re.M,
+            ):
+                audit_step = (step, specs_val.split())
+                break
+        if audit_step is None:
+            fail("S6", f"{rel(CI)}: jobs.build must have a step with env.PIP_AUDIT_SPECS looped into `/tmp/pip-audit-venv/bin/pip-audit`")
         else:
-            for step in audit_steps:
-                vuln_code = strip_shell_comments(step["run"])
-                audited = set(re.findall(r'"([a-z0-9-]+):ci:(/opt/[^"]+)"', vuln_code))
-                for img in pub_imgs:
-                    if img not in targets:
-                        continue
-                    for comp in sorted(image_components(targets, img)):
-                        if comp.endswith("-env") and comp != "jupyter-env":
-                            expected_spec = (img, f"/opt/{comp}/bin/python")
-                            if expected_spec not in audited:
-                                fail("S6", f"{rel(CI)}: published image {img} holds {comp}, but pip-audit step {step.get('name')!r} omits {expected_spec[0]}:ci:{expected_spec[1]}")
+            step, specs = audit_step
+            audited = set(specs)
+            for img in pub_imgs:
+                if img not in targets:
+                    continue
+                for comp in sorted(image_components(targets, img)):
+                    if comp.endswith("-env") and comp != "jupyter-env":
+                        expected_spec = f"{img}:ci:/opt/{comp}/bin/python"
+                        if expected_spec not in audited:
+                            fail("S6", f"{rel(CI)}: published image {img} holds {comp}, but env.PIP_AUDIT_SPECS in {step.get('name')!r} omits {expected_spec}")
 
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is
