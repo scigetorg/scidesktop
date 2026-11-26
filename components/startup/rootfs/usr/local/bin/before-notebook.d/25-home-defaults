@@ -14,7 +14,8 @@ while IFS= read -r -d "" f; do
     rel="${f#./}"
     dest="$2/${rel}"
     if [ -L "${dest}" ] && [ ! -e "${dest}" ]; then
-        target="$(readlink "${dest}" 2>/dev/null || true)"
+        target="$(readlink -n "${dest}" 2>/dev/null && printf X || true)"
+        target="${target%X}"
         case "${rel}" in
             .codex/AGENTS.md|.claude/CLAUDE.md|.config/opencode/AGENTS.md)
                 if [ -L "${f}" ] && [[ "${target}" =~ ^/opt/[a-z0-9-]+-agents/AGENTS\.md$ ]]; then

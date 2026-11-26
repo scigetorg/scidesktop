@@ -224,37 +224,88 @@ def static():
     if ci != sorted(arches):
         fail("S7", f"{rel(CI)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
                    f"components/target-arch lists {', '.join(arches)}")
-    pub_m = re.search(r"^  PUBLISH:\s+(.+)$", ci_text, re.M)
+    def yaml_strip_comment(line: str) -> str:
+        in_sq = in_dq = False
+        for idx, ch in enumerate(line):
+            if ch == "'" and not in_dq:
+                in_sq = not in_sq
+            elif ch == '"' and not in_sq:
+                in_dq = not in_dq
+            elif ch == "#" and not in_sq and not in_dq and (idx == 0 or line[idx - 1].isspace()):
+                return line[:idx].rstrip()
+        return line.rstrip()
+
+    def yaml_job_block(text: str, job_name: str) -> str:
+        m = re.search(rf"^  {re.escape(job_name)}:\s*\n", text, re.M)
+        if not m:
+            return ""
+        rest = text[m.end():]
+        nxt = re.search(r"^(?:  [A-Za-z0-9_-]+:|[A-Za-z0-9_-]+:)", rest, re.M)
+        return rest[:nxt.start()] if nxt else rest
+
+    def yaml_step_block(job_block: str, step_name_prefix: str) -> str:
+        m = re.search(rf"^      - name:\s+{re.escape(step_name_prefix)}[^\n]*\n", job_block, re.M)
+        if not m:
+            return ""
+        rest = job_block[m.end():]
+        nxt = re.search(r"^      - ", rest, re.M)
+        return rest[:nxt.start()] if nxt else rest
+
+    pub_m = re.search(r"^env:\n(?:[ \t].*\n)*?^  PUBLISH:\s+(.+)$", ci_text, re.M)
     if not pub_m:
-        fail("S6", f"{rel(CI)}: could not parse PUBLISH list")
+        fail("S6", f"{rel(CI)}: could not parse env.PUBLISH list")
     else:
-        pub_imgs = pub_m.group(1).split()
-        # Attestation matrix (supports inline `image: [...]` and block `- img` YAML)
-        att_section = re.search(r"^  attest:\n([\s\S]+)$", ci_text, re.M)
+        pub_imgs = yaml_strip_comment(pub_m.group(1)).split()
+
+        # Attestation matrix scoped strictly to jobs.attest (inline or block YAML, comments stripped)
+        att_block = yaml_job_block(ci_text, "attest")
         att_imgs = None
-        if att_section:
-            att_block = att_section.group(1)
-            inline_m = re.search(r"^\s+image:\s+\[([^\]]+)\]", att_block, re.M)
-            block_m = re.search(r"^\s+image:\s*\n((?:\s+-\s+\S+\n)+)", att_block, re.M)
-            if inline_m:
-                att_imgs = [s.strip() for s in inline_m.group(1).split(",") if s.strip()]
-            elif block_m:
-                att_imgs = re.findall(r"^\s+-\s+(\S+)", block_m.group(1), re.M)
+        if att_block:
+            att_lines = [yaml_strip_comment(ln) for ln in att_block.splitlines()]
+            for i, ln in enumerate(att_lines):
+                im = re.match(r"^(\s+)image:\s*(.*)$", ln)
+                if not im:
+                    continue
+                indent, val = len(im.group(1)), im.group(2).strip()
+                if val.startswith("[") and val.endswith("]"):
+                    att_imgs = [s.strip().strip("'\"") for s in val[1:-1].split(",") if s.strip()]
+                elif val == "":
+                    items = []
+                    for sub in att_lines[i + 1:]:
+                        if not sub.strip():
+                            continue
+                        sub_indent = len(sub) - len(sub.lstrip())
+                        if sub_indent <= indent:
+                            break
+                        bm = re.match(r"^\s+-\s+(\S+)$", sub)
+                        if bm:
+                            items.append(bm.group(1).strip("'\""))
+                    att_imgs = items
+                break
         if not att_imgs:
-            fail("S6", f"{rel(CI)}: could not parse attest.strategy.matrix.image")
+            fail("S6", f"{rel(CI)}: could not parse jobs.attest.strategy.matrix.image")
         elif set(pub_imgs) != set(att_imgs):
             fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match attest matrix ({', '.join(att_imgs)})")
 
-        brw_m = re.search(r"^          for image in ([^;]+); do$", ci_text, re.M)
+        # Browser smoke loop scoped strictly to the Browser & WebGL2 smoke step in jobs.build
+        build_block = yaml_job_block(ci_text, "build")
+        browser_step = yaml_step_block(build_block, "Browser & WebGL2 smoke")
+        brw_m = re.search(
+            r"^\s+for image in ([^;]+); do$",
+            "\n".join(yaml_strip_comment(ln) for ln in browser_step.splitlines()),
+            re.M,
+        )
         if not brw_m:
-            fail("S6", f"{rel(CI)}: could not parse browser-smoke image loop")
+            fail("S6", f"{rel(CI)}: could not parse Browser & WebGL2 smoke image loop")
         else:
             brw_imgs = brw_m.group(1).split()
             if set(pub_imgs) != set(brw_imgs):
                 fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match browser-smoke loop ({', '.join(brw_imgs)})")
 
-        # Installed Python pip-audit must cover every domain *-env kernel copied by a published image.
-        audited = set(re.findall(r'"([a-z0-9-]+):ci:(/opt/[^"]+)"', ci_text))
+        # Installed Python pip-audit scoped strictly to the Vulnerability scan step (ignoring comments)
+        vuln_step = yaml_step_block(build_block, "Vulnerability scan")
+        vuln_code = "\n".join(yaml_strip_comment(ln) for ln in vuln_step.splitlines())
+        audited = set(re.findall(r'"([a-z0-9-]+):ci:(/opt/[^"]+)"', vuln_code))
         for img in pub_imgs:
             if img not in targets:
                 continue

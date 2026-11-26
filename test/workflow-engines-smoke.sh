@@ -147,7 +147,7 @@ NF
         printf "%s\n" "${nf_slurm_log}"
         exit 1
     }
-    nf_slurm_out="$(find "${work}/nf-slurm-work" -type f -name nf-slurm.txt -exec cat {} +)"
+    nf_slurm_out="$(find "${work}/nf-slurm-work" -type f -name nf-slurm.txt -exec cat {} + 2>/dev/null || true)"
     if grep -qE "^nextflow-slurm-ok job=[0-9]+$" <<<"${nf_slurm_out}"; then
         echo "nextflow_slurm_run=ok"
     else

@@ -170,46 +170,50 @@ session_apps_dir() {
         return 0
     fi
 
-    src_dir="$(active_apps_dir_for_sources "${expected}")"
-    if [ -z "${src_dir}" ] || [ "${src_dir}" = "${STATIC_APPS_DIR}" ]; then
+    if ! cache_matches_sources_for "${expected}"; then
         exec {lock_fd}>&-
-        [ -n "${src_dir}" ] && printf '%s\n' "${src_dir}"
+        [ -d "${STATIC_APPS_DIR}" ] && printf '%s\n' "${STATIC_APPS_DIR}"
         return 0
     fi
 
     local merged_json="${ns_dir}/current/merged.json"
-    local -A live_tools=()
+    local -A live_filenames=()
     if [ -f "${merged_json}" ]; then
-        local tid
+        local tid slug
         while IFS= read -r tid; do
-            [ -n "${tid}" ] && live_tools["${tid}"]=1
+            [ -n "${tid}" ] || continue
+            live_filenames["eessi-${tid}.desktop"]=1
+            slug="$(desktop_slug "${tid}")"
+            [ -n "${slug}" ] && live_filenames["eessi-${slug}.desktop"]=1
         done < <(jq -r '.tools | keys[]' "${merged_json}" 2>/dev/null || true)
     fi
 
+    src_dir="$(readlink -f -- "${ns_dir}/current/applications" 2>/dev/null || true)"
     session_root="${EESSI_SESSION_APPS_ROOT:-/tmp}"
     mkdir -p "${session_root}"
     session_dir="$(mktemp -d "${session_root}/scidesktop-eessi-apps.XXXXXX")"
     STAGING_DIR="${session_dir}"
     chmod 0755 "${session_dir}"
-    for f in "${src_dir}"/*.desktop; do
-        [ -f "${f}" ] || continue
-        cp -- "${f}" "${session_dir}/"
-        chmod 0644 "${session_dir}/$(basename "${f}")"
-        copied=$((copied + 1))
-    done
+    if [ -n "${src_dir}" ] && [ -d "${src_dir}" ]; then
+        for f in "${src_dir}"/*.desktop; do
+            [ -f "${f}" ] || continue
+            cp -- "${f}" "${session_dir}/"
+            chmod 0644 "${session_dir}/$(basename "${f}")"
+            copied=$((copied + 1))
+        done
+    fi
     exec {lock_fd}>&-
 
-    # Merge any image-bundled domain launchers whose tool ID is NOT managed by
-    # the live catalog (so live entries win on collision and tools explicitly
-    # hidden with `show_in_menu: false` stay hidden).
+    # Merge any image-bundled domain launchers whose canonical filename is NOT
+    # managed by the live catalog (so live entries win on collision and tools
+    # explicitly hidden with `show_in_menu: false` stay hidden, even when a
+    # synced catalog has zero visible launchers).
     if [ -d "${STATIC_APPS_DIR}" ]; then
-        local base tool_id
+        local base
         for f in "${STATIC_APPS_DIR}"/*.desktop; do
             [ -f "${f}" ] || continue
             base="$(basename "${f}")"
-            tool_id="${base#eessi-}"
-            tool_id="${tool_id%.desktop}"
-            [ -z "${live_tools[${tool_id}]+x}" ] || continue
+            [ -z "${live_filenames[${base}]+x}" ] || continue
             if [ ! -e "${session_dir}/${base}" ]; then
                 cp -- "${f}" "${session_dir}/${base}"
                 chmod 0644 "${session_dir}/${base}"
@@ -218,13 +222,6 @@ session_apps_dir() {
         done
     fi
 
-    if [ "${copied}" -eq 0 ]; then
-        cleanup_staging
-        if [ -d "${STATIC_APPS_DIR}" ]; then
-            printf '%s\n' "${STATIC_APPS_DIR}"
-        fi
-        return 0
-    fi
     STAGING_DIR=""
     printf '%s\n' "${session_dir}"
 }
@@ -593,51 +590,60 @@ show_catalog() {
     echo "  module avail"
     echo "  eessi-catalog sync    # refresh curated catalog & JupyterLab launchers"
 
-    local expected="" apps_dir
+    local expected="" synced=0 ns_dir="" synced_apps_dir=""
     if ! expected="$(resolve_sources 2>/dev/null)"; then
         expected=""
     fi
-    apps_dir="$(active_apps_dir_for_sources "${expected}")"
-    if [ -n "${apps_dir}" ] && [ -d "${apps_dir}" ]; then
-        echo
-        echo "Desktop launchers (shown in JupyterLab EESSI section when EESSI is mounted):"
-        local f base name exec_cmd
-        local -A seen_launchers=()
-        for f in "${apps_dir}"/*.desktop; do
-            [ -f "${f}" ] || continue
-            base="$(basename "${f}")"
-            seen_launchers["${base}"]=1
-            name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
-            exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
-            printf '  - %-32s %s\n' "${name}" "${exec_cmd}"
-        done
-        if [ "${apps_dir}" != "${STATIC_APPS_DIR}" ] && [ -d "${STATIC_APPS_DIR}" ]; then
-            local -A live_tools=()
-            if [ -n "${expected}" ] && cache_matches_sources_for "${expected}"; then
-                local _ns_dir tid
-                _ns_dir="$(namespace_dir_for_sources "${expected}")"
-                while IFS= read -r tid; do
-                    [ -n "${tid}" ] && live_tools["${tid}"]=1
-                done < <(jq -r '.tools | keys[]' "${_ns_dir}/current/merged.json" 2>/dev/null || true)
-            fi
-            local tool_id
-            for f in "${STATIC_APPS_DIR}"/*.desktop; do
+    if [ -n "${expected}" ] && cache_matches_sources_for "${expected}"; then
+        synced=1
+        ns_dir="$(namespace_dir_for_sources "${expected}")"
+        synced_apps_dir="$(readlink -f -- "${ns_dir}/current/applications" 2>/dev/null || true)"
+    fi
+
+    echo
+    echo "Desktop launchers (shown in JupyterLab EESSI section when EESSI is mounted):"
+    local f base name exec_cmd
+    local -A seen_launchers=()
+    local -A live_filenames=()
+    if [ "${synced}" -eq 1 ]; then
+        local tid slug
+        while IFS= read -r tid; do
+            [ -n "${tid}" ] || continue
+            live_filenames["eessi-${tid}.desktop"]=1
+            slug="$(desktop_slug "${tid}")"
+            [ -n "${slug}" ] && live_filenames["eessi-${slug}.desktop"]=1
+        done < <(jq -r '.tools | keys[]' "${ns_dir}/current/merged.json" 2>/dev/null || true)
+        if [ -n "${synced_apps_dir}" ] && [ -d "${synced_apps_dir}" ]; then
+            for f in "${synced_apps_dir}"/*.desktop; do
                 [ -f "${f}" ] || continue
                 base="$(basename "${f}")"
-                tool_id="${base#eessi-}"
-                tool_id="${tool_id%.desktop}"
-                [ -z "${seen_launchers[${base}]+x}" ] || continue
-                [ -z "${live_tools[${tool_id}]+x}" ] || continue
+                seen_launchers["${base}"]=1
                 name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
                 exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
                 printf '  - %-32s %s\n' "${name}" "${exec_cmd}"
             done
         fi
+        if [ -d "${STATIC_APPS_DIR}" ]; then
+            for f in "${STATIC_APPS_DIR}"/*.desktop; do
+                [ -f "${f}" ] || continue
+                base="$(basename "${f}")"
+                [ -z "${seen_launchers[${base}]+x}" ] || continue
+                [ -z "${live_filenames[${base}]+x}" ] || continue
+                name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
+                exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
+                printf '  - %-32s %s\n' "${name}" "${exec_cmd}"
+            done
+        fi
+    elif [ -d "${STATIC_APPS_DIR}" ]; then
+        for f in "${STATIC_APPS_DIR}"/*.desktop; do
+            [ -f "${f}" ] || continue
+            name="$(sed -n 's/^Name=//p' "${f}" | head -n 1)"
+            exec_cmd="$(sed -n 's/^Exec=//p' "${f}" | head -n 1)"
+            printf '  - %-32s %s\n' "${name}" "${exec_cmd}"
+        done
     fi
 
-    if [ -n "${expected}" ] && cache_matches_sources_for "${expected}"; then
-        local ns_dir
-        ns_dir="$(namespace_dir_for_sources "${expected}")"
+    if [ "${synced}" -eq 1 ]; then
         echo
         echo "Curated EESSI modules from live catalog (explicit selection; no DOI):"
         jq -r '

@@ -258,17 +258,18 @@ JSON
         }
       }
     },
-    "paraview": {
-      "package": "ParaView",
-      "categories": ["visualization"],
+    "r-bundle-bioconductor": {
+      "package": "R-bundle-Bioconductor",
+      "categories": ["biology"],
       "apps": {
-        "ParaView Live (EESSI/2025.06)": {
+        "R + Bioconductor Hidden (EESSI/2025.06)": {
           "backend": "eessi",
           "stack": "2025.06",
-          "module": "ParaView/6.0.1-foss-2025b",
-          "exec": ["paraview"],
-          "gui": true,
-          "show_in_menu": true
+          "module": "R-bundle-Bioconductor/3.22-foss-2025b-R-4.5.2",
+          "exec": ["R"],
+          "gui": false,
+          "terminal": true,
+          "show_in_menu": false
         }
       }
     }
@@ -278,7 +279,10 @@ JSON
     EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/hide-fastqc.eessi.json" eessi-catalog sync
     hdir="$(EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/hide-fastqc.eessi.json" EESSI_SESSION_APPS_ROOT="${fx}/happs" eessi-catalog session-apps-dir)"
     [ ! -e "${hdir}/eessi-fastqc.desktop" ]
-    ! EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/hide-fastqc.eessi.json" eessi-catalog list | grep -q "FastQC (EESSI)"
+    [ ! -e "${hdir}/eessi-r-bioconductor.desktop" ]
+    hlist="$(EESSI_CACHE_DIR="${fx}/cache" EESSI_CATALOG_FILES="${fx}/hide-fastqc.eessi.json" eessi-catalog list)"
+    if grep -q "FastQC (EESSI)" <<<"${hlist}"; then exit 1; fi
+    if grep -q "R + Bioconductor (EESSI)" <<<"${hlist}"; then exit 1; fi
     rm -rf "${fx}"
 ' 2>/dev/null; then
     pass "eessi-catalog fixture tests pass (live collision, FastQC merge, show_in_menu=false hide, cold-cache & synced notes)"

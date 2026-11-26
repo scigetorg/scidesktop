@@ -630,6 +630,13 @@ Name=Hidden Tool (EESSI)
 Exec=/usr/local/bin/eessi-launch HiddenTool hiddentool
 X-Scidesktop-Category=EESSI
 EOF
+cat >"${tmp}/static-apps/eessi-r-bioconductor.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=R + Bioconductor (EESSI)
+Exec=/usr/local/bin/eessi-launch R-bundle-Bioconductor xfce4-terminal --disable-server -e R
+X-Scidesktop-Category=EESSI
+EOF
 cat >"${tmp}/merge-fixture.eessi.json" <<'EOF'
 {
   "schemaVersion": 1,
@@ -665,6 +672,21 @@ cat >"${tmp}/merge-fixture.eessi.json" <<'EOF'
           "show_in_menu": false
         }
       }
+    },
+    "r-bundle-bioconductor": {
+      "package": "R-bundle-Bioconductor",
+      "categories": ["biology"],
+      "apps": {
+        "R + Bioconductor Hidden (EESSI/2025.06)": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "R-bundle-Bioconductor/3.22-foss-2025b-R-4.5.2",
+          "exec": ["R"],
+          "gui": false,
+          "terminal": true,
+          "show_in_menu": false
+        }
+      }
     }
   }
 }
@@ -676,11 +698,49 @@ merged_dir="$(EESSI_CACHE_DIR="${cache}" EESSI_STATIC_APPS_DIR="${tmp}/static-ap
 grep -q '^Name=ParaView Live (EESSI/2025\.06)$' "${merged_dir}/eessi-paraview.desktop"
 test -f "${merged_dir}/eessi-fastqc.desktop"
 [ ! -e "${merged_dir}/eessi-hidden-tool.desktop" ]
+[ ! -e "${merged_dir}/eessi-r-bioconductor.desktop" ]
 merged_list="$(EESSI_CACHE_DIR="${cache}" EESSI_STATIC_APPS_DIR="${tmp}/static-apps" \
     EESSI_CATALOG_FILES="${tmp}/merge-fixture.eessi.json" /usr/local/bin/eessi-catalog list)"
 grep -q 'ParaView Live (EESSI/2025\.06)' <<<"${merged_list}"
 grep -q 'FastQC (EESSI)' <<<"${merged_list}"
-! grep -q 'Hidden Tool (EESSI)' <<<"${merged_list}"
+if grep -q 'Hidden Tool (EESSI)' <<<"${merged_list}"; then echo "FAIL: hidden-tool reappeared" >&2; exit 1; fi
+if grep -q 'R + Bioconductor (EESSI)' <<<"${merged_list}"; then echo "FAIL: hidden r-bundle-bioconductor reappeared" >&2; exit 1; fi
+
+# Zero visible launchers in a synced catalog still hides its managed tools.
+cat >"${tmp}/all-hidden.eessi.json" <<'EOF'
+{
+  "schemaVersion": 1,
+  "backend": "eessi",
+  "explicitSelectionRequired": true,
+  "cvmfsRepo": "software.eessi.io",
+  "stacks": ["2025.06"],
+  "tools": {
+    "fastqc": {
+      "package": "FastQC",
+      "categories": ["biology"],
+      "apps": {
+        "FastQC Hidden (EESSI/2025.06)": {
+          "backend": "eessi",
+          "stack": "2025.06",
+          "module": "FastQC/0.12.1-Java-11",
+          "exec": ["fastqc"],
+          "gui": true,
+          "show_in_menu": false
+        }
+      }
+    }
+  }
+}
+EOF
+EESSI_CACHE_DIR="${cache}" EESSI_CATALOG_FILES="${tmp}/all-hidden.eessi.json" /usr/local/bin/eessi-catalog sync
+all_hidden_dir="$(EESSI_CACHE_DIR="${cache}" EESSI_STATIC_APPS_DIR="${tmp}/static-apps" \
+    EESSI_SESSION_APPS_ROOT="${tmp}/session-apps" \
+    EESSI_CATALOG_FILES="${tmp}/all-hidden.eessi.json" /usr/local/bin/eessi-catalog session-apps-dir)"
+[ ! -e "${all_hidden_dir}/eessi-fastqc.desktop" ]
+test -f "${all_hidden_dir}/eessi-paraview.desktop"
+all_hidden_list="$(EESSI_CACHE_DIR="${cache}" EESSI_STATIC_APPS_DIR="${tmp}/static-apps" \
+    EESSI_CATALOG_FILES="${tmp}/all-hidden.eessi.json" /usr/local/bin/eessi-catalog list)"
+if grep -q 'FastQC (EESSI)' <<<"${all_hidden_list}"; then echo "FAIL: hidden fastqc reappeared in zero-visible catalog" >&2; exit 1; fi
 
 # Static fallback .desktop entries also belong to the explicit EESSI category.
 for f in /etc/scidesktop/eessi-apps.d/*.desktop; do

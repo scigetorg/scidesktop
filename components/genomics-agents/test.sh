@@ -29,10 +29,13 @@ echo mine > "${HOME}/.codex/AGENTS.md.new" && mv "${HOME}/.codex/AGENTS.md.new" 
 ln -sf /opt/neurodesk-agents/AGENTS.md "${HOME}/.claude/CLAUDE.md"
 ln -sf /opt/local/custom-agents/AGENTS.md "${HOME}/.config/opencode/AGENTS.md"
 ln -sf /opt/local/custom-agents/config.toml "${HOME}/.codex/config.toml"
+ln -sf $'/opt/neurodesk-agents/AGENTS.md\n' "${HOME}/.codex/AGENTS.md"
 /usr/local/bin/before-notebook.d/25-home-defaults
 [ "$(readlink "${HOME}/.claude/CLAUDE.md")" = "${component}/AGENTS.md" ]
 [ "$(readlink "${HOME}/.config/opencode/AGENTS.md")" = "/opt/local/custom-agents/AGENTS.md" ]
 [ "$(readlink "${HOME}/.codex/config.toml")" = "/opt/local/custom-agents/config.toml" ]
+nl_target="$(readlink -n "${HOME}/.codex/AGENTS.md" && printf X)"
+[ "${nl_target%X}" = $'/opt/neurodesk-agents/AGENTS.md\n' ]
 
 # No secret, token or preset model is shipped.
 if grep -rnE '"model"|sk-[A-Za-z0-9]{8}|Bearer ' "${component}"; then
