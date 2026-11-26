@@ -1,7 +1,8 @@
 [
   {
     "name": "datascience",
-    "url": "https://apps-catalog.scigetorg.workers.dev/datascience/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "datascience",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   }

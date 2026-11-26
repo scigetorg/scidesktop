@@ -1,7 +1,8 @@
 [
   {
     "name": "molecular-imaging",
-    "url": "https://apps-catalog.scigetorg.workers.dev/molecular-imaging/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "molecular-imaging",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   }

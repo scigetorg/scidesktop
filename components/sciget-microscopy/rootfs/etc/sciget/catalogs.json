@@ -1,7 +1,8 @@
 [
   {
     "name": "microscopy",
-    "url": "https://apps-catalog.scigetorg.workers.dev/microscopy/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "microscopy",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   }

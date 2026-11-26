@@ -1,43 +1,50 @@
 [
   {
     "name": "neuroimaging",
-    "url": "https://apps-catalog.scigetorg.workers.dev/neuroimaging/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "neuroimaging",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   },
   {
     "name": "microscopy",
-    "url": "https://apps-catalog.scigetorg.workers.dev/microscopy/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "microscopy",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   },
   {
     "name": "datascience",
-    "url": "https://apps-catalog.scigetorg.workers.dev/datascience/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "datascience",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   },
   {
     "name": "dermatology",
-    "url": "https://apps-catalog.scigetorg.workers.dev/dermatology/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "dermatology",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   },
   {
     "name": "preclinical",
-    "url": "https://apps-catalog.scigetorg.workers.dev/preclinical/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "preclinical",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   },
   {
     "name": "molecular-imaging",
-    "url": "https://apps-catalog.scigetorg.workers.dev/molecular-imaging/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "molecular-imaging",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   },
   {
     "name": "genomics",
-    "url": "https://apps-catalog.scigetorg.workers.dev/genomics/apps.json",
+    "url": "https://apps-catalog.scigetorg.workers.dev/domains.json",
+    "domain": "genomics",
     "use": true,
     "dir": "/cvmfs/neurodesk.ardc.edu.au/containers"
   }
