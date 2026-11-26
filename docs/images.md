@@ -245,7 +245,9 @@ to the workflow.
   Nothing is pushed.
   The Actions cache holds 10 GB for the repository and evicts the rest. A
   build that fails because a cached layer was evicted while it ran is run
-  once more without the cache; any other failure stands.
+  once more without the cache; any other failure stands. Writing the cache
+  is best effort: GitHub throttles cache writes, and a build that passed
+  does not fail because its layers could not be saved.
 - **Pushes to `main`:** the same jobs, then each pushes the images named in
   `PUBLISH` to `ghcr.io/<owner>/<image>` under a candidate tag,
   `run-<run id>-<arch>`. When both architectures have passed, the `publish`
