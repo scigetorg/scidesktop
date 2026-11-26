@@ -29,6 +29,11 @@ def main():
     ldd = subprocess.run(["ldd", str(harness)], capture_output=True, text=True, check=False)
     assert "not found" not in ldd.stdout, ldd.stdout
 
+    defaults = json.loads(
+        pathlib.Path("/etc/scidesktop/t3-code/settings.d/30-antigravity-acp.json").read_text()
+    )
+    assert defaults == {"providerInstances": {"antigravity": {"driver": "antigravity", "enabled": True}}}, defaults
+
     with tempfile.TemporaryDirectory(prefix="agy-acp-test-") as tmp:
         env = dict(os.environ)
         env["HOME"] = tmp

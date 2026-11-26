@@ -45,6 +45,9 @@ configuration under `providerInstances`. Because T3 0.1.5 writes
 bookkeeping, that exact legacy entry is treated as inert on upgrade; to disable
 OpenCode persistently, turn it off in T3 Code's **Settings → Providers** (which
 records `providerInstances.opencode.enabled: false` and is always preserved).
+When `antigravity-acp` is installed, the Antigravity provider (Google's Gemini
+models) is also on by default; sign in with a Google account in T3 Code's
+provider settings.
 Sign in to an agent in a terminal first, or in T3 Code's provider settings,
 where each agent can also be turned on or off.
 
