@@ -89,7 +89,7 @@ printf 'allow_local: false\noffers:\n  - {name: mine, provider: slurm, resources
     || fail "LC_COMPUTE_CONFIG ignored"
 cp "${HOME}/own.yaml" "${HOME}/.lightcone/compute.yaml"
 rm -rf "${catalog}"
-[ "$(offers | cut -d' ' -f1-3)" = "mine 1 1.0" ] || fail "~/.lightcone/compute.yaml ignored"
+[ "$(offers | cut -d' ' -f1-3)" = "mine 1 1.0" ] || fail "the home compute.yaml was ignored"
 [ ! -e "${catalog}" ] || fail "a catalog was written beside the user's own"
 rm "${HOME}/.lightcone/compute.yaml"
 
