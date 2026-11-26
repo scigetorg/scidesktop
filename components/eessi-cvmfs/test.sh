@@ -89,17 +89,23 @@ mkdir -p "${empty_modroot}"
 out_empty="$(EESSI_CACHE_DIR="${tmp}/empty-cache" EESSI_MODULE_ROOT="${empty_modroot}" /usr/local/bin/eessi-catalog)"
 grep -q 'GROMACS' <<<"${out_empty}"
 
-# URL derivation from /etc/sciget/catalogs.json ignores disabled and non-HTTPS entries.
+# URL derivation from /etc/sciget/catalogs.json supports both domains.json+domain
+# and legacy apps.json entries while ignoring disabled, non-HTTPS, and malformed ones.
 cat >"${tmp}/catalogs.json" <<'EOF'
 [
-  {"name": "neuroimaging", "url": "https://apps-catalog.scigetorg.workers.dev/neuroimaging/apps.json", "use": true},
-  {"name": "disabled", "url": "https://apps-catalog.scigetorg.workers.dev/microscopy/apps.json", "use": false},
-  {"name": "insecure", "url": "http://example.org/datascience/apps.json", "use": true},
+  {"name": "neuroimaging", "url": "https://apps-catalog.scigetorg.workers.dev/domains.json", "domain": "neuroimaging", "use": true},
+  {"name": "disabled-domain", "url": "https://apps-catalog.scigetorg.workers.dev/domains.json", "domain": "microscopy", "use": false},
+  {"name": "bad-domain", "url": "https://apps-catalog.scigetorg.workers.dev/domains.json", "domain": "../evil", "use": true},
+  {"name": "missing-domain", "url": "https://apps-catalog.scigetorg.workers.dev/domains.json", "use": true},
+  {"name": "insecure-domain", "url": "http://example.org/domains.json", "domain": "genomics", "use": true},
+  {"name": "molecular-imaging", "url": "https://apps-catalog.scigetorg.workers.dev/domains.json", "domain": "molecular-imaging"},
+  {"name": "disabled-legacy", "url": "https://apps-catalog.scigetorg.workers.dev/microscopy/apps.json", "use": false},
+  {"name": "insecure-legacy", "url": "http://example.org/datascience/apps.json", "use": true},
   {"name": "datascience", "url": "https://apps-catalog.scigetorg.workers.dev/datascience/apps.json"}
 ]
 EOF
 urls="$(SCIGET_CATALOGS_FILE="${tmp}/catalogs.json" /usr/local/bin/eessi-catalog urls)"
-[ "${urls}" = "$(printf 'url:https://apps-catalog.scigetorg.workers.dev/neuroimaging/eessi.json\nurl:https://apps-catalog.scigetorg.workers.dev/datascience/eessi.json')" ]
+[ "${urls}" = "$(printf 'url:https://apps-catalog.scigetorg.workers.dev/neuroimaging/eessi.json\nurl:https://apps-catalog.scigetorg.workers.dev/molecular-imaging/eessi.json\nurl:https://apps-catalog.scigetorg.workers.dev/datascience/eessi.json')" ]
 
 # Sync from local eessi.json fixtures merges domains, deduplicates launchers,
 # preserves canonical tile slugs, validates exec argv, and isolates EESSI category.

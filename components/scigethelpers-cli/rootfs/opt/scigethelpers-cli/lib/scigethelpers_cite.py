@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -212,16 +213,46 @@ def default_output() -> Path:
     return Path.home() / "CITATIONS.md"
 
 
-def configured_catalogue_urls() -> list[str]:
-    """Active catalog URLs from sciget's system and user configuration."""
+@dataclass(frozen=True)
+class CatalogueSource:
+    """One configured sciget catalog source: a direct apps/catalog URL or a domains.json entry."""
+
+    url: str
+    domain: str | None = None
+
+
+def _normalize_source_url(raw_url: str) -> str:
+    if raw_url.startswith("/"):
+        return Path(raw_url).as_uri()
+    return raw_url
+
+
+def _allowed_target_url(source_url: str, target_url: str) -> bool:
+    src_scheme = urllib.parse.urlparse(source_url).scheme.lower()
+    dst_scheme = urllib.parse.urlparse(target_url).scheme.lower()
+    if src_scheme == "https":
+        return dst_scheme == "https"
+    if src_scheme == "http":
+        return dst_scheme in ("http", "https")
+    if src_scheme == "file":
+        return dst_scheme == "file"
+    return False
+
+
+def configured_catalogue_sources() -> list[CatalogueSource]:
+    """Active catalog sources from sciget's system and user configuration."""
     override = (
         os.environ.get("SCIGETHELPERS_CITE_CATALOGUE_URL")
         or os.environ.get("NEURODESKTOP_CITE_CATALOGUE_URL")
     )
     if override:
-        return [u.strip() for u in override.split(",") if u.strip()]
+        return [
+            CatalogueSource(_normalize_source_url(u.strip()))
+            for u in override.split(",")
+            if u.strip()
+        ]
     config_base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    by_name: dict[str, tuple[bool, str]] = {}
+    by_name: dict[str, tuple[bool, str, str | None]] = {}
     for path in (SYSTEM_CATALOGS, config_base / "sciget/catalogs.json"):
         try:
             entries = json.loads(path.read_text(encoding="utf-8"))
@@ -235,12 +266,23 @@ def configured_catalogue_urls() -> list[str]:
             name = entry.get("name")
             if not isinstance(name, str) or not name:
                 continue
-            prev_use, prev_url = by_name.get(name, (True, ""))
+            prev_use, prev_url, prev_domain = by_name.get(name, (True, "", None))
             use = bool(entry["use"]) if "use" in entry else prev_use
-            url = entry["url"] if isinstance(entry.get("url"), str) else prev_url
-            by_name[name] = (use, url)
-    urls = [url for use, url in by_name.values() if use and url]
-    return urls or [FALLBACK_CATALOGUE_URL]
+            raw_url = entry.get("url")
+            if isinstance(raw_url, str) and raw_url:
+                url = _normalize_source_url(raw_url)
+                raw_domain = entry.get("domain")
+                domain = raw_domain if isinstance(raw_domain, str) and raw_domain else None
+            else:
+                url = prev_url
+                domain = prev_domain
+            by_name[name] = (use, url, domain)
+    sources = [
+        CatalogueSource(url, domain)
+        for use, url, domain in by_name.values()
+        if use and url
+    ]
+    return sources or [CatalogueSource(FALLBACK_CATALOGUE_URL)]
 
 
 def write_atomically(path: Path, text: str) -> None:
@@ -251,17 +293,21 @@ def write_atomically(path: Path, text: str) -> None:
     os.replace(temporary, path)
 
 
-def load_one_catalogue(url: str, cache: Path) -> dict[ModuleKey, CatalogueEntry]:
-    """Fetch one catalogue, refreshing its cache, or fall back to the cache."""
+def fetch_json_document(
+    url: str, cache: Path, memo: dict[str, object | None]
+) -> object | None:
+    """Fetch one JSON document, refreshing its cache, or fall back to the cache."""
+    if url in memo:
+        return memo[url]
     try:
         request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT_SECONDS) as response:
             raw = response.read().decode("utf-8")
-        catalogue = parse_catalogue(json.loads(raw))
+        document = json.loads(raw)
     except (OSError, ValueError) as error:
         try:
             cached = cache.read_text(encoding="utf-8")
-            catalogue = parse_catalogue(json.loads(cached))
+            document = json.loads(cached)
         except (OSError, ValueError):
             print(
                 f"Could not fetch {url} ({error}) and no cached catalogue exists.",
@@ -271,26 +317,84 @@ def load_one_catalogue(url: str, cache: Path) -> dict[ModuleKey, CatalogueEntry]
                 "Build dates and tool citations are missing from the output.",
                 file=sys.stderr,
             )
-            return {}
+            memo[url] = None
+            return None
         fetched = datetime.fromtimestamp(cache.stat().st_mtime).date().isoformat()
         print(
             f"Could not fetch {url} ({error}); using the catalogue cached on {fetched}.",
             file=sys.stderr,
         )
-        return catalogue
+        memo[url] = document
+        return document
     try:
         write_atomically(cache, raw)
     except OSError as error:
         print(f"Could not cache the catalogue in {cache}: {error}", file=sys.stderr)
-    return catalogue
+    memo[url] = document
+    return document
 
 
-def load_catalogues(urls: Sequence[str]) -> dict[ModuleKey, CatalogueEntry]:
+def _resolve_app_json_url(
+    source_url: str, app_url: str
+) -> str | None:
+    resolved = urllib.parse.urljoin(source_url, app_url)
+    if not _allowed_target_url(source_url, resolved):
+        print(
+            f"Ignoring unsafe catalogue URL {resolved!r} referenced by {source_url}.",
+            file=sys.stderr,
+        )
+        return None
+    return resolved
+
+
+def load_one_source(
+    source: CatalogueSource, root: Path, memo: dict[str, object | None]
+) -> dict[ModuleKey, CatalogueEntry]:
+    """Load one configured catalog source (apps.json, catalog.json, or domains.json)."""
+    key = hashlib.sha256(source.url.encode("utf-8")).hexdigest()[:12]
+    if source.domain is not None:
+        doc = fetch_json_document(source.url, root / f"domains-{key}.json", memo)
+        if not isinstance(doc, dict) or not isinstance(doc.get("domains"), dict):
+            return {}
+        domain_entry = doc["domains"].get(source.domain)
+        if not isinstance(domain_entry, dict):
+            return {}
+        raw_app_url = domain_entry.get("appJsonUrl")
+        if not isinstance(raw_app_url, str) or not raw_app_url:
+            return {}
+        app_url = _resolve_app_json_url(source.url, raw_app_url)
+        if app_url is None:
+            return {}
+        app_key = hashlib.sha256(app_url.encode("utf-8")).hexdigest()[:12]
+        app_doc = fetch_json_document(app_url, root / f"apps-{app_key}.json", memo)
+        return parse_catalogue(app_doc) if app_doc is not None else {}
+
+    doc = fetch_json_document(source.url, root / f"apps-{key}.json", memo)
+    if doc is None:
+        return {}
+    if (
+        isinstance(doc, dict)
+        and doc.get("schemaVersion") == 1
+        and isinstance(doc.get("appJsonUrl"), str)
+    ):
+        raw_app_url = doc["appJsonUrl"]
+        if not raw_app_url:
+            return {}
+        app_url = _resolve_app_json_url(source.url, raw_app_url)
+        if app_url is None:
+            return {}
+        app_key = hashlib.sha256(app_url.encode("utf-8")).hexdigest()[:12]
+        app_doc = fetch_json_document(app_url, root / f"apps-{app_key}.json", memo)
+        return parse_catalogue(app_doc) if app_doc is not None else {}
+    return parse_catalogue(doc)
+
+
+def load_catalogues(sources: Sequence[CatalogueSource]) -> dict[ModuleKey, CatalogueEntry]:
     merged: dict[ModuleKey, CatalogueEntry] = {}
     root = cache_dir()
-    for url in urls:
-        key = hashlib.sha256(url.encode("utf-8")).hexdigest()[:12]
-        for mod_key, entry in load_one_catalogue(url, root / f"apps-{key}.json").items():
+    memo: dict[str, object | None] = {}
+    for source in sources:
+        for mod_key, entry in load_one_source(source, root, memo).items():
             known = merged.get(mod_key)
             if known is None or known.build_date < entry.build_date:
                 merged[mod_key] = entry
@@ -343,7 +447,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
-    tools = resolve(uses, load_catalogues(configured_catalogue_urls()))
+    tools = resolve(uses, load_catalogues(configured_catalogue_sources()))
     # A deployment that versions its image names it here.
     version = os.environ.get("SCIDESKTOP_VERSION") or os.environ.get("NEURODESKTOP_VERSION") or ""
     output = args.output or default_output()

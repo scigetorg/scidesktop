@@ -69,6 +69,17 @@ JSON
 SCIGETHELPERS_CITE_CATALOGUE_URL="file://${HOME}/apps.json" scigethelpers cite >/dev/null
 grep -q 'smoketool (v1.2, built 2026-01-01) was run in Neurodesk/Scidesktop (Renton et al., 2024).' "${HOME}/CITATIONS.md"
 grep -q 'https://doi.org/10.0000/smoke' "${HOME}/CITATIONS.md"
+# Also verify catalogs.json entries pointing at domains.json with a domain selector.
+mkdir -p "${HOME}/.config/sciget"
+cat > "${HOME}/domains.json" <<JSON
+{"schemaVersion": 1, "domains": {"microscopy": {"appJsonUrl": "file://${HOME}/apps.json"}}}
+JSON
+cat > "${HOME}/.config/sciget/catalogs.json" <<JSON
+[{"name": "microscopy", "url": "file://${HOME}/domains.json", "domain": "microscopy", "use": true}]
+JSON
+scigethelpers cite --output "${HOME}/CITATIONS-domains.md" >/dev/null
+grep -q 'smoketool (v1.2, built 2026-01-01) was run in Neurodesk/Scidesktop (Renton et al., 2024).' "${HOME}/CITATIONS-domains.md"
+grep -q 'https://doi.org/10.0000/smoke' "${HOME}/CITATIONS-domains.md"
 
 # kernel: no container kernel yet, and a module that is not a container's is
 # refused with a reason, without a traceback.

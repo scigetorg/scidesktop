@@ -85,10 +85,16 @@ resolve_sources() {
         derived="$(jq -r '
             if type == "array" then
                 .[]
-                | select((has("use") | not) or .use == true)
-                | (.url // "")
-                | select(type == "string" and test("\\Ahttps://[^[:space:]]+/apps\\.json\\z"))
-                | sub("/apps\\.json$"; "/eessi.json")
+                | select(type == "object" and ((has("use") | not) or .use == true))
+                | if ((.url // "") | type == "string" and test("\\Ahttps://[^[:space:]]+/domains\\.json\\z"))
+                     and ((.domain // "") | type == "string" and test("\\A[a-z0-9][a-z0-9_-]*\\z")) then
+                    .domain as $d
+                    | .url | sub("/domains\\.json$"; "/" + $d + "/eessi.json")
+                  elif ((.url // "") | type == "string" and test("\\Ahttps://[^[:space:]]+/apps\\.json\\z")) then
+                    .url | sub("/apps\\.json$"; "/eessi.json")
+                  else
+                    empty
+                  end
             else
                 empty
             end
