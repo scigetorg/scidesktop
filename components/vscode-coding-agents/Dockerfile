@@ -3,8 +3,8 @@
 # openai.chatgpt), kept separate from vscode-core because each carries its own
 # copy of its agent (~1.5 GB together). Installed at build time into
 # code-server's system extensions folder (/usr/local/share/code-server/extensions).
-# Extensions only: an image copies code-server as well. Not part of the base
-# image; domain images copy it (docs/images.md).
+# Extensions only: an image copies code-server and coding-agents as well.
+# Included in base scidesktop (docs/images.md).
 
 # Versions and checksums come from docker-bake.hcl.
 ARG UBUNTU_IMAGE

@@ -10,7 +10,7 @@ FROM ${UBUNTU_IMAGE} AS rootfs
 COPY docker-stacks/ /src/
 COPY VENDOR.md /src/
 COPY rootfs/ /rootfs/
-RUN set -e; chmod -R go-w /rootfs; cd /src; r=/rootfs \
+RUN set -e; chmod -R a+rX,go-w /rootfs; cd /src; r=/rootfs \
     && install -D -m 0755 -t "${r}/usr/local/bin" _docker_stacks_log.sh start.sh \
         run-hooks.sh fix-permissions start-notebook.py start-notebook.sh \
         start-singleuser.py start-singleuser.sh \
@@ -76,5 +76,16 @@ RUN printf '#!/bin/bash\necho hook-ran\n' > /usr/local/bin/before-notebook.d/10-
     && [ "$(/opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
     && [ "$(runuser -u "${NB_USER}" -- /opt/scidesktop/run-as-user id -un)" = "${NB_USER}" ] \
     && test -r /opt/scidesktop/stop_supervisor.py \
+    # Interactive shells get `ll` and `<flavour>-<version>:\w$ ` with /home/jovyan/.bashrc and with an empty HOME.
+    && out=$(runuser -u "${NB_USER}" -- env SCIDESKTOP_FLAVOUR=scidesktop SCIDESKTOP_VERSION=2026-11-27 TERM=dumb \
+        bash -lic 'type ll; printf "PS1=%s\n" "$PS1"' 2>/dev/null) \
+    && grep -q "ll is aliased to" <<<"${out}" \
+    && grep -qxF 'PS1=scidesktop-2026-11-27:\w\$ ' <<<"${out}" \
+    && empty_home=$(mktemp -d) && chown "${NB_UID}:${NB_GID}" "${empty_home}" \
+    && out=$(runuser -u "${NB_USER}" -- env HOME="${empty_home}" SCIDESKTOP_FLAVOUR=neurodesktop SCIDESKTOP_VERSION=2026-11-27 TERM=dumb \
+        bash -lic 'type ll; printf "PS1=%s\n" "$PS1"' 2>/dev/null) \
+    && rm -rf "${empty_home}" \
+    && grep -q "ll is aliased to" <<<"${out}" \
+    && grep -qxF 'PS1=neurodesktop-2026-11-27:\w\$ ' <<<"${out}" \
     # The OS layer has no Python; the smoke test parses these with Jupyter's.
     && test -x /usr/local/bin/start-notebook.py && test -x /usr/local/bin/start-singleuser.py

@@ -82,7 +82,6 @@ component's test starts both against the agents in `coding-agents`.
 
 ## What is left out
 
-- **Notebook Intelligence**, neurodesktop's other chat panel.
 - **Seeding `AGENTS.md` into a chat's folder**, which neurodesktop does with a
   contents hook. The agents here read their instructions from the home
   ([coding-agents.md](coding-agents.md)).

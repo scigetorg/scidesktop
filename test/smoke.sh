@@ -370,19 +370,34 @@ docker exec "${NAME}" bash -lc 'case ":${XDG_DATA_DIRS}:" in *:/opt/sciget:*) ex
     && pass "sciget applications on login-shell data path" \
     || fail "sciget applications on login-shell data path"
 # Interactive shells, login (JupyterLab terminal) and not (desktop terminal),
-# start without warnings and have module, ml and mamba.
+# start without warnings and have module, ml, mamba, ll and the flavour-version prompt.
 for mode in -ic -lic; do
     out=$(docker exec -u "$(docker exec "${NAME}" printenv NB_USER 2>/dev/null || echo jovyan)" -w /tmp "${NAME}" \
-        bash "${mode}" 'type -t module >/dev/null && type -t ml >/dev/null && type -t mamba >/dev/null && echo SHELL_OK' 2>&1 \
+        bash "${mode}" 'type -t module >/dev/null && type -t ml >/dev/null && type -t mamba >/dev/null && type ll >/dev/null && echo SHELL_OK' 2>&1 \
         | sed 's/\x1b\[[0-9;]*m//g' \
         | grep -v -e 'cannot set terminal process group' -e 'no job control' \
         | grep -vxF -f <(docker exec "${NAME}" cat /tmp/.scidesktop-containers-unavailable 2>/dev/null))
     if [ "$(printf '%s' "${out}")" = SHELL_OK ]; then
-        pass "bash ${mode}: clean, module, ml and mamba"
+        pass "bash ${mode}: clean, module, ml, mamba and ll"
     else
-        fail "bash ${mode}: clean, module, ml and mamba"; printf '%s\n' "${out}" | head -5 | sed 's/^/        /'
+        fail "bash ${mode}: clean, module, ml, mamba and ll"; printf '%s\n' "${out}" | head -5 | sed 's/^/        /'
     fi
 done
+# Even with an empty mounted home (no ~/.bashrc), interactive bash has `ll` and
+# `<flavour>-<version>:\w$ ` without username or pod hostname.
+flavour=$(docker exec "${NAME}" printenv SCIDESKTOP_FLAVOUR 2>/dev/null || true)
+version=$(docker exec "${NAME}" printenv SCIDESKTOP_VERSION 2>/dev/null || true)
+want_ps1="${flavour}${version:+-${version}}:\\w\\$ "
+prompt_out=$(docker exec -u "${NB_USER}" -e TERM=dumb "${NAME}" bash -lic '
+    empty=$(mktemp -d)
+    trap "rm -rf \"${empty}\"" EXIT
+    HOME="${empty}" bash -lic '\''type ll >/dev/null && printf "%s" "$PS1"'\'' 2>/dev/null
+' 2>/dev/null || true)
+if [ -n "${flavour}" ] && [ "${prompt_out}" = "${want_ps1}" ]; then
+    pass "prompt shows ${flavour}${version:+-${version}} without username/hostname (empty HOME)"
+else
+    fail "prompt shows flavour-version without username/hostname (want: '${want_ps1}', got: '${prompt_out}')"
+fi
 # sciget arrives configured from its system layer, with nothing copied into
 # the home. Which catalog an image has is its catalog component's to check
 # (test/sciget-catalog-check.sh); the base has none.

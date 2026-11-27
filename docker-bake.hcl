@@ -193,6 +193,9 @@ variable "NB_GID" { default = "100" }
 # platform per run: CI builds each on its own runner and joins them when it
 # publishes.
 variable "PLATFORM" { default = "" }
+# Image build date (YYYY-MM-DD), shown in the terminal prompt beside the flavour.
+# Passed by .github/scripts/bake-args in CI; defaults to "dev" for local builds.
+variable "SCIDESKTOP_VERSION" { default = "dev" }
 variable "IMAGE" { default = "scidesktop:latest" }
 variable "MICRODESKTOP_IMAGE" { default = "microdesktop:latest" }
 variable "DATADESKTOP_IMAGE" { default = "datadesktop:latest" }
@@ -275,6 +278,7 @@ group "test" {
     "vscode-core-test",
     "vscode-niivue-test",
     "vscode-coding-agents-test",
+    "notebook-intelligence-test",
     "virtualgl-test",
     "jupyterlab-slurm-test",
     "workflow-engines-test",
@@ -950,8 +954,7 @@ target "vscode-niivue-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: the Claude Code and Codex VS Code extensions (~1.5 GB together;
-# kept separate from vscode-core so images can take vscode-core without them).
+# The Claude Code and Codex VS Code extensions (included in base scidesktop).
 target "vscode-coding-agents" {
   inherits = ["_component"]
   context  = "components/vscode-coding-agents"
@@ -973,6 +976,23 @@ target "vscode-coding-agents" {
 
 target "vscode-coding-agents-test" {
   inherits = ["vscode-coding-agents"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Notebook Intelligence for JupyterLab (included in base scidesktop).
+target "notebook-intelligence" {
+  inherits = ["_component"]
+  context  = "components/notebook-intelligence"
+  target   = "component"
+  contexts = {
+    jupyter-env   = "target:jupyter-env"
+    coding-agents = "target:coding-agents"
+  }
+}
+
+target "notebook-intelligence-test" {
+  inherits = ["notebook-intelligence"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1300,6 +1320,7 @@ target "scidesktop" {
     datalad               = "target:datalad"
     code-server           = "target:code-server"
     vscode-core           = "target:vscode-core"
+    vscode-coding-agents  = "target:vscode-coding-agents"
     scigethelpers-cli     = "target:scigethelpers-cli"
     jupyterlab-slurm      = "target:jupyterlab-slurm"
     workflow-engines      = "target:workflow-engines"
@@ -1309,12 +1330,16 @@ target "scidesktop" {
     coding-agents         = "target:coding-agents"
     acp-adapters          = "target:acp-adapters"
     antigravity-acp       = "target:antigravity-acp"
+    notebook-intelligence = "target:notebook-intelligence"
     t3-code               = "target:t3-code"
     t3-connect            = "target:t3-connect"
     rclone                = "target:rclone"
     gh                    = "target:gh"
     aria2                 = "target:aria2"
     tcsh                  = "target:tcsh"
+  }
+  args = {
+    SCIDESKTOP_VERSION = SCIDESKTOP_VERSION
   }
   tags   = [IMAGE]
   output = ["type=docker"]
@@ -1410,16 +1435,15 @@ target "neurodesktop" {
   inherits = ["_common"]
   context  = "images/neurodesktop"
   contexts = {
-    scidesktop-base      = "target:scidesktop"
-    sciget-neuroimaging  = "target:sciget-neuroimaging"
-    neurodesk-cvmfs      = "target:neurodesk-cvmfs"
-    vscode-niivue        = "target:vscode-niivue"
-    vscode-coding-agents  = "target:vscode-coding-agents"
+    scidesktop-base       = "target:scidesktop"
+    sciget-neuroimaging   = "target:sciget-neuroimaging"
+    neurodesk-cvmfs       = "target:neurodesk-cvmfs"
+    vscode-niivue         = "target:vscode-niivue"
     jupyterlab-niivue     = "target:jupyterlab-niivue"
     jupyterlab-freebrowse = "target:jupyterlab-freebrowse"
     neurodesk-agents      = "target:neurodesk-agents"
-    neuroimaging-env     = "target:neuroimaging-env"
-    neurodesk-compat     = "target:neurodesk-compat"
+    neuroimaging-env      = "target:neuroimaging-env"
+    neurodesk-compat      = "target:neurodesk-compat"
   }
   tags   = [NEURODESKTOP_IMAGE]
   output = ["type=docker"]

@@ -48,6 +48,7 @@ NOT_RENOVATED = {
     "NB_UID": "setting, not a version",
     "NB_GID": "setting, not a version",
     "PLATFORM": "build setting",
+    "SCIDESKTOP_VERSION": "build date (YYYY-MM-DD), passed by CI",
     "IMAGE": "output tag",
     "MICRODESKTOP_IMAGE": "output tag",
     "DATADESKTOP_IMAGE": "output tag",

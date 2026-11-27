@@ -25,5 +25,7 @@ COPY --link --from=sciget-dermatology / /
 COPY --link --from=jupyterlab-neuroglancer / /
 COPY --link --from=dermatology-env / /
 
+ENV SCIDESKTOP_FLAVOUR=dermdesktop
+
 LABEL org.opencontainers.image.title="dermdesktop" \
       org.opencontainers.image.description="scidesktop for dermatology: dermatology sciget catalog, Neuroglancer WSI viewer, and locked Python 3.13 dermoscopy, dermatopathology and 3D skin imaging kernel"

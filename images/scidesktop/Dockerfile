@@ -28,6 +28,7 @@ COPY --link --from=virtualgl / /
 COPY --link --from=datalad / /
 COPY --link --from=code-server / /
 COPY --link --from=vscode-core / /
+COPY --link --from=vscode-coding-agents / /
 COPY --link --from=scigethelpers-cli / /
 COPY --link --from=jupyterlab-slurm / /
 COPY --link --from=workflow-engines / /
@@ -37,6 +38,7 @@ COPY --link --from=eessi-cvmfs / /
 COPY --link --from=coding-agents / /
 COPY --link --from=acp-adapters / /
 COPY --link --from=antigravity-acp / /
+COPY --link --from=notebook-intelligence / /
 COPY --link --from=t3-code / /
 COPY --link --from=t3-connect / /
 COPY --link --from=rclone / /
@@ -58,13 +60,16 @@ LABEL maintainer="Sciget project <sciget.org>" \
 # component. Owners: CONDA_DIR, MAMBA_ROOT_PREFIX, PATH (jupyter-env); DISPLAY
 # (selkies); XDG_DATA_DIRS (sciget); JUPYTER_* (jupyter-env);
 # NVIDIA_DRIVER_CAPABILITIES (virtualgl / GPU runtimes).
+ARG SCIDESKTOP_VERSION
 ENV CONDA_DIR=/opt/conda \
     MAMBA_ROOT_PREFIX=/opt/conda \
     PATH=/opt/conda/bin:${PATH} \
     JUPYTER_PORT=8888 \
     DISPLAY=:20 \
     XDG_DATA_DIRS=/opt/sciget:/usr/local/share:/usr/share \
-    NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display \
+    SCIDESKTOP_FLAVOUR=scidesktop \
+    SCIDESKTOP_VERSION="${SCIDESKTOP_VERSION}"
 
 EXPOSE 8888
 HEALTHCHECK --interval=3s --timeout=1s --start-period=3s --retries=3 \

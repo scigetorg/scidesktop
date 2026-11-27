@@ -61,7 +61,8 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
 # without group or other write permission whatever the checkout's umask.
 FROM ${UBUNTU_IMAGE} AS rootfs
 COPY rootfs/ /rootfs/
-RUN chmod -R go-w /rootfs
+RUN chmod -R a+rX,go-w /rootfs \
+    && chmod 0755 /rootfs/usr/local/bin/before-notebook.d/15-enable-server-proxy
 
 # /opt/conda is owned by the notebook user so `mamba install` works. Copying
 # /opt/ keeps that ownership on /opt/conda itself (a COPY's destination
@@ -117,4 +118,6 @@ RUN set -e \
     # The desktop's readiness poll is capped (patches/simpervisor_ready_backoff.py).
     && python -c 'import inspect, simpervisor.process as p; assert "min(2 * wait_time, 0.1)" in inspect.getsource(p)' \
     # Execute a real Bash kernel cell and a Papermill notebook end-to-end.
-    && python -c 'import json, tempfile, subprocess, pathlib; d = pathlib.Path(tempfile.mkdtemp()); nb = {"cells": [{"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": ["echo BASH_KERNEL_OK\n"]}], "metadata": {"kernelspec": {"display_name": "Bash", "language": "bash", "name": "bash"}}, "nbformat": 4, "nbformat_minor": 5}; src = d / "in.ipynb"; dst = d / "out.ipynb"; src.write_text(json.dumps(nb)); subprocess.run(["papermill", "--no-progress-bar", str(src), str(dst)], check=True); out = json.loads(dst.read_text()); assert "BASH_KERNEL_OK" in "".join("".join(o.get("text", "")) for o in out["cells"][0]["outputs"]), out'
+    && python -c 'import json, tempfile, subprocess, pathlib; d = pathlib.Path(tempfile.mkdtemp()); nb = {"cells": [{"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": ["echo BASH_KERNEL_OK\n"]}], "metadata": {"kernelspec": {"display_name": "Bash", "language": "bash", "name": "bash"}}, "nbformat": 4, "nbformat_minor": 5}; src = d / "in.ipynb"; dst = d / "out.ipynb"; src.write_text(json.dumps(nb)); subprocess.run(["papermill", "--no-progress-bar", str(src), str(dst)], check=True); out = json.loads(dst.read_text()); assert "BASH_KERNEL_OK" in "".join("".join(o.get("text", "")) for o in out["cells"][0]["outputs"]), out' \
+    # 15-enable-server-proxy clears legacy neurodesktop's disabledExtensions entry without clobbering other settings.
+    && python -c 'import json, os, pathlib, subprocess, tempfile; d = pathlib.Path(tempfile.mkdtemp()); lc = d / ".jupyter" / "labconfig"; lc.mkdir(parents=True); pc = lc / "page_config.json"; pc.write_text(json.dumps({"disabledExtensions": {"@jupyterhub/jupyter-server-proxy": True, "@jupyterlab/apputils-extension:announcements": True}, "neurodeskSupporter": "false"})); subprocess.run(["/usr/local/bin/before-notebook.d/15-enable-server-proxy"], env={**os.environ, "HOME": str(d)}, check=True); got = json.loads(pc.read_text()); assert "@jupyterhub/jupyter-server-proxy" not in got["disabledExtensions"], got; assert got["disabledExtensions"]["@jupyterlab/apputils-extension:announcements"] is True; assert got["neurodeskSupporter"] == "false"'

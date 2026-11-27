@@ -63,7 +63,7 @@ ENV SHELL=/bin/bash \
 # without group or other write permission whatever the checkout's umask.
 FROM ${UBUNTU_IMAGE} AS rootfs
 COPY rootfs/ /rootfs/
-RUN chmod -R go-w /rootfs
+RUN chmod -R a+rX,go-w /rootfs
 
 # The runtime OS layer: the snapshot build, the OS's own integration files (CVMFS hook,
 # desktop settings), and apt pointed back at the live archive. Components built

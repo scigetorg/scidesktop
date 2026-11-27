@@ -1,0 +1,8 @@
+# Notebook Intelligence for JupyterLab (BSD-3-Clause), installed into
+# /opt/notebook-intelligence/lib. Packages already provided by jupyter-env are
+# excluded by ./lock so this component only ships the delta.
+# Run ./lock after changing a pin.
+notebook-intelligence==6.3.0
+# Notebook Intelligence imports mcp.server.fastmcp (MCP v1 API); keep <2.
+mcp>=1.30.0,<2
+litellm>=1.105.1

@@ -27,5 +27,7 @@ COPY --link --from=sciget-datascience / /
 COPY --link --from=datascience-env / /
 COPY --link --from=ai-ready / /
 
+ENV SCIDESKTOP_FLAVOUR=datadesktop
+
 LABEL org.opencontainers.image.title="datadesktop" \
       org.opencontainers.image.description="scidesktop for data science: datascience sciget catalog and locked Python 3.13 tabular, SQL, statistical and ML kernel, and the AI Ready workshop"

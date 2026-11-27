@@ -35,3 +35,5 @@ for dockerfile in images/*/Dockerfile; do
     image="$(basename "$(dirname "${dockerfile}")")"
     echo "--set=${image}.tags=${image}:${tag}"
 done
+version="${SCIDESKTOP_VERSION:-$(TZ=UTC git show --no-patch --date=format-local:%Y-%m-%d --format=%cd HEAD)}"
+echo "--set=scidesktop.args.SCIDESKTOP_VERSION=${version}"
