@@ -73,6 +73,7 @@ COPY --from=build /out/manifest/ /opt/scidesktop/manifest.d/
 
 FROM os AS test
 COPY --from=component / /
+COPY --chmod=0755 test-page-config-hook.py /tmp/test-page-config-hook.py
 ENV PATH=/opt/conda/bin:${PATH}
 USER ${NB_UID}
 RUN set -e \
@@ -118,5 +119,5 @@ RUN set -e \
     && python -c 'import inspect, simpervisor.process as p; assert "min(2 * wait_time, 0.1)" in inspect.getsource(p)' \
     # Execute a real Bash kernel cell and a Papermill notebook end-to-end.
     && python -c 'import json, tempfile, subprocess, pathlib; d = pathlib.Path(tempfile.mkdtemp()); nb = {"cells": [{"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": ["echo BASH_KERNEL_OK\n"]}], "metadata": {"kernelspec": {"display_name": "Bash", "language": "bash", "name": "bash"}}, "nbformat": 4, "nbformat_minor": 5}; src = d / "in.ipynb"; dst = d / "out.ipynb"; src.write_text(json.dumps(nb)); subprocess.run(["papermill", "--no-progress-bar", str(src), str(dst)], check=True); out = json.loads(dst.read_text()); assert "BASH_KERNEL_OK" in "".join("".join(o.get("text", "")) for o in out["cells"][0]["outputs"]), out' \
-    # page_config_hook re-enables jupyter-server-proxy in memory for both recent and older legacy neurodesktop homes without touching disk, preserves deliberate user disables, and does not hang on a FIFO ~/.bashrc.
-    && python -c 'import os, pathlib, tempfile; from jupyter_server.serverapp import ServerApp; app = ServerApp(); app.load_config_file(); hook = app.config.ServerApp.tornado_settings.get_value({})["page_config_hook"]; r1 = hook(None, {"disabledExtensions": ["@jupyterhub/jupyter-server-proxy", "@jupyterlab/apputils-extension:announcements"], "neurodeskSupporter": "false"}); assert r1["disabledExtensions"] == ["@jupyterlab/apputils-extension:announcements"], r1; td = pathlib.Path(tempfile.mkdtemp()); (td / ".bashrc").write_text("# Neurodesk bashrc additions\n"); os.environ["HOME"] = str(td); r2 = hook(None, {"disabledExtensions": ["@jupyterhub/jupyter-server-proxy"]}); assert r2["disabledExtensions"] == [], r2; os.environ["SCIDESKTOP_KEEP_DISABLED_SERVER_PROXY"] = "1"; r2b = hook(None, {"disabledExtensions": ["@jupyterhub/jupyter-server-proxy"]}); assert r2b["disabledExtensions"] == ["@jupyterhub/jupyter-server-proxy"], r2b; del os.environ["SCIDESKTOP_KEEP_DISABLED_SERVER_PROXY"]; td2 = pathlib.Path(tempfile.mkdtemp()); os.environ["HOME"] = str(td2); r3 = hook(None, {"disabledExtensions": ["@jupyterhub/jupyter-server-proxy"]}); assert r3["disabledExtensions"] == ["@jupyterhub/jupyter-server-proxy"], r3; td3 = pathlib.Path(tempfile.mkdtemp()); os.mkfifo(td3 / ".bashrc"); os.environ["HOME"] = str(td3); r4 = hook(None, {"disabledExtensions": ["@jupyterhub/jupyter-server-proxy"]}); assert r4["disabledExtensions"] == ["@jupyterhub/jupyter-server-proxy"], r4'
+    # page_config_hook re-enables jupyter-server-proxy in memory for legacy neurodesktop homes without touching disk, while preserving operator disables/locks, deliberate user disables, and non-blocking FIFO handling.
+    && python /tmp/test-page-config-hook.py

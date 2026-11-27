@@ -97,14 +97,14 @@ def patch_settings_bundle_text(text):
         f"if(void 0!=={tab}){api}.__sdPendingTab={tab};"
         f"if({api}.__sdOpenInFlight)return {api}.__sdOpenInFlight;"
         f"return {api}.__sdOpenInFlight=(async()=>{{"
-        f"try{{await {api}.fetchCapabilities()}}"
-        f'catch(err){{{api}.__sdPendingTab=void 0;console.error("Notebook Intelligence: failed to refresh capabilities before opening settings",err);throw err;}}'
+        f"try{{await {api}.fetchCapabilities();"
         f"const __sdTab={api}.__sdPendingTab;{api}.__sdPendingTab=void 0;"
         f"{widget}.isDisposed||{widget}.dispose();"
         f'{widget}={factory}(),__sdTab&&{widget}.content.selectTab(__sdTab),'
         f'{app}.shell.add({widget},"main"),'
-        f"{app}.shell.activateById({widget}.id);"
-        f"}})().finally(()=>{{{api}.__sdOpenInFlight=null;}})}}"
+        f"{app}.shell.activateById({widget}.id);}}"
+        f'catch(err){{{api}.__sdPendingTab=void 0;console.error("Notebook Intelligence: failed to refresh capabilities before opening settings",err);throw err;}}'
+        f"finally{{{api}.__sdOpenInFlight=null;}}}})()}}"
     )
 
     start, end = command_match.span()
