@@ -80,7 +80,10 @@ def nifti():
 extension = EXTENSIONS[VIEWER]
 
 # JupyterLab loads the extensions its page names.
-status, _, body = fetch("lab")
+status, lab_headers, body = fetch("lab")
+lab_csp = lab_headers.get("Content-Security-Policy", "")
+check("frame-ancestors 'none'" in lab_csp,
+      "JupyterLab keeps Hub default frame-ancestors 'none'", lab_csp)
 config = re.search(r'<script id="jupyter-config-data" type="application/json">(.*?)</script>', body.decode(), re.S)
 offered = {entry["name"]: entry for entry in json.loads(config[1])["federated_extensions"]} if config else {}
 if check(extension in offered, f"JupyterLab's page offers the {extension} extension", sorted(offered) or status):
@@ -96,6 +99,15 @@ if VIEWER == "jupyterlab-freebrowse":
     scripts = re.findall(r'src="\./(assets/[^"]+\.js)"', page)
     check(status == 200 and "text/html" in headers.get("Content-Type", "") and scripts,
           "FreeBrowse's page is served at freebrowse/", status)
+    fb_csp = headers.get("Content-Security-Policy", "")
+    check(
+        "frame-ancestors 'self'" in fb_csp
+        and "frame-ancestors 'none'" not in fb_csp
+        and "report-uri /hub/security/csp-report" in fb_csp
+        and "default-src 'self'" in fb_csp,
+        "FreeBrowse overrides Hub CSP to frame-ancestors 'self' while preserving other policies/directives",
+        fb_csp,
+    )
     for script in scripts[:1]:
         status, headers, body = fetch("freebrowse/" + script)
         check(status == 200 and "javascript" in headers.get("Content-Type", "") and body,
@@ -111,11 +123,23 @@ if VIEWER == "jupyterlab-neuroglancer":
     status, headers, _ = fetch("neuroglancer")
     check(status in (301, 302) and headers.get("Location", "").endswith("/neuroglancer/"),
           "Neuroglancer redirects /neuroglancer to /neuroglancer/", f"{status} {headers.get('Location')}")
+    redir_csp = headers.get("Content-Security-Policy", "")
+    check("frame-ancestors 'self'" in redir_csp and "frame-ancestors 'none'" not in redir_csp,
+          "Neuroglancer redirect allows same-origin framing", redir_csp)
     status, headers, body = fetch("neuroglancer/")
     page = body.decode(errors="replace")
     scripts = re.findall(r'src="([^"]+\.js)"', page)
     check(status == 200 and "text/html" in headers.get("Content-Type", "") and scripts,
           "Neuroglancer's page is served at neuroglancer/", status)
+    ng_csp = headers.get("Content-Security-Policy", "")
+    check(
+        "frame-ancestors 'self'" in ng_csp
+        and "frame-ancestors 'none'" not in ng_csp
+        and "report-uri /hub/security/csp-report" in ng_csp
+        and "default-src 'self'" in ng_csp,
+        "Neuroglancer overrides Hub CSP to frame-ancestors 'self' while preserving other policies/directives",
+        ng_csp,
+    )
     for script in scripts[:2]:
         status, headers, body = fetch("neuroglancer/" + script.lstrip("./"))
         check(status == 200 and "javascript" in headers.get("Content-Type", "") and body,

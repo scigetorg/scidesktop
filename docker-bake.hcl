@@ -276,6 +276,7 @@ group "test" {
     "vscode-coding-agents-test",
     "virtualgl-test",
     "jupyterlab-slurm-test",
+    "launcher-links-test",
     "workflow-engines-test",
     "viash-hub-test",
     "microscopy-env-test",
@@ -679,6 +680,26 @@ target "jupyterlab-neuroglancer" {
 
 target "jupyterlab-neuroglancer-test" {
   inherits = ["jupyterlab-neuroglancer"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Operator-configured external launcher tiles (e.g. WEBKNOSSOS via
+# SCIDESKTOP_WEBKNOSSOS_URL or SCIDESKTOP_LAUNCHER_LINKS).
+target "launcher-links" {
+  inherits = ["_component"]
+  context  = "components/launcher-links"
+  target   = "component"
+  contexts = {
+    jupyter-env = "target:jupyter-env"
+  }
+  args = {
+    NODE_VERSION = NODE_VERSION
+  }
+}
+
+target "launcher-links-test" {
+  inherits = ["launcher-links"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1286,6 +1307,7 @@ target "scidesktop" {
     vscode-core           = "target:vscode-core"
     scigethelpers-cli     = "target:scigethelpers-cli"
     jupyterlab-slurm      = "target:jupyterlab-slurm"
+    launcher-links        = "target:launcher-links"
     workflow-engines      = "target:workflow-engines"
     sciget-all            = "target:sciget-all"
     eessi-cvmfs           = "target:eessi-cvmfs"

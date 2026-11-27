@@ -100,6 +100,7 @@ RUN set -e \
     && grep -q 'kernel_info_timeout = 180' <<<"${cfg}" \
     && grep -q "terminado_settings = {'shell_command': \['/bin/bash', '-l'\]}" <<<"${cfg}" \
     && grep -q 'check_for_updates_class = .*NeverCheckForUpdate' <<<"${cfg}" \
+    && grep -q "'scidesktop_page_config': True" <<<"${cfg}" \
     && test ! -d /opt/conda/pkgs -o -z "$(ls -A /opt/conda/pkgs 2>/dev/null | grep -v -E '^(cache|urls|urls.txt)$')" \
     && grep -E 'enabled|disabled' <<<"${exts}" \
     # rfc3987_syntax must not compile its parsers at import (patches/).
@@ -117,4 +118,8 @@ RUN set -e \
     # The desktop's readiness poll is capped (patches/simpervisor_ready_backoff.py).
     && python -c 'import inspect, simpervisor.process as p; assert "min(2 * wait_time, 0.1)" in inspect.getsource(p)' \
     # Execute a real Bash kernel cell and a Papermill notebook end-to-end.
-    && python -c 'import json, tempfile, subprocess, pathlib; d = pathlib.Path(tempfile.mkdtemp()); nb = {"cells": [{"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": ["echo BASH_KERNEL_OK\n"]}], "metadata": {"kernelspec": {"display_name": "Bash", "language": "bash", "name": "bash"}}, "nbformat": 4, "nbformat_minor": 5}; src = d / "in.ipynb"; dst = d / "out.ipynb"; src.write_text(json.dumps(nb)); subprocess.run(["papermill", "--no-progress-bar", str(src), str(dst)], check=True); out = json.loads(dst.read_text()); assert "BASH_KERNEL_OK" in "".join("".join(o.get("text", "")) for o in out["cells"][0]["outputs"]), out'
+    && python -c 'import json, tempfile, subprocess, pathlib; d = pathlib.Path(tempfile.mkdtemp()); nb = {"cells": [{"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": ["echo BASH_KERNEL_OK\n"]}], "metadata": {"kernelspec": {"display_name": "Bash", "language": "bash", "name": "bash"}}, "nbformat": 4, "nbformat_minor": 5}; src = d / "in.ipynb"; dst = d / "out.ipynb"; src.write_text(json.dumps(nb)); subprocess.run(["papermill", "--no-progress-bar", str(src), str(dst)], check=True); out = json.loads(dst.read_text()); assert "BASH_KERNEL_OK" in "".join("".join(o.get("text", "")) for o in out["cells"][0]["outputs"]), out' \
+    # Shared-home compatibility: scidesktop_page_config chains after any existing
+    # page_config_hook (including JupyterHub's) and drops @jupyterhub/jupyter-server-proxy
+    # from disabledExtensions at render time without mutating ~/.jupyter/labconfig/page_config.json.
+    && python -c 'import sys, types; sys.path.insert(0, "/opt/scidesktop/jupyter-env"); import scidesktop_page_config as m; app = types.SimpleNamespace(web_app=types.SimpleNamespace(settings={"page_config_hook": lambda h, cfg: {**cfg, "hubUser": "alice"}})); m._load_jupyter_server_extension(app); out = app.web_app.settings["page_config_hook"](None, {"disabledExtensions": ["@jupyterhub/jupyter-server-proxy", "@jupyterlab/apputils-extension:announcements"]}); assert out["hubUser"] == "alice", out; assert "@jupyterhub/jupyter-server-proxy" not in out["disabledExtensions"], out; assert "@jupyterlab/apputils-extension:announcements" in out["disabledExtensions"], out'

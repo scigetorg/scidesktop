@@ -26,7 +26,8 @@ trap cleanup EXIT
 
 echo "${COMPONENT} smoke: ${IMAGE}"
 docker run -d --name "${NAME}" -e JUPYTER_TOKEN="${TOKEN}" -e JUPYTERHUB_SERVICE_PREFIX="${BASE_PATH}" \
-    "${IMAGE}" start-notebook.py --ServerApp.base_url="${BASE_PATH}" >/dev/null \
+    "${IMAGE}" start-notebook.py --ServerApp.base_url="${BASE_PATH}" \
+    '--ServerApp.tornado_settings={"headers":{"Content-Security-Policy":"default-src '\''self'\'', frame-ancestors '\''none'\''; report-uri /hub/security/csp-report"}}' >/dev/null \
     || { echo "  FAIL  container did not start"; exit 1; }
 for _ in $(seq 1 120); do
     docker exec "${NAME}" curl -fsS -o /dev/null "http://127.0.0.1:8888${BASE_PATH}api" 2>/dev/null && break
