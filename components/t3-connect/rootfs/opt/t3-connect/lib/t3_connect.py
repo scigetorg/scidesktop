@@ -22,7 +22,7 @@ which only the `t3` command reads.
 
 import asyncio
 import atexit
-from contextlib import suppress
+from contextlib import closing, suppress
 import json
 import os
 from pathlib import Path
@@ -174,10 +174,13 @@ class ConnectManager:
         if not path.exists():
             return False
         try:
-            with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=1) as db:
+            with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=1)) as db:
                 return db.execute(
-                    "SELECT count(*) FROM projection_thread_sessions "
-                    "WHERE active_turn_id IS NOT NULL OR status IN ('running', 'starting')"
+                    "SELECT count(*) FROM orchestration_v2_projection_runs AS runs "
+                    "JOIN orchestration_v2_projection_threads AS threads "
+                    "ON threads.thread_id = runs.thread_id "
+                    "WHERE threads.deleted_at IS NULL "
+                    "AND runs.status IN ('preparing', 'starting', 'running', 'waiting')"
                 ).fetchone()[0] != 0
         except sqlite3.Error:
             return True
