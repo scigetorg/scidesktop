@@ -2,7 +2,7 @@
 # Arguments for `docker buildx bake` in CI, one per line.
 #
 #   CACHE_REPO=ghcr.io/<owner>/scidesktop-cache [LOCAL_REGISTRY=127.0.0.1:5000] \
-#       bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|domain-cache|no-cache] [image...]
+#       bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|no-cache]
 #
 # Every component in components/ gets two GHCR registry cache tags per
 # architecture: <component>-<arch> (its component graph) and
@@ -15,14 +15,6 @@
 #   - `write-test-cache`: exports only `<component>-test-<arch>` (for `bake test`)
 #   - `write-cache`:      exports only `<component>-<arch>` and
 #                         `scidesktop-<arch>` with mode=min (for `bake scidesktop`)
-#   - `domain-cache <image>...`: emits `cache-from` only for `scidesktop-<arch>`,
-#                         the domain-only components added by `<image>...`
-#                         (`<component>-test-<arch>`), and any build-only
-#                         components not copied into any image (e.g.
-#                         `micromamba`), avoiding ~100 redundant GHCR manifest
-#                         lookups per domain image while keeping fallback
-#                         protection against BuildKit lazy cache loading or
-#                         local GC eviction.
 # Domain images get no cache-to lines because their components and base are
 # already cached. Every image in images/ is tagged <image>:<tag> (or
 # ${LOCAL_REGISTRY}/<image>:<tag> with `type=registry,registry.insecure=true`
@@ -33,14 +25,9 @@
 # are emitted. Writing the cache is best effort (ignore-error=true) so a passing
 # build does not fail if a transient registry error prevents saving cache tags.
 set -euo pipefail
-arch="${1:?usage: bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|domain-cache|no-cache] [image...]}"
-tag="${2:?usage: bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|domain-cache|no-cache] [image...]}"
+arch="${1:?usage: bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|no-cache]}"
+tag="${2:?usage: bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|no-cache]}"
 mode="${3:-}"
-if [ "$#" -ge 3 ]; then
-    shift 3
-else
-    shift "$#"
-fi
 cache_repo="${CACHE_REPO:-}"
 cache_repo="${cache_repo,,}"
 local_registry="${LOCAL_REGISTRY:-}"
@@ -48,54 +35,19 @@ local_registry="${local_registry%/}"
 cd "$(dirname "$0")/../.."
 
 if [ -n "${cache_repo}" ] && [ "${mode}" != no-cache ]; then
-    if [ "${mode}" = domain-cache ]; then
-        if [ "$#" -eq 0 ]; then
-            echo "bake-args: domain-cache requires at least one <image>" >&2
-            exit 1
+    for dockerfile in components/*/Dockerfile; do
+        target="$(basename "$(dirname "${dockerfile}")")"
+        echo "--set=${target}.cache-from=type=registry,ref=${cache_repo}:${target}-${arch}"
+        echo "--set=${target}.cache-from=type=registry,ref=${cache_repo}:${target}-test-${arch}"
+        if [ "${mode}" = write-test-cache ]; then
+            echo "--set=${target}-test.cache-to=type=registry,ref=${cache_repo}:${target}-test-${arch},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
+        elif [ "${mode}" = write-cache ]; then
+            echo "--set=${target}.cache-to=type=registry,ref=${cache_repo}:${target}-${arch},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
         fi
-        for image_filter in "$@"; do
-            df="images/${image_filter}/Dockerfile"
-            [ -f "${df}" ] || { echo "bake-args: missing ${df}" >&2; exit 1; }
-        done
-        # Resolve added domain components and build-only components (such as
-        # micromamba) from the canonical Bake graph via test/contract.py.
-        domain_lines="$(python3 - "${cache_repo}" "${arch}" "$@" <<'PY'
-import sys
-sys.path.insert(0, "test")
-import contract
-
-cache_repo, arch, *images = sys.argv[1:]
-targets = contract.bake_print()["target"]
-added = sorted(set().union(*(contract.added_components(targets, img) for img in images)))
-build_only = sorted(
-    set(contract.component_names())
-    - {contract.OS_COMPONENT}
-    - set(contract.copied_components(targets))
-)
-for target in added:
-    print(f"--set={target}.cache-from=type=registry,ref={cache_repo}:{target}-test-{arch}")
-for target in build_only:
-    print(f"--set={target}.cache-from=type=registry,ref={cache_repo}:{target}-{arch}")
-    print(f"--set={target}.cache-from=type=registry,ref={cache_repo}:{target}-test-{arch}")
-print(f"--set=scidesktop.cache-from=type=registry,ref={cache_repo}:scidesktop-{arch}")
-PY
-)"
-        printf '%s\n' "${domain_lines}"
-    else
-        for dockerfile in components/*/Dockerfile; do
-            target="$(basename "$(dirname "${dockerfile}")")"
-            echo "--set=${target}.cache-from=type=registry,ref=${cache_repo}:${target}-${arch}"
-            echo "--set=${target}.cache-from=type=registry,ref=${cache_repo}:${target}-test-${arch}"
-            if [ "${mode}" = write-test-cache ]; then
-                echo "--set=${target}-test.cache-to=type=registry,ref=${cache_repo}:${target}-test-${arch},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
-            elif [ "${mode}" = write-cache ]; then
-                echo "--set=${target}.cache-to=type=registry,ref=${cache_repo}:${target}-${arch},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
-            fi
-        done
-        echo "--set=scidesktop.cache-from=type=registry,ref=${cache_repo}:scidesktop-${arch}"
-        if [ "${mode}" = write-cache ]; then
-            echo "--set=scidesktop.cache-to=type=registry,ref=${cache_repo}:scidesktop-${arch},mode=min,image-manifest=true,oci-mediatypes=true,ignore-error=true"
-        fi
+    done
+    echo "--set=scidesktop.cache-from=type=registry,ref=${cache_repo}:scidesktop-${arch}"
+    if [ "${mode}" = write-cache ]; then
+        echo "--set=scidesktop.cache-to=type=registry,ref=${cache_repo}:scidesktop-${arch},mode=min,image-manifest=true,oci-mediatypes=true,ignore-error=true"
     fi
 fi
 

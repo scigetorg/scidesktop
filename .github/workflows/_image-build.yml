@@ -138,9 +138,7 @@ jobs:
               shift
               local args_out=""
               local args=()
-              if [ "${cache_mode}" = domain-cache ]; then
-                  args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci domain-cache "$@")" || return 1
-              elif [ "${cache_mode}" = read-cache ]; then
+              if [ "${cache_mode}" = read-cache ]; then
                   args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci)" || return 1
               else
                   args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci "${cache_mode}")" || return 1
@@ -200,7 +198,11 @@ jobs:
 
           if [ "${#domain_images[@]}" -gt 0 ]; then
               t0=$SECONDS
-              run_bake domain-cache "${domain_images[@]}"
+              # Use full read-cache here: with type=registry export, bake scidesktop
+              # can satisfy base components lazily from GHCR without materializing
+              # their intermediate stages locally, so the single batched domain bake
+              # needs cache-from for base components too.
+              run_bake read-cache "${domain_images[@]}"
               echo "Timing: bake ${#domain_images[@]} domain images -> local registry = $((SECONDS - t0))s"
 
               t0=$SECONDS
