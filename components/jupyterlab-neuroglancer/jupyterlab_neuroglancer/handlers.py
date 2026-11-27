@@ -11,8 +11,47 @@ HERE = os.path.dirname(__file__)
 STATIC_DIR = os.path.join(HERE, "static", "neuroglancer")
 
 
+def _allow_same_origin_framing(csp: str) -> str:
+    """Allow same-origin JupyterLab framing while preserving other CSP policies/directives.
+
+    JupyterHub sets `Content-Security-Policy: frame-ancestors 'none'` across
+    the single-user server by default. Packaged viewer pages rendered inside a
+    JupyterLab iframe need `frame-ancestors 'self'` without relaxing CSP for
+    the rest of the server or dropping unrelated comma-separated policies.
+    """
+    policies = []
+    any_replaced = False
+    for raw_policy in csp.split(","):
+        directives = []
+        replaced = False
+        for raw in raw_policy.split(";"):
+            directive = raw.strip()
+            if not directive:
+                continue
+            name = directive.split(None, 1)[0].lower()
+            if name == "frame-ancestors":
+                if not replaced:
+                    directives.append("frame-ancestors 'self'")
+                    replaced = True
+                    any_replaced = True
+            else:
+                directives.append(directive)
+        if directives:
+            policies.append("; ".join(directives))
+    if not any_replaced:
+        if policies:
+            policies[0] = f"{policies[0]}; frame-ancestors 'self'"
+        else:
+            policies.append("frame-ancestors 'self'")
+    return ", ".join(policies)
+
+
 class NeuroglancerRedirectHandler(JupyterHandler):
     """Redirect /neuroglancer to /neuroglancer/ so relative asset URLs resolve."""
+
+    @property
+    def content_security_policy(self):
+        return _allow_same_origin_framing(super().content_security_policy)
 
     @authenticated
     def get(self):
@@ -24,6 +63,10 @@ class NeuroglancerRedirectHandler(JupyterHandler):
 
 class NeuroglancerStaticHandler(JupyterHandler, StaticFileHandler):
     """Authenticated, packaged Neuroglancer client assets, never user workspace files."""
+
+    @property
+    def content_security_policy(self):
+        return _allow_same_origin_framing(super().content_security_policy)
 
     def check_xsrf_cookie(self):
         # Module scripts, Web Workers and WASM fetches use CORS/same-origin mode

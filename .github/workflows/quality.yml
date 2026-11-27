@@ -62,7 +62,7 @@ jobs:
             /tmp/pip-audit-venv/bin/pip-audit -r "${lock}" --no-deps --disable-pip
           done
           rm -rf /tmp/pip-audit-venv
-          for pkg in components/acp-adapters components/jupyterlab-neuroglancer/labextension; do
+          for pkg in components/acp-adapters components/jupyterlab-neuroglancer/labextension components/launcher-links/labextension; do
             echo "=== npm audit ${pkg} ==="
             npm --prefix "${pkg}" audit --omit=dev --audit-level=moderate
           done

@@ -28,7 +28,7 @@ trap 'rm -rf "${tmp}"' EXIT
 
 tarball="${tmp}/go-containerregistry.tar.gz"
 url="https://github.com/google/go-containerregistry/releases/download/v${version}/go-containerregistry_Linux_${arch}.tar.gz"
-curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "${tarball}" "${url}"
+curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-delay 5 --retry-max-time 300 -o "${tarball}" "${url}"
 printf '%s  %s\n' "${sha}" "${tarball}" | sha256sum -c -
 tar -xzf "${tarball}" -C "${tmp}" crane
 

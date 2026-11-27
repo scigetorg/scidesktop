@@ -2,13 +2,16 @@
 
 How to run scidesktop as a JupyterHub single-user image, what the platform
 must provide, and how to check and triage a deployment. Deploy an image digest
-or an immutable short-SHA tag, not `latest`. Every published image can be
-pulled from either registry using the same tags:
+or an immutable short-SHA tag, not `latest`:
 
 - **GHCR** (primary, with GitHub build provenance attestations): `ghcr.io/scigetorg/<image>`
-- **Quay.io** (mirror): `quay.io/scigetorg/<image>`
+- **Quay.io** (optional mirror, populated for builds published after mirroring is enabled): `quay.io/scigetorg/<image>`
 
-In the `docker run` and `c.KubeSpawner.image` examples below, `quay.io/scigetorg/<image>:<short-sha>` can be used interchangeably with `ghcr.io/scigetorg/<image>:<short-sha>`.
+For any tag that has successfully mirrored to Quay.io (older GHCR tags are not
+backfilled, and per-image mirrors can fail independently or skip rolling tags
+if `main` advances), `quay.io/scigetorg/<image>:<short-sha>` can be used
+interchangeably with `ghcr.io/scigetorg/<image>:<short-sha>` in the `docker run`
+and `c.KubeSpawner.image` examples below.
 
 Every tag is one image for amd64 and arm64; each node pulls its own
 architecture.
@@ -19,6 +22,16 @@ architecture.
 | `<YYYY-MM-DD>` (UTC) | to the last build of that day | finding a build by date |
 | `latest` | with every build of `main` | trying it out |
 | `run-<number>-<arch>` | never | none: single-architecture parts of the tags above |
+
+### GHCR build cache package
+
+CI writes BuildKit layer caches on `main` pushes to
+`ghcr.io/scigetorg/scidesktop-cache`. New organisation packages on GHCR start
+private by default: after the first `main` push creates `scidesktop-cache`,
+an org admin should set its visibility to **Public** (and confirm the
+`scigetorg/scidesktop` repository has **Write** access under Package Settings
+-> Manage Actions access) so fork pull requests and local developers can read
+the cache anonymously without hitting a cold rebuild.
 
 ## Platform requirements
 
@@ -114,9 +127,11 @@ the launcher.
 | `SCIDESKTOP_CVMFS_REPOSITORIES` | `software.eessi.io`; `neurodesk.ardc.edu.au,software.eessi.io` in neurodesktop | Repositories to mount in `internal` mode, comma-separated. Images include `eessi-cvmfs` by default, and `neurodesktop` adds `neurodesk-cvmfs`. |
 | `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
 | `CVMFS_NFILES` | `65536`, or the container's hard open-file limit when that is lower | The open-file limit the CVMFS client sets for itself in `internal` mode. The client refuses to mount when it may not raise the limit that far. |
-| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. |
+| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. Narrowed domain images (such as `microdesktop`) derive their CVMFS Lmod module view from the cached catalog, so disabling refresh offline leaves CVMFS modules empty until `sciget refresh` has populated the cache. |
 | `SCIDESKTOP_SLURM` | `yes` | Start the session's Slurm queue, sized from `CPU_LIMIT` and `MEM_LIMIT`. It needs no privilege. `SCIDESKTOP_SLURM_PARTITION` and `SCIDESKTOP_SLURM_MEMORY_RESERVE_MB` are in [slurm.md](slurm.md). |
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | The desktop's internal credential; generated per container when unset. |
+| `SCIDESKTOP_WEBKNOSSOS_URL` | unset | Optional URL for a **WEBKNOSSOS** tile on the JupyterLab launcher (`components/launcher-links`), opened in a new browser tab (e.g. a cluster's JupyterHub OAuth2 bridge `https://webknossos.<domain>/jh-auth/login`). |
+| `SCIDESKTOP_LAUNCHER_LINKS` | unset | Optional JSON array of `{"title","url","category"?,"caption"?,"icon"?}` entries rendered as external JupyterLab launcher tiles (`http`/`https` only). |
 | `CPU_LIMIT`, `MEM_LIMIT` | from the pod's cgroup | Set by KubeSpawner, or derived at start from the cgroup when it does not. `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS` and `NUMEXPR_NUM_THREADS` follow `CPU_LIMIT` unless set, so numerical libraries use the pod's CPUs. |
 
 sciget's settings and catalog for every user are its system layer in

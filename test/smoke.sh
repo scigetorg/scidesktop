@@ -13,6 +13,7 @@ IMAGE="${1:-scidesktop}"
 NAME="scidesktop-smoke-$$"
 PORT="${SMOKE_PORT:-18999}"
 TOKEN="smoke"
+HERE="$(cd "$(dirname "$0")" && pwd)"
 # Test container image for the Apptainer checks.
 SMOKE_ALPINE="${SMOKE_ALPINE:-alpine:3.22}"
 FAILED=0
@@ -38,6 +39,11 @@ cleanup() {
     done
     docker rm -f "${NAME}-singleuser" "${NAME}-hub" "${NAME}-userns" "${NAME}-tile" >/dev/null 2>&1 || true
     [ -z "${TILE_DIR:-}" ] || rm -rf "${TILE_DIR:?}"
+    if [ -n "${SU_HOME:-}" ] && [ -d "${SU_HOME}" ]; then
+        docker run --rm -v "${SU_HOME}:/su-home" --entrypoint /bin/sh "${IMAGE}" \
+            -c 'find /su-home -mindepth 1 -delete' >/dev/null 2>&1 || true
+        rm -rf "${SU_HOME:?}" || true
+    fi
 }
 trap cleanup EXIT
 
@@ -408,7 +414,7 @@ docker exec "${NAME}" python3 -c '
 import glob, json, sys
 names = {p.split("/")[-1][:-5] for p in glob.glob("/opt/scidesktop/manifest.d/*.json")}
 [json.load(open(p)) for p in glob.glob("/opt/scidesktop/manifest.d/*.json")]
-need = {"os-ubuntu", "startup", "jupyter-env", "selkies", "apptainer", "lmod", "sciget", "slurm"}
+need = {"os-ubuntu", "startup", "jupyter-env", "selkies", "apptainer", "lmod", "sciget", "slurm", "launcher-links"}
 sys.exit(0 if need <= names else f"missing: {need - names}")' >/dev/null 2>&1 \
     && pass "version manifest complete" || fail "version manifest complete"
 # Shared folders stay traversable for the user (a linked layer once made
@@ -416,67 +422,8 @@ sys.exit(0 if need <= names else f"missing: {need - names}")' >/dev/null 2>&1 \
 docker exec "${NAME}" bash -c 'for d in /usr/local/share /usr/local/bin /usr/local/etc /etc/profile.d /opt; do [ -x "$d" ] || exit 1; done' 2>/dev/null \
     && pass "shared folders traversable" || fail "shared folders traversable"
 
-# Image hygiene & security baseline: no leftover apt package lists,
-# security-sensitive server libraries stay above patched floors, zero
-# SUID/SGID binaries and zero POSIX file capabilities across the assembled
-# image, and the Jupyter server runs with NoNewPrivs=1.
-if hygiene_err=$(docker exec -u 0 "${NAME}" /opt/conda/bin/python -c '
-import errno, glob, importlib.metadata as im, os, re, stat
-assert not glob.glob("/var/lib/apt/lists/*_Packages*"), "leftover apt package lists"
-assert not os.path.exists("/usr/bin/sudo"), "sudo should not be installed"
-assert not os.path.exists("/opt/apptainer/libexec/apptainer/bin/starter-suid"), "starter-suid should not be installed"
-def ver(pkg, n=2):
-    nums = [int(m.group(0)) for m in re.finditer(r"\d+", im.version(pkg))]
-    return tuple(nums[:n])
-assert ver("PyJWT") >= (2, 10), im.version("PyJWT")
-assert ver("cryptography") >= (44, 0), im.version("cryptography")
-assert ver("tornado") >= (6, 5), im.version("tornado")
-assert ver("fastmcp", 3) >= (3, 4, 10), im.version("fastmcp")
-root_dev = os.stat("/").st_dev
-suid, caps = [], []
-def onerror(err):
-    if err.errno != errno.ENOENT:
-        raise err
-for root, dirs, files in os.walk("/", onerror=onerror):
-    kept = []
-    for d in dirs:
-        dp = os.path.join(root, d)
-        try:
-            st = os.lstat(dp)
-        except FileNotFoundError:
-            continue
-        if st.st_dev == root_dev and not stat.S_ISLNK(st.st_mode):
-            kept.append(d)
-    dirs[:] = kept
-    for f in files:
-        p = os.path.join(root, f)
-        try:
-            st = os.lstat(p)
-        except FileNotFoundError:
-            continue
-        if not stat.S_ISREG(st.st_mode) or st.st_dev != root_dev:
-            continue
-        if st.st_mode & (stat.S_ISUID | stat.S_ISGID):
-            suid.append(p)
-        try:
-            if "security.capability" in os.listxattr(p):
-                caps.append(p)
-        except OSError as exc:
-            if exc.errno not in (errno.ENOENT, errno.EOPNOTSUPP):
-                raise
-assert not suid, f"unexpected SUID/SGID binaries: {suid}"
-assert not caps, f"unexpected POSIX file capabilities: {caps}"
-' 2>&1); then
-    pass "image hygiene (no apt lists, zero SUID/SGID/file-caps, security package floors)"
-else
-    fail "image hygiene (no apt lists, zero SUID/SGID/file-caps, security package floors): ${hygiene_err}"
-fi
-docker exec -u "${NB_USER}" "${NAME}" sh -c '
-    pid=$(pgrep -o -f "[j]upyter-lab|[j]upyter lab")
-    [ -n "${pid}" ] && grep -qx "NoNewPrivs:[[:space:]]*1" "/proc/${pid}/status"
-' 2>/dev/null \
-    && pass "Jupyter server runs with NoNewPrivs=1" \
-    || fail "Jupyter server runs with NoNewPrivs=1"
+# Image hygiene & security baseline (shared with test/flavour-smoke.sh).
+"${HERE}/hygiene-check.sh" "${NAME}" "${NB_USER}" || FAILED=$((FAILED + 1))
 
 # 7. Apptainer, and the pieces unprivileged builds fall back to. Whether a
 #    build actually succeeds depends on the runtime granting user namespaces,
@@ -621,21 +568,33 @@ done
 #    environment; the server checks the Hub API before serving, so a stand-in
 #    answers that check from a container sharing its network namespace.
 SU_PORT="${SMOKE_SINGLEUSER_PORT:-18998}"
+SU_HOME="$(mktemp -d)"
+mkdir -p "${SU_HOME}/.jupyter/labconfig"
+SU_ORIG_CFG='{"disabledExtensions":{"@jupyterhub/jupyter-server-proxy":true,"@jupyterlab/apputils-extension:announcements":true},"neurodeskSupporter":"false"}'
+printf '%s\n' "${SU_ORIG_CFG}" > "${SU_HOME}/.jupyter/labconfig/page_config.json"
+chmod -R a+rwX "${SU_HOME}"
 FAKE_HUB='import http.server, json
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200); self.send_header("Content-Type", "application/json")
-        self.end_headers(); self.wfile.write(json.dumps({"version": "0"}).encode())
+        self.end_headers()
+        if self.path.rstrip("/") == "/hub/api":
+            body = {"version": "0"}
+        else:
+            body = {"name": "smoke", "admin": False, "kind": "user", "groups": [], "roles": [], "scopes": ["access:servers!server=smoke/"]}
+        self.wfile.write(json.dumps(body).encode())
     def log_message(self, *a): pass
 http.server.HTTPServer(("127.0.0.1", 8081), H).serve_forever()'
 docker run -d --name "${NAME}-hub" -p "${SU_PORT}:8888" --entrypoint /opt/conda/bin/python \
     "${IMAGE}" -c "${FAKE_HUB}" >/dev/null
 docker run -d --name "${NAME}-singleuser" --network "container:${NAME}-hub" \
+    -v "${SU_HOME}:/home/jovyan" \
     -e JUPYTERHUB_API_TOKEN=smoke -e JUPYTERHUB_API_URL=http://127.0.0.1:8081/hub/api \
     -e JUPYTERHUB_USER=smoke -e JUPYTERHUB_CLIENT_ID=jupyterhub-user-smoke \
     -e JUPYTERHUB_SERVICE_PREFIX=/user/smoke/ -e JUPYTERHUB_BASE_URL=/ \
     -e JUPYTERHUB_SERVICE_URL=http://0.0.0.0:8888/user/smoke/ \
     -e JUPYTERHUB_OAUTH_CALLBACK_URL=/user/smoke/oauth_callback \
+    -e 'JUPYTERHUB_OAUTH_ACCESS_SCOPES=["access:servers!server=smoke/"]' \
     "${IMAGE}" start-singleuser.py >/dev/null
 su_code=000
 for _ in $(seq 1 120); do
@@ -648,7 +607,31 @@ done
 lab_code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${SU_PORT}/user/smoke/lab" 2>/dev/null)
 [ "${lab_code}" = 302 ] && pass "singleuser sends unauthenticated users to the Hub" \
     || fail "singleuser sends unauthenticated users to the Hub (HTTP ${lab_code})"
+su_lab=$(curl -fsS -H "Authorization: token smoke" "http://127.0.0.1:${SU_PORT}/user/smoke/lab" 2>/dev/null || true)
+if printf '%s' "${su_lab}" | python3 -c '
+import json, re, sys
+html = sys.stdin.read()
+m = re.search(r"<script id=\"jupyter-config-data\" type=\"application/json\">(.*?)</script>", html, re.S)
+assert m, "missing jupyter-config-data"
+cfg = json.loads(m.group(1))
+disabled = cfg.get("disabledExtensions", [])
+assert cfg.get("hubUser") == "smoke", cfg.get("hubUser")
+assert "@jupyterhub/jupyter-server-proxy" not in disabled, disabled
+assert "@jupyterlab/apputils-extension:announcements" in disabled, disabled
+' && [ "$(cat "${SU_HOME}/.jupyter/labconfig/page_config.json")" = "${SU_ORIG_CFG}" ]; then
+    pass "singleuser keeps jupyter-server-proxy enabled without mutating shared page_config.json"
+else
+    fail "singleuser keeps jupyter-server-proxy enabled without mutating shared page_config.json"
+fi
+docker exec -u jovyan "${NAME}-singleuser" /opt/slurm/bin/slurm-session wait >/dev/null 2>&1 \
+    && docker exec -u jovyan "${NAME}-singleuser" sinfo -h -o '%t' 2>/dev/null | grep -qx 'idle' \
+    && pass "singleuser starts Slurm queue idle under Hub spawn" \
+    || fail "singleuser starts Slurm queue idle under Hub spawn"
 docker rm -f "${NAME}-singleuser" "${NAME}-hub" >/dev/null 2>&1 || true
+docker run --rm -v "${SU_HOME}:/su-home" --entrypoint /bin/sh "${IMAGE}" \
+    -c 'find /su-home -mindepth 1 -delete' >/dev/null 2>&1 || true
+rm -rf "${SU_HOME}"
+SU_HOME=""
 
 # App tiles: a desktop entry in sciget's applications folder becomes a
 # JupyterLab launcher tile, and the tile starts the application maximised

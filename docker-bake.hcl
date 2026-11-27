@@ -277,6 +277,7 @@ group "test" {
     "vscode-coding-agents-test",
     "virtualgl-test",
     "jupyterlab-slurm-test",
+    "launcher-links-test",
     "workflow-engines-test",
     "viash-hub-test",
     "microscopy-env-test",
@@ -329,14 +330,6 @@ target "os-ubuntu" {
   }
 }
 
-# The OS layer as installed from the snapshot, before its runtime integration files. Components
-# that compile against the OS build FROM it ("os-build"), so changes to the
-# OS's own integration files do not rebuild them.
-target "os-ubuntu-build" {
-  inherits = ["os-ubuntu"]
-  target   = "build"
-}
-
 target "os-ubuntu-test" {
   inherits = ["os-ubuntu"]
   target   = "test"
@@ -345,8 +338,8 @@ target "os-ubuntu-test" {
 
 # --- Components ------------------------------------------------------------------
 
-# Every component: "os" is the runtime OS its test runs on, "os-build" the OS it
-# compiles against; UBUNTU_IMAGE is for the stage that lays out its rootfs/.
+# Every component: "os" is the runtime OS its test runs on; UBUNTU_IMAGE is for
+# the build stage and the stage that lays out its rootfs/.
 target "_component" {
   inherits = ["_common"]
   args = {
@@ -355,7 +348,6 @@ target "_component" {
   }
   contexts = {
     os         = "target:os-ubuntu"
-    os-build   = "target:os-ubuntu-build"
     micromamba = "target:micromamba"
     tests      = "test"
     components = "components"
@@ -680,6 +672,26 @@ target "jupyterlab-neuroglancer" {
 
 target "jupyterlab-neuroglancer-test" {
   inherits = ["jupyterlab-neuroglancer"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Operator-configured external launcher tiles (e.g. WEBKNOSSOS via
+# SCIDESKTOP_WEBKNOSSOS_URL or SCIDESKTOP_LAUNCHER_LINKS).
+target "launcher-links" {
+  inherits = ["_component"]
+  context  = "components/launcher-links"
+  target   = "component"
+  contexts = {
+    jupyter-env = "target:jupyter-env"
+  }
+  args = {
+    NODE_VERSION = NODE_VERSION
+  }
+}
+
+target "launcher-links-test" {
+  inherits = ["launcher-links"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1302,6 +1314,7 @@ target "scidesktop" {
     vscode-core           = "target:vscode-core"
     scigethelpers-cli     = "target:scigethelpers-cli"
     jupyterlab-slurm      = "target:jupyterlab-slurm"
+    launcher-links        = "target:launcher-links"
     workflow-engines      = "target:workflow-engines"
     lightcone             = "target:lightcone"
     sciget-all            = "target:sciget-all"

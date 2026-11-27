@@ -12,8 +12,7 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Packages from the dated snapshot. Components that compile against the OS build
-# FROM this stage (bake target os-ubuntu-build, context "os-build").
+# Packages from the dated snapshot, before the OS layer's runtime integration files.
 FROM ${UBUNTU_IMAGE} AS build
 ARG APT_SNAPSHOT
 ARG CVMFS_VERSION
@@ -66,8 +65,7 @@ COPY rootfs/ /rootfs/
 RUN chmod -R go-w /rootfs
 
 # The runtime OS layer: the snapshot build, the OS's own integration files (CVMFS hook,
-# desktop settings), and apt pointed back at the live archive. Components built
-# FROM "os-build" are not rebuilt when this stage changes.
+# desktop settings), and apt pointed back at the live archive.
 FROM build AS os
 COPY --link --from=rootfs /rootfs/ /
 RUN for f in /etc/apt/sources.list.d/*.live; do mv "${f}" "${f%.live}"; done

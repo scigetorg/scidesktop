@@ -7,12 +7,15 @@
                                              # a built image: the components it holds
     python3 test/contract.py added <image>   # the components the image adds to
                                              # the image it is FROM (all, for the base)
+    python3 test/contract.py surfaces <image># 'full' if the image needs full smoke.sh,
+                                             # 'flavour' if flavour-smoke.sh suffices
 
 Exit status is non-zero when any rule is broken; each violation is printed
 with the rule it breaks.
 """
 import json
 import re
+import shlex
 import subprocess
 import sys
 import tarfile
@@ -31,6 +34,7 @@ OS_COMPONENT = "os-ubuntu"
 # The one place that names architectures; everything else asks it.
 TARGET_ARCH = COMPONENTS / "target-arch"
 CI = ROOT / ".github" / "workflows" / "image.yml"
+CI_BUILD = ROOT / ".github" / "workflows" / "_image-build.yml"
 # Asking the machine instead of buildx's TARGETARCH.
 ARCH_PROBE = re.compile(r"uname -m|dpkg --print-architecture")
 # Where a component puts its part of the notebook server's configuration, and
@@ -125,6 +129,264 @@ def component_names():
 
 def image_names():
     return sorted(p.name for p in IMAGES.iterdir() if p.is_dir())
+
+
+def image_parent(targets, name):
+    """Parent image name in images/ for a domain image, or None for the base."""
+    return next((source.removeprefix("target:")
+                 for context, source in targets.get(name, {}).get("contexts", {}).items()
+                 if context == f"{source.removeprefix('target:')}-base"), None)
+
+
+def added_components(targets, name):
+    """Components the image adds on top of the image it is FROM (all, for the base)."""
+    parent = image_parent(targets, name)
+    return image_components(targets, name) - (image_components(targets, parent) if parent else set())
+
+
+# Runtime surfaces that affect base startup, shells, CVMFS, modulepath,
+# base Jupyter config, or desktop menus and therefore require full test/smoke.sh.
+FULL_SMOKE_SURFACES = (
+    "/usr/local/bin/before-notebook.d/",
+    "/usr/local/bin/start-notebook.d/",
+    "/usr/local/bin/start",
+    "/etc/profile.d/",
+    "/etc/bash.bashrc.d/",
+    "/etc/scidesktop/home-defaults/",
+    "/etc/scidesktop/modulepath.d/",
+    "/etc/cvmfs/",
+    "/opt/sciget/applications/",
+    "/etc/X11/",
+    "/etc/xdg/",
+    "/etc/jupyter/",
+)
+
+
+def _matches_surface(path):
+    """True when an installed path overlaps any FULL_SMOKE_SURFACES prefix."""
+    norm = "/" + path.lstrip("/")
+    return any(
+        norm.startswith(prefix) or (prefix.endswith("/") and norm == prefix.rstrip("/"))
+        for prefix in FULL_SMOKE_SURFACES
+    )
+
+
+def _component_stages(df_path):
+    """Return list of (stage_name, [(ins, text), ...]) for a Dockerfile."""
+    stages = []
+    for ins, text in instructions(df_path):
+        if ins == "FROM":
+            words = [w for w in text.split()[1:] if not w.startswith("--")]
+            stage = words[2].lower() if len(words) > 2 and words[1].lower() == "as" else None
+            stages.append((stage, []))
+        elif stages:
+            stages[-1][1].append((ins, text))
+    return stages
+
+
+def _strip_shell_comments_and_heredocs(script: str) -> str:
+    """Strip shell comments and heredoc bodies while preserving quoted strings."""
+    out = []
+    heredoc_queue: list[tuple[str, bool]] = []
+    in_sq = in_dq = False
+    for line in script.splitlines():
+        if heredoc_queue:
+            delim, strip_tabs = heredoc_queue[0]
+            candidate = line.lstrip("\t") if strip_tabs else line
+            if candidate == delim:
+                heredoc_queue.pop(0)
+            continue
+        escaped = False
+        cleaned_chars = []
+        i = 0
+        n = len(line)
+        while i < n:
+            ch = line[i]
+            if escaped:
+                cleaned_chars.append(ch)
+                escaped = False
+                i += 1
+                continue
+            if ch == "\\" and not in_sq:
+                cleaned_chars.append(ch)
+                escaped = True
+                i += 1
+                continue
+            if ch == "'" and not in_dq:
+                in_sq = not in_sq
+                cleaned_chars.append(ch)
+                i += 1
+                continue
+            if ch == '"' and not in_sq:
+                in_dq = not in_dq
+                cleaned_chars.append(ch)
+                i += 1
+                continue
+            if ch == "#" and not in_sq and not in_dq and (i == 0 or line[i - 1].isspace()):
+                break
+            if not in_sq and not in_dq and line.startswith("<<", i):
+                if (i > 0 and line[i - 1] == "<") or (i + 2 < n and line[i + 2] == "<"):
+                    while i < n and line[i] == "<":
+                        cleaned_chars.append(line[i])
+                        i += 1
+                    continue
+                cleaned_chars.append("<<")
+                i += 2
+                strip_tabs = i < n and line[i] == "-"
+                if strip_tabs:
+                    cleaned_chars.append("-")
+                    i += 1
+                while i < n and line[i] in " \t":
+                    cleaned_chars.append(line[i])
+                    i += 1
+                delim_chars = []
+                d_sq = d_dq = d_esc = False
+                while i < n:
+                    c = line[i]
+                    if d_esc:
+                        delim_chars.append(c)
+                        cleaned_chars.append(c)
+                        d_esc = False
+                        i += 1
+                        continue
+                    if c == "\\" and not d_sq:
+                        cleaned_chars.append(c)
+                        d_esc = True
+                        i += 1
+                        continue
+                    if c == "'" and not d_dq:
+                        d_sq = not d_sq
+                        cleaned_chars.append(c)
+                        i += 1
+                        continue
+                    if c == '"' and not d_sq:
+                        d_dq = not d_dq
+                        cleaned_chars.append(c)
+                        i += 1
+                        continue
+                    if not d_sq and not d_dq and c in " \t;|&()<>":
+                        break
+                    delim_chars.append(c)
+                    cleaned_chars.append(c)
+                    i += 1
+                if delim_chars:
+                    heredoc_queue.append(("".join(delim_chars), strip_tabs))
+                continue
+            cleaned_chars.append(ch)
+            i += 1
+        out.append("".join(cleaned_chars))
+    return "\n".join(out)
+
+
+def _copy_args(text):
+    """Return (sources, dest) for a Dockerfile COPY instruction (shell or JSON form)."""
+    rest = re.sub(r"^COPY\s+", "", text, flags=re.IGNORECASE).strip()
+    while rest.startswith("--"):
+        m = re.match(r"^--\S+\s*", rest)
+        if not m:
+            break
+        rest = rest[m.end():]
+    if rest.startswith("["):
+        try:
+            arr = json.loads(rest)
+            if isinstance(arr, list) and len(arr) >= 2 and all(isinstance(x, str) for x in arr):
+                return arr[:-1], arr[-1]
+        except ValueError:
+            pass
+    try:
+        parts = shlex.split(rest)
+    except ValueError:
+        parts = rest.split()
+    return (parts[:-1], parts[-1]) if len(parts) >= 2 else ([], "")
+
+
+def _copy_dest(text):
+    """Destination path of a Dockerfile COPY instruction (shell or JSON form)."""
+    _, dest = _copy_args(text)
+    return dest
+
+
+def _shipped_venvs(df_path):
+    """Return sorted shipped /opt/... venv paths created in non-test RUN stages."""
+    stages = _component_stages(df_path)
+    venv_re = re.compile(r"""-m\s+venv(?:\s+--\S+)*\s+['"]?(/(?:out/)?opt/[A-Za-z0-9._/-]+)['"]?""")
+    created = set()
+    component_copies = []
+    for stage, ins_list in stages:
+        if stage == "test":
+            continue
+        for ins, text in ins_list:
+            if ins == "RUN":
+                cleaned = _strip_shell_comments_and_heredocs(text)
+                for m in venv_re.finditer(cleaned):
+                    created.add(m.group(1).rstrip("/"))
+            elif stage == "component" and ins == "COPY":
+                srcs, dest = _copy_args(text)
+                if srcs and dest:
+                    component_copies.append((srcs, dest))
+    if not created:
+        return []
+    shipped = set()
+    for v in created:
+        for srcs, dest in component_copies:
+            dest_clean = dest.rstrip("/")
+            for src in srcs:
+                src_clean = src.rstrip("/")
+                if not src_clean:
+                    mapped = (dest_clean + v) if dest_clean else v
+                    shipped.add(mapped)
+                elif v == src_clean or v.startswith(src_clean + "/"):
+                    suffix = v[len(src_clean):]
+                    mapped = (dest_clean + suffix) if dest_clean else (suffix or "/")
+                    if mapped.startswith("/opt/"):
+                        shipped.add(mapped)
+    return sorted(shipped)
+
+
+def image_surface(targets, name):
+    """Return 'full' if the image must run full test/smoke.sh, else 'flavour'.
+
+    Derived mechanically from:
+    1. Any instruction in the domain image Dockerfile outside plain assembly
+       (FROM, LABEL, and `COPY --link --from=<component> / /`) -> 'full'.
+    2. Any component the image adds on top of its base whose rootfs/ files,
+       component-stage COPY destinations, or `/out/...` paths in non-test stages
+       touch FULL_SMOKE_SURFACES -> 'full'.
+    """
+    if name == BASE_IMAGE:
+        return "full"
+    all_components = set(component_names()) - {OS_COMPONENT}
+    df = IMAGES / name / targets[name].get("dockerfile", "Dockerfile")
+    if df.is_file():
+        for ins, text in instructions(df):
+            if ins in ("FROM", "LABEL"):
+                continue
+            m = re.fullmatch(r"COPY --link --from=(\S+) / /", text) if ins == "COPY" else None
+            if m and m.group(1) in all_components:
+                continue
+            return "full"
+    for comp in added_components(targets, name):
+        root = COMPONENTS / comp / "rootfs"
+        if root.is_dir():
+            for path in root.rglob("*"):
+                if path.is_symlink() or path.is_file():
+                    if _matches_surface("/" + path.relative_to(root).as_posix()):
+                        return "full"
+        comp_df = COMPONENTS / comp / "Dockerfile"
+        if comp_df.is_file():
+            for stage, ins_list in _component_stages(comp_df):
+                if stage == "test":
+                    continue
+                for ins, text in ins_list:
+                    if stage == "component" and ins == "COPY":
+                        dest = _copy_dest(text)
+                        if dest and dest != "/" and _matches_surface(dest):
+                            return "full"
+                    elif ins in ("RUN", "COPY"):
+                        for m in re.finditer(r"""/out(/[A-Za-z0-9._/@:+-]+)""", text):
+                            if _matches_surface(m.group(1)):
+                                return "full"
+    return "flavour"
 
 
 def image_components(targets, image):
@@ -225,119 +487,48 @@ def static():
     if not isinstance(ci_doc, dict):
         fail("S6", f"{rel(CI)}: workflow YAML did not parse as a mapping")
         ci_doc = {}
+    ci_build_doc = yaml.safe_load(CI_BUILD.read_text()) if CI_BUILD.is_file() else None
+    if not isinstance(ci_build_doc, dict):
+        fail("S6", f"{rel(CI_BUILD)}: reusable build workflow YAML is missing or did not parse as a mapping")
+        ci_build_doc = {}
 
     jobs = ci_doc.get("jobs") or {}
-    build_job = jobs.get("build") or {}
+    build_jobs = ci_build_doc.get("jobs") or {}
+    build_job = build_jobs.get("build") or {}
     build_include = ((build_job.get("strategy") or {}).get("matrix") or {}).get("include") or []
     ci = sorted(str(entry["arch"]) for entry in build_include if isinstance(entry, dict) and "arch" in entry)
     if ci != sorted(arches):
-        fail("S7", f"{rel(CI)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
+        fail("S7", f"{rel(CI_BUILD)}: the build matrix has {', '.join(ci) or 'no architectures'}, "
                    f"components/target-arch lists {', '.join(arches)}")
 
-    def strip_shell_comments_and_heredocs(script: str) -> str:
-        out = []
-        heredoc_queue: list[tuple[str, bool]] = []
-        in_sq = in_dq = False
-        for line in script.splitlines():
-            if heredoc_queue:
-                delim, strip_tabs = heredoc_queue[0]
-                candidate = line.lstrip("\t") if strip_tabs else line
-                if candidate == delim:
-                    heredoc_queue.pop(0)
-                continue
-            escaped = False
-            cleaned_chars = []
-            i = 0
-            n = len(line)
-            while i < n:
-                ch = line[i]
-                if escaped:
-                    cleaned_chars.append(ch)
-                    escaped = False
-                    i += 1
-                    continue
-                if ch == "\\" and not in_sq:
-                    cleaned_chars.append(ch)
-                    escaped = True
-                    i += 1
-                    continue
-                if ch == "'" and not in_dq:
-                    in_sq = not in_sq
-                    cleaned_chars.append(ch)
-                    i += 1
-                    continue
-                if ch == '"' and not in_sq:
-                    in_dq = not in_dq
-                    cleaned_chars.append(ch)
-                    i += 1
-                    continue
-                if ch == "#" and not in_sq and not in_dq and (i == 0 or line[i - 1].isspace()):
-                    break
-                if not in_sq and not in_dq and line.startswith("<<", i):
-                    if (i > 0 and line[i - 1] == "<") or (i + 2 < n and line[i + 2] == "<"):
-                        while i < n and line[i] == "<":
-                            cleaned_chars.append(line[i])
-                            i += 1
-                        continue
-                    cleaned_chars.append("<<")
-                    i += 2
-                    strip_tabs = i < n and line[i] == "-"
-                    if strip_tabs:
-                        cleaned_chars.append("-")
-                        i += 1
-                    while i < n and line[i] in " \t":
-                        cleaned_chars.append(line[i])
-                        i += 1
-                    delim_chars = []
-                    d_sq = d_dq = d_esc = False
-                    while i < n:
-                        c = line[i]
-                        if d_esc:
-                            delim_chars.append(c)
-                            cleaned_chars.append(c)
-                            d_esc = False
-                            i += 1
-                            continue
-                        if c == "\\" and not d_sq:
-                            cleaned_chars.append(c)
-                            d_esc = True
-                            i += 1
-                            continue
-                        if c == "'" and not d_dq:
-                            d_sq = not d_sq
-                            cleaned_chars.append(c)
-                            i += 1
-                            continue
-                        if c == '"' and not d_sq:
-                            d_dq = not d_dq
-                            cleaned_chars.append(c)
-                            i += 1
-                            continue
-                        if not d_sq and not d_dq and c in " \t;|&()<>":
-                            break
-                        delim_chars.append(c)
-                        cleaned_chars.append(c)
-                        i += 1
-                    if delim_chars:
-                        heredoc_queue.append(("".join(delim_chars), strip_tabs))
-                    continue
-                cleaned_chars.append(ch)
-                i += 1
-            out.append("".join(cleaned_chars))
-        return "\n".join(out)
+    # PR build job must hold read-only package permissions and never write cache or candidates.
+    pr_job = jobs.get("build-pr") or {}
+    pr_perms = pr_job.get("permissions") or {}
+    pr_with = pr_job.get("with") or {}
+    if pr_perms.get("packages") != "read":
+        fail("S6", f"{rel(CI)}: jobs.build-pr must request `packages: read` (got {pr_perms.get('packages')!r})")
+    if pr_with.get("write-cache") is not False or pr_with.get("push-candidates") is not False:
+        fail("S6", f"{rel(CI)}: jobs.build-pr must pass `write-cache: false` and `push-candidates: false`")
+
+    strip_shell_comments_and_heredocs = _strip_shell_comments_and_heredocs
 
     publish_raw = (ci_doc.get("env") or {}).get("PUBLISH")
+    build_publish_raw = (ci_build_doc.get("env") or {}).get("PUBLISH")
     if not isinstance(publish_raw, str) or not publish_raw.split():
         fail("S6", f"{rel(CI)}: env.PUBLISH is missing or empty")
     else:
         pub_imgs = publish_raw.split()
+        if len(pub_imgs) != len(set(pub_imgs)):
+            fail("S6", f"{rel(CI)}: env.PUBLISH contains duplicate entries ({', '.join(pub_imgs)})")
+        if not isinstance(build_publish_raw, str) or build_publish_raw.split() != pub_imgs:
+            fail("S6", f"{rel(CI_BUILD)}: env.PUBLISH ({build_publish_raw!r}) does not match {rel(CI)} ({publish_raw!r})")
 
-        # Attestation and Quay mirror matrices must both match PUBLISH.
+        # Attestation and Quay mirror matrices must both match PUBLISH with no duplicates.
         for job_name in ("attest", "mirror-quay"):
             mat_imgs = (((jobs.get(job_name) or {}).get("strategy") or {}).get("matrix") or {}).get("image")
             if not isinstance(mat_imgs, list) or not mat_imgs:
                 fail("S6", f"{rel(CI)}: jobs.{job_name}.strategy.matrix.image is missing or empty")
-            elif set(pub_imgs) != {str(x) for x in mat_imgs}:
+            elif sorted(pub_imgs) != sorted(str(x) for x in mat_imgs):
                 fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match {job_name} matrix ({', '.join(map(str, mat_imgs))})")
 
         # Browser smoke step: must loop over ${PUBLISH} and invoke ./test/browser-smoke.sh "${image}:ci".
@@ -360,10 +551,11 @@ def static():
                 browser_ok = True
                 break
         if not browser_ok:
-            fail("S6", f"{rel(CI)}: jobs.build must have a step looping `for image in ${{PUBLISH}}; do` that runs `./test/browser-smoke.sh \"${{image}}:ci\"`")
+            fail("S6", f"{rel(CI_BUILD)}: jobs.build must have a step looping `for image in ${{PUBLISH}}; do` that runs `./test/browser-smoke.sh \"${{image}}:ci\"`")
 
         # Installed Python pip-audit step: must declare env.PIP_AUDIT_SPECS covering
-        # every published image's domain *-env interpreter and execute pip-audit in a loop over it.
+        # every published image's domain *-env interpreter and shipped -m venv,
+        # and execute pip-audit in a loop over it.
         audit_step = None
         for step in build_steps:
             if not (isinstance(step, dict) and isinstance(step.get("run"), str)):
@@ -385,18 +577,24 @@ def static():
                 audit_step = (step, specs_val.split())
                 break
         if audit_step is None:
-            fail("S6", f"{rel(CI)}: jobs.build must have a step with env.PIP_AUDIT_SPECS looped into `/tmp/pip-audit-venv/bin/pip-audit`")
+            fail("S6", f"{rel(CI_BUILD)}: jobs.build must have a step with env.PIP_AUDIT_SPECS looped into `/tmp/pip-audit-venv/bin/pip-audit`")
         else:
             step, specs = audit_step
             audited = set(specs)
             for img in pub_imgs:
                 if img not in targets:
                     continue
-                for comp in sorted(image_components(targets, img)):
+                for comp in sorted(added_components(targets, img)):
                     if comp.endswith("-env") and comp != "jupyter-env":
                         expected_spec = f"{img}:ci:/opt/{comp}/bin/python"
                         if expected_spec not in audited:
-                            fail("S6", f"{rel(CI)}: published image {img} holds {comp}, but env.PIP_AUDIT_SPECS in {step.get('name')!r} omits {expected_spec}")
+                            fail("S6", f"{rel(CI_BUILD)}: published image {img} holds {comp}, but env.PIP_AUDIT_SPECS in {step.get('name')!r} omits {expected_spec}")
+                    df_path = COMPONENTS / comp / "Dockerfile"
+                    if df_path.is_file():
+                        for venv_path in _shipped_venvs(df_path):
+                            expected_spec = f"{img}:ci:{venv_path}/bin/python"
+                            if expected_spec not in audited:
+                                fail("S6", f"{rel(CI_BUILD)}: published image {img} adds {comp} (venv {venv_path}), but env.PIP_AUDIT_SPECS in {step.get('name')!r} omits {expected_spec}")
 
     # S6: every folder in images/ is a bake target of the same name in group
     # "default", built from that folder. The stage a domain image builds is
@@ -669,12 +867,11 @@ def main():
         # For test/image-smoke.sh, which tests each component in the first
         # image that adds it: the images it is FROM test the rest.
         targets = bake_print()["target"]
-        name = sys.argv[2]
-        parent = next((source.removeprefix("target:")
-                       for context, source in targets[name].get("contexts", {}).items()
-                       if context == f"{source.removeprefix('target:')}-base"), None)
-        own = image_components(targets, name) - (image_components(targets, parent) if parent else set())
-        print("\n".join(sorted(own)))
+        print("\n".join(sorted(added_components(targets, sys.argv[2]))))
+        sys.exit(0)
+    elif mode == "surfaces" and len(sys.argv) == 3 and sys.argv[2] in image_names():
+        targets = bake_print()["target"]
+        print(image_surface(targets, sys.argv[2]))
         sys.exit(0)
     else:
         sys.exit(__doc__)

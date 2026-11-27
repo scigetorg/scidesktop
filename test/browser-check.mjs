@@ -323,34 +323,31 @@ async function main() {
     // 1. JupyterLab boot, WebGL2 availability, and launcher tiles
     const lab = await openTab(cdp);
     await lab.goto(`${BASE_URL}/lab?token=${encodeURIComponent(TOKEN)}`);
+    const expectedCards = ["Desktop", "scigent.ai", "Chat", "Slurm Dashboard", "WEBKNOSSOS"];
+    if (HAS_VSCODE) expectedCards.push("VS Code");
+    if (HAS_NEUROGLANCER) expectedCards.push("Neuroglancer");
     const launcher = await lab.waitFor(`(() => {
       const panel = document.querySelector('#jp-main-dock-panel');
       const cards = [...document.querySelectorAll('.jp-LauncherCard-label')].map(e => e.textContent.trim());
       if (!panel || cards.length < 3) return null;
-      return { cards };
-    })()`, 60000);
+      const wanted = ${JSON.stringify(expectedCards)};
+      if (wanted.every(w => cards.some(c => c.toLowerCase().includes(w.toLowerCase())))) {
+        return { cards };
+      }
+      return null;
+    })()`, 60000) || await lab.eval(`(() => {
+      const panel = document.querySelector('#jp-main-dock-panel');
+      const cards = [...document.querySelectorAll('.jp-LauncherCard-label')].map(e => e.textContent.trim());
+      return panel && cards.length >= 3 ? { cards } : null;
+    })()`);
 
     if (launcher) {
       pass(`JupyterLab rendered launcher (${launcher.cards.length} tiles)`);
-      for (const expected of ["Desktop", "scigent.ai", "Chat"]) {
+      for (const expected of expectedCards) {
         if (launcher.cards.some((c) => c.toLowerCase().includes(expected.toLowerCase()))) {
           pass(`launcher offers "${expected}" tile`);
         } else {
           fail(`launcher offers "${expected}" tile`, `saw: ${launcher.cards.join(", ")}`);
-        }
-      }
-      if (HAS_VSCODE) {
-        if (launcher.cards.some((c) => c.toLowerCase().includes("vs code"))) {
-          pass('launcher offers "VS Code" tile');
-        } else {
-          fail('launcher offers "VS Code" tile', `saw: ${launcher.cards.join(", ")}`);
-        }
-      }
-      if (HAS_NEUROGLANCER) {
-        if (launcher.cards.some((c) => c.toLowerCase().includes("neuroglancer"))) {
-          pass('launcher offers "Neuroglancer" tile');
-        } else {
-          fail('launcher offers "Neuroglancer" tile', `saw: ${launcher.cards.join(", ")}`);
         }
       }
     } else {
