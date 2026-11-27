@@ -4,6 +4,7 @@ import json
 import os
 import pathlib
 import tempfile
+from types import SimpleNamespace
 
 from jupyter_core.paths import jupyter_path
 from jupyter_server.serverapp import ServerApp
@@ -19,6 +20,24 @@ def load_hook():
     return app.config.ServerApp.tornado_settings.get_value({})["page_config_hook"]
 
 
+def _write_federated_ext(jdata, name, disabled_list):
+    ext_dir = jdata / "labextensions" / name
+    ext_dir.mkdir(parents=True, exist_ok=True)
+    (ext_dir / "package.json").write_text(
+        json.dumps(
+            {
+                "name": name,
+                "version": "1.0.0",
+                "jupyterlab": {
+                    "_build": {"load": "static/remoteEntry.js"},
+                    "disabledExtensions": disabled_list,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def run_case(
     hook,
     user_cfg,
@@ -27,7 +46,8 @@ def run_case(
     extra_setup=None,
     keep_env=False,
     symlink_user_to_op=False,
-    ext_disables_proxy=False,
+    federated_exts=None,
+    source_ext_metadata=None,
 ):
     with tempfile.TemporaryDirectory() as td:
         root = pathlib.Path(td)
@@ -54,6 +74,17 @@ def run_case(
         if extra_setup is not None:
             extra_setup(home)
 
+        app_settings_dir = None
+        if source_ext_metadata is not None:
+            app_dir = root / "app"
+            (app_dir / "settings").mkdir(parents=True)
+            (app_dir / "static").mkdir(parents=True)
+            (app_dir / "static" / "package.json").write_text(
+                json.dumps({"jupyterlab": {"extensionMetadata": source_ext_metadata}}),
+                encoding="utf-8",
+            )
+            app_settings_dir = str(app_dir / "settings")
+
         old_env = {
             k: os.environ.get(k)
             for k in (
@@ -71,23 +102,10 @@ def run_case(
                 os.environ["JUPYTER_CONFIG_PATH"] = str(op)
             else:
                 os.environ.pop("JUPYTER_CONFIG_PATH", None)
-            if ext_disables_proxy:
+            if federated_exts:
                 jdata = root / "jdata"
-                ext_dir = jdata / "labextensions" / "org-policy-ext"
-                ext_dir.mkdir(parents=True)
-                (ext_dir / "package.json").write_text(
-                    json.dumps(
-                        {
-                            "name": "org-policy-ext",
-                            "version": "1.0.0",
-                            "jupyterlab": {
-                                "_build": {"load": "static/remoteEntry.js"},
-                                "disabledExtensions": [EXT],
-                            },
-                        }
-                    ),
-                    encoding="utf-8",
-                )
+                for name, disabled_list in federated_exts.items():
+                    _write_federated_ext(jdata, name, disabled_list)
                 os.environ["JUPYTER_PATH"] = str(jdata)
             else:
                 os.environ.pop("JUPYTER_PATH", None)
@@ -96,8 +114,20 @@ def run_case(
             else:
                 os.environ.pop("SCIDESKTOP_KEEP_DISABLED_SERVER_PROXY", None)
 
-            merged = get_page_config(jupyter_path("labextensions"), None)
-            res = hook(None, merged)
+            labext_paths = jupyter_path("labextensions")
+            merged = get_page_config(labext_paths, app_settings_dir)
+            handler = (
+                SimpleNamespace(
+                    extensionapp=SimpleNamespace(
+                        app_settings_dir=app_settings_dir,
+                        labextensions_path=labext_paths,
+                        extra_labextensions_path=[],
+                    )
+                )
+                if app_settings_dir is not None
+                else None
+            )
+            res = hook(handler, merged)
             assert pc_file.read_text(encoding="utf-8") == orig, "page_config.json mutated"
             return res
         finally:
@@ -192,9 +222,28 @@ def main():
     r10 = run_case(
         hook,
         {"disabledExtensions": {EXT: True}, "neurodeskSupporter": "false"},
-        ext_disables_proxy=True,
+        federated_exts={"org-policy-ext": [EXT]},
     )
     assert EXT in r10["disabledExtensions"], r10
+
+    # 11. Extension A disables server-proxy while Extension B disables A via metadata:
+    # JupyterLab still applies A's policy (A is not disabled in static config), so preserve.
+    r11 = run_case(
+        hook,
+        {"disabledExtensions": {EXT: True}, "neurodeskSupporter": "false"},
+        federated_exts={"ext-a": [EXT], "ext-b": ["ext-a"]},
+    )
+    assert EXT in r11["disabledExtensions"], r11
+
+    # 12. Federated metadata for ext-a supersedes source extensionMetadata for ext-a:
+    # ext-a's federated metadata does not disable server-proxy, so legacy user disable recovers.
+    r12 = run_case(
+        hook,
+        {"disabledExtensions": {EXT: True}, "neurodeskSupporter": "false"},
+        federated_exts={"ext-a": ["some-other-ext"]},
+        source_ext_metadata={"ext-a": {"disabledExtensions": [EXT]}},
+    )
+    assert EXT not in r12["disabledExtensions"], r12
 
     print("PAGE_CONFIG_HOOK_TESTS_OK")
 

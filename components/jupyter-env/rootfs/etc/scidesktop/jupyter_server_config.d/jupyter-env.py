@@ -65,48 +65,8 @@ def _has_legacy_neurodesk_provenance(user_cfg):
                 pass
 
 
-def _extension_metadata_disables(handler, page_config):
-    app = getattr(handler, "extensionapp", None)
-    if app is not None and hasattr(app, "labextensions_path"):
-        labextensions_path = list(getattr(app, "extra_labextensions_path", [])) + list(
-            app.labextensions_path
-        )
-    else:
-        labextensions_path = jupyter_paths.jupyter_path("labextensions")
-
-    disabled = page_config.get("disabledExtensions")
-    for ext_name, ext_data in get_federated_extensions(labextensions_path).items():
-        if _ext_enabled_in(disabled, ext_name):
-            continue
-        if _ext_enabled_in(
-            ext_data.get("jupyterlab", {}).get("disabledExtensions"),
-            _SERVER_PROXY_EXT,
-        ):
-            return True
-
-    app_settings_dir = getattr(app, "app_settings_dir", None)
-    if app_settings_dir:
-        pkg_path = os.path.join(
-            os.path.dirname(app_settings_dir), "static", "package.json"
-        )
-        if os.path.isfile(pkg_path):
-            try:
-                with open(pkg_path, encoding="utf-8") as fh:
-                    app_data = json.load(fh)
-                ext_meta = app_data.get("jupyterlab", {}).get("extensionMetadata", {})
-                for ext_name, ext_data in ext_meta.items():
-                    if _ext_enabled_in(disabled, ext_name):
-                        continue
-                    if _ext_enabled_in(
-                        ext_data.get("disabledExtensions"), _SERVER_PROXY_EXT
-                    ):
-                        return True
-            except (OSError, ValueError):
-                pass
-    return False
-
-
-def _operator_or_extension_disables(handler, user_dir, page_config):
+def _disabled_without_legacy_user_entry(handler, user_dir):
+    """Evaluate JupyterLab's exact disable rollup without the legacy user entry."""
     user_norm = os.path.normpath(user_dir)
     user_real = os.path.realpath(user_dir)
     all_config_paths = jupyter_paths.jupyter_config_path()
@@ -124,10 +84,9 @@ def _operator_or_extension_disables(handler, user_dir, page_config):
     ):
         return True
 
-    non_user_cfg = {}
-    app_settings_dir = getattr(
-        getattr(handler, "extensionapp", None), "app_settings_dir", None
-    )
+    app = getattr(handler, "extensionapp", None)
+    app_settings_dir = getattr(app, "app_settings_dir", None)
+    static_cfg = {}
     if app_settings_dir:
         for name in ("page_config.json5", "page_config.json"):
             path = os.path.join(app_settings_dir, name)
@@ -136,25 +95,74 @@ def _operator_or_extension_disables(handler, user_dir, page_config):
                 for key in ("disabledExtensions", "lockedExtensions"):
                     if isinstance(data.get(key), list):
                         data[key] = {ext: True for ext in data[key]}
-                recursive_update(non_user_cfg, data)
+                recursive_update(static_cfg, data)
                 break
 
-    non_user_paths = [os.path.join(p, "labconfig") for p in operator_dirs]
-    if non_user_paths:
-        recursive_update(
-            non_user_cfg,
-            ConfigManager(read_config_path=non_user_paths).get("page_config"),
+    # Merge config layers in ConfigManager's exact back-to-front precedence,
+    # subtracting only _SERVER_PROXY_EXT from the user layer's disabledExtensions.
+    for path in all_config_paths[::-1]:
+        layer = ConfigManager(
+            read_config_path=[os.path.join(path, "labconfig")]
+        ).get("page_config")
+        if os.path.normpath(path) == user_norm:
+            layer_disabled = layer.get("disabledExtensions")
+            if isinstance(layer_disabled, dict):
+                layer_disabled.pop(_SERVER_PROXY_EXT, None)
+        recursive_update(static_cfg, layer)
+
+    if _ext_enabled_in(static_cfg.get("lockedExtensions"), _SERVER_PROXY_EXT):
+        return True
+
+    static_disabled = static_cfg.get("disabledExtensions")
+    if not isinstance(static_disabled, dict):
+        static_disabled = {}
+
+    if app is not None and hasattr(app, "labextensions_path"):
+        labextensions_path = list(getattr(app, "extra_labextensions_path", [])) + list(
+            app.labextensions_path
         )
+    else:
+        labextensions_path = jupyter_paths.jupyter_path("labextensions")
 
-    if _ext_enabled_in(non_user_cfg.get("lockedExtensions"), _SERVER_PROXY_EXT):
-        return True
-    non_user_disabled = non_user_cfg.get("disabledExtensions")
-    if isinstance(non_user_disabled, dict) and _SERVER_PROXY_EXT in non_user_disabled:
-        return bool(non_user_disabled[_SERVER_PROXY_EXT])
-    if _ext_enabled_in(non_user_disabled, _SERVER_PROXY_EXT):
-        return True
+    # Mirror jupyterlab_server.config.get_page_config's extension-metadata rollup:
+    # federated metadata takes precedence over source extensionMetadata by name,
+    # and an extension's metadata is skipped only if static config disables it.
+    disabled_by_extensions_all = {}
+    for _, ext_data in get_federated_extensions(labextensions_path).items():
+        jlab = ext_data.get("jupyterlab") or {}
+        if "_build" not in jlab:
+            continue
+        if jlab.get("disabledExtensions"):
+            disabled_by_extensions_all[ext_data["name"]] = jlab["disabledExtensions"]
 
-    return _extension_metadata_disables(handler, page_config)
+    if app_settings_dir:
+        pkg_path = os.path.join(
+            os.path.dirname(app_settings_dir), "static", "package.json"
+        )
+        if os.path.isfile(pkg_path):
+            try:
+                with open(pkg_path, encoding="utf-8") as fh:
+                    app_data = json.load(fh)
+                ext_meta = app_data.get("jupyterlab", {}).get("extensionMetadata", {})
+                for ext_name, ext_data in ext_meta.items():
+                    if ext_name in disabled_by_extensions_all:
+                        continue
+                    if ext_data.get("disabledExtensions"):
+                        disabled_by_extensions_all[ext_name] = ext_data[
+                            "disabledExtensions"
+                        ]
+            except (OSError, ValueError):
+                pass
+
+    rollup_disabled = {}
+    for name in sorted(disabled_by_extensions_all):
+        if static_disabled.get(name) is True:
+            continue
+        for item in disabled_by_extensions_all[name]:
+            rollup_disabled[item] = True
+
+    rollup_disabled.update(static_disabled)
+    return bool(rollup_disabled.get(_SERVER_PROXY_EXT))
 
 
 def _scidesktop_page_config_hook(handler, page_config):
@@ -173,7 +181,7 @@ def _scidesktop_page_config_hook(handler, page_config):
     if (
         _ext_enabled_in(user_cfg.get("disabledExtensions"), _SERVER_PROXY_EXT)
         and _has_legacy_neurodesk_provenance(user_cfg)
-        and not _operator_or_extension_disables(handler, user_dir, page_config)
+        and not _disabled_without_legacy_user_entry(handler, user_dir)
     ):
         page_config["disabledExtensions"] = [
             ext for ext in disabled if ext != _SERVER_PROXY_EXT

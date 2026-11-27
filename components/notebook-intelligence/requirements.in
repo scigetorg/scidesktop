@@ -1,4 +1,4 @@
-# Notebook Intelligence for JupyterLab (BSD-3-Clause), installed into
+# Notebook Intelligence for JupyterLab (GPL-3.0), installed into
 # /opt/notebook-intelligence/lib. Packages already provided by jupyter-env are
 # excluded by ./lock so this component only ships the delta.
 # Run ./lock after changing a pin.
