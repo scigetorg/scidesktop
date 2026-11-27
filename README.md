@@ -76,9 +76,12 @@ base alongside them, so nothing needs publishing first. To start a new one, or
 to build one for your own community in a fork, see [docs/images.md](docs/images.md).
 
 CI builds and tests every image on amd64 and arm64. On `main` it publishes
-scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, genomicsdesktop and neurodesktop to
-`ghcr.io/scigetorg/<image>`, each as one multi-arch image, tagged with the
-commit's short SHA, the date and `latest`.
+scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, genomicsdesktop and neurodesktop as multi-arch images tagged with the commit's short SHA, the UTC date and `latest`:
+
+- **GHCR** (primary, with build provenance attestations): `ghcr.io/scigetorg/<image>:<tag>`
+- **Quay.io** (optional mirror, populated for builds published after mirroring is configured): `quay.io/scigetorg/<image>:<tag>`
+
+Any short-SHA tag (`<short sha>`) that has successfully mirrored can be pulled interchangeably from Quay.io (older GHCR tags are not backfilled, and rolling tags such as `latest` or `<YYYY-MM-DD>` can lag behind GHCR if a Quay mirror fails or is skipped). See [docs/images.md](docs/images.md#mirroring-to-quayio) for publishing and mirror details.
 
 ## What is in it
 

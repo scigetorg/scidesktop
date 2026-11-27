@@ -523,15 +523,18 @@ def static():
         fail("S6", f"{rel(CI)}: env.PUBLISH is missing or empty")
     else:
         pub_imgs = publish_raw.split()
+        if len(pub_imgs) != len(set(pub_imgs)):
+            fail("S6", f"{rel(CI)}: env.PUBLISH contains duplicate entries ({', '.join(pub_imgs)})")
         if not isinstance(build_publish_raw, str) or build_publish_raw.split() != pub_imgs:
             fail("S6", f"{rel(CI_BUILD)}: env.PUBLISH ({build_publish_raw!r}) does not match {rel(CI)} ({publish_raw!r})")
 
-        # Attestation matrix: jobs.attest.strategy.matrix.image
-        att_imgs = (((jobs.get("attest") or {}).get("strategy") or {}).get("matrix") or {}).get("image")
-        if not isinstance(att_imgs, list) or not att_imgs:
-            fail("S6", f"{rel(CI)}: jobs.attest.strategy.matrix.image is missing or empty")
-        elif set(pub_imgs) != {str(x) for x in att_imgs}:
-            fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match attest matrix ({', '.join(map(str, att_imgs))})")
+        # Attestation and Quay mirror matrices must both match PUBLISH with no duplicates.
+        for job_name in ("attest", "mirror-quay"):
+            mat_imgs = (((jobs.get(job_name) or {}).get("strategy") or {}).get("matrix") or {}).get("image")
+            if not isinstance(mat_imgs, list) or not mat_imgs:
+                fail("S6", f"{rel(CI)}: jobs.{job_name}.strategy.matrix.image is missing or empty")
+            elif sorted(pub_imgs) != sorted(str(x) for x in mat_imgs):
+                fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match {job_name} matrix ({', '.join(map(str, mat_imgs))})")
 
         # Browser smoke step: must loop over ${PUBLISH} and invoke ./test/browser-smoke.sh "${image}:ci".
         build_steps = build_job.get("steps") or []

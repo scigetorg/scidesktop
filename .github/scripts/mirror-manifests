@@ -1,0 +1,226 @@
+#!/bin/bash
+# Mirrors published multi-arch images from a source registry (GHCR) to a
+# destination registry (Quay.io) using crane.
+#
+#   mirror-manifests <source-registry/owner> <dest-registry/owner> <image>...
+#
+# Mirrors the commit's short-SHA multi-arch manifest first for every image and
+# verifies it holds every target architecture in components/target-arch. Only
+# after every image's short-SHA tag is mirrored and verified does it move the
+# rolling tags (UTC commit date and latest), rechecking that GITHUB_SHA is
+# still the head of PUBLISH_BRANCH (default main) before every tag attempt
+# (including retries after backoff), matching publish-manifests' rolling-tag
+# safety guarantees.
+#
+# Retries transient registry errors and timeouts with bounded backoff, while
+# failing fast on genuine authentication/authorization errors. Quay's transient
+# maintenance response ("DENIED: System is currently read-only") is treated as
+# retryable.
+set -euo pipefail
+
+src_registry="${1:?usage: mirror-manifests <source-registry/owner> <dest-registry/owner> <image>...}"
+dst_registry="${2:?usage: mirror-manifests <source-registry/owner> <dest-registry/owner> <image>...}"
+shift 2
+
+if [ "$#" -eq 0 ]; then
+    echo "mirror-manifests: at least one image name is required" >&2
+    exit 2
+fi
+
+cd "$(dirname "$0")/../.."
+arches="$(components/target-arch list)"
+sha="${GITHUB_SHA:?}"
+short_sha="$(printf '%.7s' "${sha}")"
+branch="${PUBLISH_BRANCH:-main}"
+date="$(TZ=UTC git show --no-patch --date=format-local:%Y-%m-%d --format=%cd "${sha}")"
+
+# Budget aligned with mirror-quay's 60m job timeout:
+# copy (3 * 600s + 90s = 31.5m) + 3 metadata ops (3 * (3 * 60s + 90s) = 13.5m)
+# + setup/branch lookups (~6m) <= 60m.
+max_attempts="${CRANE_MAX_ATTEMPTS:-3}"
+copy_timeout="${CRANE_ATTEMPT_TIMEOUT_SECONDS:-600}"
+metadata_timeout="${CRANE_METADATA_TIMEOUT_SECONDS:-60}"
+# Space-separated retry delays in seconds; the last value repeats if needed.
+retry_delays_str="${CRANE_RETRY_DELAYS:-30 60 120}"
+read -r -a retry_delays <<< "${retry_delays_str}"
+
+if ! [[ "${max_attempts}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "mirror-manifests: CRANE_MAX_ATTEMPTS must be a positive integer; got '${max_attempts}'" >&2
+    exit 2
+fi
+if ! [[ "${copy_timeout}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "mirror-manifests: CRANE_ATTEMPT_TIMEOUT_SECONDS must be a positive integer; got '${copy_timeout}'" >&2
+    exit 2
+fi
+if ! [[ "${metadata_timeout}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "mirror-manifests: CRANE_METADATA_TIMEOUT_SECONDS must be a positive integer; got '${metadata_timeout}'" >&2
+    exit 2
+fi
+if ! command -v crane >/dev/null 2>&1; then
+    echo "mirror-manifests: crane is required but was not found on PATH" >&2
+    exit 127
+fi
+
+src_prefix="${src_registry,,}"
+src_prefix="${src_prefix%/}"
+dst_prefix="${dst_registry,,}"
+dst_prefix="${dst_prefix%/}"
+
+# Quay answers writes during maintenance with "DENIED: System is currently
+# read-only"; that is transient, so only the remaining lines decide whether
+# the failure is a real auth error.
+is_auth_failure() {
+    local log_file="$1"
+    grep -Ei \
+        '(unauthorized|unauthenticated|authentication required|incorrect username|invalid username|forbidden|denied:|requested access.*denied)' \
+        < <(grep -Eiv 'denied: system is currently read-only' "${log_file}" || true) \
+        >/dev/null
+}
+
+retry_delay_for_attempt() {
+    local attempt="$1"
+    local idx=$((attempt - 1))
+    local last=$((${#retry_delays[@]} - 1))
+    if [ "${idx}" -gt "${last}" ]; then
+        idx="${last}"
+    fi
+    echo "${retry_delays[${idx}]}"
+}
+
+# check_branch_head <image> <tag-desc>
+# Returns 0 if GITHUB_SHA is still the head of PUBLISH_BRANCH, 1 if the branch
+# has advanced (after logging), or exits non-zero if the branch lookup fails.
+check_branch_head() {
+    local image="$1"
+    local tag_desc="$2"
+    local head
+    head="$(git ls-remote origin "refs/heads/${branch}" | cut -f 1)"
+    [ -n "${head}" ] || { echo "mirror-manifests: origin has no branch ${branch}" >&2; exit 1; }
+    if [ "${head}" != "${sha}" ]; then
+        echo "mirror-manifests: ${short_sha} is not the head of ${branch} ($(printf '%.7s' "${head}")); ${tag_desc} of ${image} and any remaining rolling tags are left where they are"
+        return 1
+    fi
+    return 0
+}
+
+# run_crane_retry <timeout-seconds> <output-file-or-empty> <guard-image-or-empty> <crane-args...>
+# Runs `crane <args...>` with timeout and bounded retries. When output-file is
+# non-empty, stdout is captured there (stderr is logged); otherwise both stdout
+# and stderr are logged. When guard-image is non-empty, rechecks that GITHUB_SHA
+# is still head of PUBLISH_BRANCH immediately before each attempt; returns 75
+# if the branch advanced.
+run_crane_retry() {
+    local timeout_s="$1"
+    local out_file="$2"
+    local guard_image="$3"
+    shift 3
+    local attempt rc log_file err_file delay
+
+    for attempt in $(seq 1 "${max_attempts}"); do
+        if [ -n "${guard_image}" ]; then
+            if ! check_branch_head "${guard_image}" ":${*: -1}"; then
+                return 75
+            fi
+        fi
+        echo "crane $*: attempt ${attempt}/${max_attempts}" >&2
+        log_file="$(mktemp)"
+        err_file="$(mktemp)"
+        set +e
+        if [ -n "${out_file}" ]; then
+            timeout "${timeout_s}s" crane "$@" >"${out_file}" 2>"${err_file}"
+            rc=$?
+            cp "${err_file}" "${log_file}"
+        else
+            timeout "${timeout_s}s" crane "$@" >"${log_file}" 2>&1
+            rc=$?
+        fi
+        set -e
+
+        if [ -s "${log_file}" ]; then
+            cat "${log_file}" >&2
+        fi
+
+        if [ "${rc}" -eq 0 ]; then
+            rm -f "${log_file}" "${err_file}"
+            return 0
+        fi
+
+        if is_auth_failure "${log_file}"; then
+            rm -f "${log_file}" "${err_file}"
+            echo "mirror-manifests: crane $* failed with an authentication or authorization error; not retrying" >&2
+            return "${rc}"
+        fi
+        rm -f "${log_file}" "${err_file}"
+
+        if [ "${rc}" -eq 124 ]; then
+            echo "mirror-manifests: crane $* timed out after ${timeout_s}s" >&2
+        else
+            echo "mirror-manifests: crane $* failed with exit code ${rc}" >&2
+        fi
+
+        if [ "${attempt}" -lt "${max_attempts}" ]; then
+            delay="$(retry_delay_for_attempt "${attempt}")"
+            echo "mirror-manifests: retrying crane $* in ${delay}s" >&2
+            sleep "${delay}"
+        else
+            echo "mirror-manifests: crane $* failed after ${max_attempts} attempts" >&2
+            return "${rc}"
+        fi
+    done
+}
+
+verify_multiarch() {
+    local ref="$1"
+    local manifest_file published expected
+    manifest_file="$(mktemp)"
+    if ! run_crane_retry "${metadata_timeout}" "${manifest_file}" "" manifest "${ref}"; then
+        rm -f "${manifest_file}"
+        return 1
+    fi
+    published="$(python3 - "${manifest_file}" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as fh:
+    doc = json.load(fh)
+arches = [
+    m["platform"]["architecture"]
+    for m in doc.get("manifests") or []
+    if (m.get("platform") or {}).get("os") == "linux"
+    and (m.get("platform") or {}).get("architecture")
+]
+print("\n".join(sorted(arches)))
+PY
+)"
+    rm -f "${manifest_file}"
+    # shellcheck disable=SC2086
+    expected="$(printf '%s\n' ${arches} | sort)"
+    if [ "${published}" != "${expected}" ]; then
+        echo "mirror-manifests: ${ref} holds '${published//$'\n'/ }', not '${arches}'" >&2
+        return 1
+    fi
+}
+
+# Pass 1: copy every image's immutable short-SHA manifest and verify all target
+# architectures are present before any rolling tag moves.
+for image in "$@"; do
+    src_repo="${src_prefix}/${image}"
+    dst_repo="${dst_prefix}/${image}"
+    run_crane_retry "${copy_timeout}" "" "" copy "${src_repo}:${short_sha}" "${dst_repo}:${short_sha}"
+    verify_multiarch "${dst_repo}:${short_sha}"
+    echo "mirrored ${dst_repo}:${short_sha} for ${arches}"
+done
+
+# Pass 2: move rolling tags (UTC date and latest) only while GITHUB_SHA is
+# still the head of PUBLISH_BRANCH, rechecking before every tag attempt.
+for image in "$@"; do
+    dst_repo="${dst_prefix}/${image}"
+    for tag in "${date}" latest; do
+        rc=0
+        run_crane_retry "${metadata_timeout}" "" "${image}" tag "${dst_repo}:${short_sha}" "${tag}" || rc=$?
+        if [ "${rc}" -eq 75 ]; then
+            exit 0
+        elif [ "${rc}" -ne 0 ]; then
+            exit "${rc}"
+        fi
+    done
+    echo "tagged ${dst_repo}:${date} and :latest"
+done

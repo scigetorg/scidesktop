@@ -117,10 +117,15 @@ pipeline takes about two minutes. Limits are for the whole session, background
 services included: idle, they hold about 1.1 GB. 8 GB and 4 CPUs leave room to train in a pipeline while
 working in JupyterLab.
 
-**Publishing.** CI publishes `ghcr.io/scigetorg/datadesktop` for amd64 and arm64, tagged as
-scidesktop is
-(see [images.md](images.md#ci-and-publishing)). A new GHCR package starts
-private: make it public or give the cluster a pull secret.
+**Publishing.** CI publishes `ghcr.io/scigetorg/datadesktop` for amd64 and
+arm64, tagged as scidesktop is, and mirrors newly published builds to
+`quay.io/scigetorg/datadesktop` when `QUAY_ORG` is configured
+(see [images.md](images.md#ci-and-publishing)). Any short-SHA tag that has
+successfully mirrored can be pulled interchangeably from either registry for
+`c.KubeSpawner.image` (older GHCR tags are not backfilled, and rolling tags
+such as `latest` or `<YYYY-MM-DD>` can lag behind GHCR if a mirror fails or is
+skipped). A new GHCR package starts private: make it public or give the cluster
+a pull secret.
 
 ## Updating the workshop
 

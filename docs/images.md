@@ -283,6 +283,40 @@ to the workflow.
 `PUBLISH` lists `scidesktop`, `microdesktop`, `datadesktop`, `dermdesktop`, `preclinicaldesktop`, `moleculardesktop`, `genomicsdesktop` and `neurodesktop`. A published
 domain image gets its own package, `ghcr.io/<owner>/<name>`.
 
+### Mirroring to Quay.io
+
+After `publish` succeeds on `main`, an optional `mirror-quay` matrix job fans
+out one runner per image in `PUBLISH` (kept in sync by `test/contract.py`) to
+copy the published multi-arch images from GHCR to Quay.io in parallel using
+`crane` (`.github/scripts/mirror-manifests`, tested by
+`test/mirror-manifests-test.sh`). It runs in parallel with `attest` with
+`fail-fast: false`, verifies every target architecture on `<short sha>` and
+checks the branch head before moving `<YYYY-MM-DD>` and `latest`, retries
+transient failures (including Quay's `DENIED: System is currently read-only`
+maintenance response), and fails fast on authentication errors. Candidate tags
+(`run-<run id>-<arch>`) stay on GHCR and are not mirrored.
+
+For builds published after mirroring is enabled, any immutable short-SHA tag
+(`<short sha>`) that has successfully mirrored can be pulled interchangeably
+from **GHCR** (`ghcr.io/scigetorg/<image>:<short sha>`) or **Quay.io**
+(`quay.io/scigetorg/<image>:<short sha>`). Older GHCR tags are not backfilled,
+individual image mirrors can fail independently (`fail-fast: false`), and
+rolling tags (`<YYYY-MM-DD>`, `latest`) can lag behind GHCR if a Quay mirror
+fails or is skipped when `main` advances before tagging completes. GHCR remains
+the primary registry carrying GitHub build provenance attestations.
+
+Mirroring is enabled by the `QUAY_ORG` repository variable (matching
+`neurodesktop`), so forks or repositories without it configured simply skip the
+job:
+
+| Registry | Repository variable | Target image | Required repository secrets |
+| --- | --- | --- | --- |
+| Quay.io | `QUAY_ORG` | `quay.io/<QUAY_ORG>/<image>` | `QUAY_USERNAME`, `QUAY_ROBOT_TOKEN` |
+
+On Quay.io's free tier, pre-create each repository as **Public** under
+`QUAY_ORG` and grant `QUAY_USERNAME` **Write** permission on each before the
+first push.
+
 ## Forks
 
 A community that wants its own image without contributing it here forks the

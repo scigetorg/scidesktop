@@ -73,6 +73,10 @@ jobs:
       - name: Publish script
         run: ./test/publish-manifests-test.sh
 
+      # Multi-arch mirroring, rolling-tag guards and retry/auth handling for Quay.io.
+      - name: Mirror script
+        run: ./test/mirror-manifests-test.sh
+
       - name: Free disk space (amd64)
         if: matrix.arch == 'amd64'
         run: |
