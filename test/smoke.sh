@@ -672,7 +672,7 @@ SU_HOME=""
 # App tiles: a desktop entry in sciget's applications folder becomes a
 # JupyterLab launcher tile, and the tile starts the application maximised
 # on the desktop (desktop_app.py), starting the desktop first.
-TILE_PORT="${SMOKE_TILE_PORT:-18997}"
+TILE_PORT="${SMOKE_TILE_PORT:-18996}"
 TILE_DIR=$(mktemp -d)
 printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=Smoke terminal' \
     'Exec=xfce4-terminal --title=smoke-tile' > "${TILE_DIR}/smoke-terminal.desktop"

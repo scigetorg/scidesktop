@@ -19,8 +19,8 @@ ARG VSCODE_CHATGPT_VERSION
 ARG VSCODE_CHATGPT_SHA256_AMD64
 ARG VSCODE_CHATGPT_SHA256_ARM64
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=private \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=private \
     apt-get update && apt-get install --no-install-recommends -y curl ca-certificates jq unzip
 RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/target-arch \
     --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
