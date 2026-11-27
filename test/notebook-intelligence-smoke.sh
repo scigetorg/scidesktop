@@ -39,7 +39,8 @@ else
     fail "JupyterLab page loads @plmbr/notebook-intelligence"
 fi
 
-if docker exec "${NAME}" bash -lc 'jupyter labextension list 2>&1' | grep -q '@plmbr/notebook-intelligence .*enabled.*OK'; then
+labs="$(docker exec "${NAME}" bash -lc 'jupyter labextension list 2>&1' || true)"
+if grep -q '@plmbr/notebook-intelligence .*enabled.*OK' <<<"${labs}"; then
     pass "@plmbr/notebook-intelligence labextension enabled OK"
 else
     fail "@plmbr/notebook-intelligence labextension enabled OK"

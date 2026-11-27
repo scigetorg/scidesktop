@@ -4,11 +4,14 @@ export PATH="/opt/conda/bin:${PATH}"
 
 ! test -e /opt/notebook-intelligence/lib/claude_agent_sdk/_bundled
 command -v claude >/dev/null
-PYTHONPATH=/opt/notebook-intelligence/lib python -m pip check
+# Match the server's sys.path order (base /opt/conda first, NBI delta appended).
+python -c 'import runpy, sys; sys.path.append("/opt/notebook-intelligence/lib"); sys.argv = ["pip", "check"]; runpy.run_module("pip", run_name="__main__")'
 grep -q 'scidesktop-nbi-settings-refresh' /opt/notebook-intelligence/lib/notebook_intelligence/labextension/static/*.js
 grep -q 'scidesktop-nbi-ollama-context-fallback' /opt/notebook-intelligence/lib/notebook_intelligence/llm_providers/ollama_llm_provider.py
-jupyter labextension list 2>&1 | grep -q '@plmbr/notebook-intelligence .*enabled.*OK'
-jupyter server --show-config 2>/dev/null | grep -q "'notebook_intelligence': True"
+labs=$(jupyter labextension list 2>&1)
+grep -q '@plmbr/notebook-intelligence .*enabled.*OK' <<<"${labs}"
+cfg=$(jupyter server --show-config 2>/dev/null)
+grep -q "'notebook_intelligence': True" <<<"${cfg}"
 
 python - <<'PY'
 import json, socket, subprocess, time, urllib.request

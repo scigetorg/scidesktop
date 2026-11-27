@@ -68,8 +68,12 @@ if [ -n "${SCIDESKTOP_FLAVOUR:-}" ]; then
             done
             PROMPT_COMMAND=("${_sd_next[@]}")
         else
+            # Bash 5.1+ allows PROMPT_COMMAND to be either an array or a scalar string.
+            # shellcheck disable=SC2178,SC2128
             PROMPT_COMMAND="${PROMPT_COMMAND//_scidesktop_prompt_init; /}"
+            # shellcheck disable=SC2178,SC2128
             PROMPT_COMMAND="${PROMPT_COMMAND//; _scidesktop_prompt_init/}"
+            # shellcheck disable=SC2178,SC2128
             PROMPT_COMMAND="${PROMPT_COMMAND//_scidesktop_prompt_init/}"
         fi
         unset -f _scidesktop_prompt_init
@@ -79,8 +83,10 @@ if [ -n "${SCIDESKTOP_FLAVOUR:-}" ]; then
     if declare -p PROMPT_COMMAND 2>/dev/null | grep -q 'declare -a'; then
         PROMPT_COMMAND=(_scidesktop_prompt_init "${PROMPT_COMMAND[@]}")
     elif [ -n "${PROMPT_COMMAND:-}" ]; then
+        # shellcheck disable=SC2178,SC2128
         PROMPT_COMMAND="_scidesktop_prompt_init; ${PROMPT_COMMAND}"
     else
+        # shellcheck disable=SC2178
         PROMPT_COMMAND="_scidesktop_prompt_init"
     fi
 fi

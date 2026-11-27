@@ -1,3 +1,0 @@
-# Components this one needs in the same image at runtime
-# (test/contract.py S9).
-startup  # /opt/scidesktop/run-as-user for 15-enable-server-proxy
