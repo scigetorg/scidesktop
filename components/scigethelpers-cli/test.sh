@@ -180,11 +180,11 @@ cli = importlib.util.module_from_spec(spec)
 sys.modules["scigethelpers_cli"] = cli
 spec.loader.exec_module(cli)
 
-# 1. An ordinary non-CVMFS mount (/proc/pressure) must not pass as CVMFS.
+# 1. An ordinary non-CVMFS mount (/proc/sys) must not pass as CVMFS.
 orig_root = cli.CVMFS_ROOT
 try:
     cli.CVMFS_ROOT = Path("/proc")
-    res = cli.probe_cvmfs("pressure", timeout=5)
+    res = cli.probe_cvmfs("sys", timeout=5)
     assert not res.ok and "not a CVMFS mount" in res.error, res
 finally:
     cli.CVMFS_ROOT = orig_root
