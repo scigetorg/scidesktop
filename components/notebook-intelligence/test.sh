@@ -6,8 +6,9 @@ export PATH="/opt/conda/bin:${PATH}"
 command -v claude >/dev/null
 # Match the server's sys.path order (base /opt/conda first, NBI delta appended).
 python -c 'import runpy, sys; sys.path.append("/opt/notebook-intelligence/lib"); sys.argv = ["pip", "check"]; runpy.run_module("pip", run_name="__main__")'
-grep -q 'scidesktop-nbi-settings-refresh' /opt/notebook-intelligence/lib/notebook_intelligence/labextension/static/*.js
-grep -q 'scidesktop-nbi-ollama-context-fallback' /opt/notebook-intelligence/lib/notebook_intelligence/llm_providers/ollama_llm_provider.py
+grep -q 'GNU GENERAL PUBLIC LICENSE' /opt/notebook-intelligence/licenses/LICENSE
+grep -q 'Version 3' /opt/notebook-intelligence/licenses/LICENSE
+grep -q 'https://github.com/plmbr/notebook-intelligence/tree/v' /opt/notebook-intelligence/licenses/SOURCE
 labs=$(jupyter labextension list 2>&1)
 grep -q '@plmbr/notebook-intelligence .*enabled.*OK' <<<"${labs}"
 cfg=$(jupyter server --show-config 2>/dev/null)

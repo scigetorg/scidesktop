@@ -5,6 +5,7 @@ import os
 import pathlib
 import tempfile
 
+from jupyter_core.paths import jupyter_path
 from jupyter_server.serverapp import ServerApp
 from jupyterlab_server.config import get_page_config
 
@@ -18,50 +19,89 @@ def load_hook():
     return app.config.ServerApp.tornado_settings.get_value({})["page_config_hook"]
 
 
-def run_case(hook, user_cfg, *, op_cfg=None, extra_setup=None, keep_env=False):
+def run_case(
+    hook,
+    user_cfg,
+    *,
+    op_cfg=None,
+    extra_setup=None,
+    keep_env=False,
+    symlink_user_to_op=False,
+    ext_disables_proxy=False,
+):
     with tempfile.TemporaryDirectory() as td:
         root = pathlib.Path(td)
         home = root / "home"
-        lc = home / ".jupyter" / "labconfig"
-        lc.mkdir(parents=True)
-        pc_file = lc / "page_config.json"
-        orig = json.dumps(user_cfg)
-        pc_file.write_text(orig, encoding="utf-8")
+        home.mkdir(parents=True)
+        op = root / "op"
+        if op_cfg is not None:
+            (op / "labconfig").mkdir(parents=True)
+            (op / "labconfig" / "page_config.json").write_text(
+                json.dumps(op_cfg), encoding="utf-8"
+            )
+
+        if symlink_user_to_op:
+            (home / ".jupyter").symlink_to(op)
+            pc_file = op / "labconfig" / "page_config.json"
+            orig = pc_file.read_text(encoding="utf-8")
+        else:
+            lc = home / ".jupyter" / "labconfig"
+            lc.mkdir(parents=True)
+            pc_file = lc / "page_config.json"
+            orig = json.dumps(user_cfg)
+            pc_file.write_text(orig, encoding="utf-8")
+
         if extra_setup is not None:
             extra_setup(home)
 
-        old_home = os.environ.get("HOME")
-        old_jcd = os.environ.get("JUPYTER_CONFIG_DIR")
-        old_jcp = os.environ.get("JUPYTER_CONFIG_PATH")
-        old_keep = os.environ.get("SCIDESKTOP_KEEP_DISABLED_SERVER_PROXY")
+        old_env = {
+            k: os.environ.get(k)
+            for k in (
+                "HOME",
+                "JUPYTER_CONFIG_DIR",
+                "JUPYTER_CONFIG_PATH",
+                "JUPYTER_PATH",
+                "SCIDESKTOP_KEEP_DISABLED_SERVER_PROXY",
+            )
+        }
         try:
             os.environ["HOME"] = str(home)
             os.environ.pop("JUPYTER_CONFIG_DIR", None)
             if op_cfg is not None:
-                op = root / "op"
-                (op / "labconfig").mkdir(parents=True)
-                (op / "labconfig" / "page_config.json").write_text(
-                    json.dumps(op_cfg), encoding="utf-8"
-                )
                 os.environ["JUPYTER_CONFIG_PATH"] = str(op)
             else:
                 os.environ.pop("JUPYTER_CONFIG_PATH", None)
+            if ext_disables_proxy:
+                jdata = root / "jdata"
+                ext_dir = jdata / "labextensions" / "org-policy-ext"
+                ext_dir.mkdir(parents=True)
+                (ext_dir / "package.json").write_text(
+                    json.dumps(
+                        {
+                            "name": "org-policy-ext",
+                            "version": "1.0.0",
+                            "jupyterlab": {
+                                "_build": {"load": "static/remoteEntry.js"},
+                                "disabledExtensions": [EXT],
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                os.environ["JUPYTER_PATH"] = str(jdata)
+            else:
+                os.environ.pop("JUPYTER_PATH", None)
             if keep_env:
                 os.environ["SCIDESKTOP_KEEP_DISABLED_SERVER_PROXY"] = "1"
             else:
                 os.environ.pop("SCIDESKTOP_KEEP_DISABLED_SERVER_PROXY", None)
 
-            merged = get_page_config([], None)
+            merged = get_page_config(jupyter_path("labextensions"), None)
             res = hook(None, merged)
-            assert pc_file.read_text(encoding="utf-8") == orig, "user page_config.json mutated"
+            assert pc_file.read_text(encoding="utf-8") == orig, "page_config.json mutated"
             return res
         finally:
-            for k, v in (
-                ("HOME", old_home),
-                ("JUPYTER_CONFIG_DIR", old_jcd),
-                ("JUPYTER_CONFIG_PATH", old_jcp),
-                ("SCIDESKTOP_KEEP_DISABLED_SERVER_PROXY", old_keep),
-            ):
+            for k, v in old_env.items():
                 if v is None:
                     os.environ.pop(k, None)
                 else:
@@ -137,6 +177,24 @@ def main():
         extra_setup=lambda h: os.mkfifo(h / ".bashrc"),
     )
     assert EXT in r8["disabledExtensions"], r8
+
+    # 9. ~/.jupyter symlinked to an operator config directory must preserve operator disable.
+    r9 = run_case(
+        hook,
+        None,
+        op_cfg={"disabledExtensions": {EXT: True}},
+        extra_setup=lambda h: (h / "neurodesktop-storage").symlink_to("/tmp"),
+        symlink_user_to_op=True,
+    )
+    assert EXT in r9["disabledExtensions"], r9
+
+    # 10. Installed federated extension metadata disabling server-proxy must be preserved.
+    r10 = run_case(
+        hook,
+        {"disabledExtensions": {EXT: True}, "neurodeskSupporter": "false"},
+        ext_disables_proxy=True,
+    )
+    assert EXT in r10["disabledExtensions"], r10
 
     print("PAGE_CONFIG_HOOK_TESTS_OK")
 

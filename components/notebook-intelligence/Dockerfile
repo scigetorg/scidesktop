@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
-# Notebook Intelligence for JupyterLab (BSD-3-Clause) at /opt/notebook-intelligence:
+# Notebook Intelligence for JupyterLab (GPL-3.0) at /opt/notebook-intelligence:
 # AI coding assistant and inline completions inside JupyterLab. Installed outside
-# /opt/conda with only the delta packages not already provided by jupyter-env;
-# the server extension registers via /etc/scidesktop/jupyter_server_config.d and
-# the prebuilt labextension is symlinked under /usr/local/share/jupyter/labextensions.
+# /opt/conda from its unmodified upstream PyPI release with only the delta
+# packages not already provided by jupyter-env; the server extension registers
+# via /etc/scidesktop/jupyter_server_config.d and the prebuilt labextension is
+# symlinked under /usr/local/share/jupyter/labextensions.
 # Included in scidesktop (docs/images.md).
 
 ARG UBUNTU_IMAGE
@@ -19,28 +20,36 @@ RUN --mount=type=bind,from=components,source=check-lock,target=/usr/local/bin/ch
     --mount=type=bind,source=.,target=/src \
     check-lock /src/requirements.in /src/requirements.lock
 COPY requirements.lock /tmp/
-COPY patches/ /tmp/patches/
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     /opt/conda/bin/python -m pip install \
         --no-cache-dir --no-deps --require-hashes --no-compile \
         --target /out/opt/notebook-intelligence/lib -r /tmp/requirements.lock \
-    # claude-agent-sdk vendors a ~260 MB Claude Code CLI binary; remove it so
-    # Notebook Intelligence uses /usr/local/bin/claude from coding-agents.
+    # claude-agent-sdk (MIT) vendors a ~260 MB Claude Code CLI binary; remove it
+    # so Notebook Intelligence uses /usr/local/bin/claude from coding-agents.
     # test -d fails loudly if the SDK relocates its bundle.
     && test -d /out/opt/notebook-intelligence/lib/claude_agent_sdk/_bundled \
     && rm -rf /out/opt/notebook-intelligence/lib/claude_agent_sdk/_bundled \
-    # Keep a single copy of the ~24 MB labextension bundle and strip sourcemaps.
+    # Keep a single copy of the unmodified upstream labextension bundle.
     && labext=/out/opt/notebook-intelligence/lib/notebook_intelligence/labextension \
     && test -f "${labext}/package.json" \
-    && find "${labext}/static" -type f -name 'remoteEntry*.js' | grep -q . \
+    && test -n "$(find "${labext}/static" -type f -name 'remoteEntry*.js')" \
     && rm -rf /out/opt/notebook-intelligence/lib/share/jupyter/labextensions/@plmbr/notebook-intelligence \
     && rm -rf /out/opt/notebook-intelligence/lib/bin \
-    && find /out/opt/notebook-intelligence -type f \( -name '*.js.map' -o -name '*.css.map' \) -delete \
     && find /out/opt/notebook-intelligence -type d -name __pycache__ -prune -exec rm -rf {} + \
-    # Anchored build-time patches (settings refresh + Ollama empty-family context fallback).
-    && /opt/conda/bin/python /tmp/patches/patch_nbi.py \
-        --bundles "${labext}/static/*.js" \
-        --ollama "/out/opt/notebook-intelligence/lib/notebook_intelligence/llm_providers/ollama_llm_provider.py" \
+    # Notebook Intelligence is GPL-3.0; place its licence text and upstream
+    # corresponding-source directions next to the installed package.
+    && nbi_ver="$(PYTHONPATH=/out/opt/notebook-intelligence/lib /opt/conda/bin/python -c 'import importlib.metadata as m; print(m.version("notebook-intelligence"))')" \
+    && install -d -m 0755 /out/opt/notebook-intelligence/licenses \
+    && install -m 0644 "/out/opt/notebook-intelligence/lib/notebook_intelligence-${nbi_ver}.dist-info/licenses/LICENSE" \
+        /out/opt/notebook-intelligence/licenses/LICENSE \
+    && grep -q "GNU GENERAL PUBLIC LICENSE" /out/opt/notebook-intelligence/licenses/LICENSE \
+    && grep -q "Version 3" /out/opt/notebook-intelligence/licenses/LICENSE \
+    && printf '%s\n' \
+        "notebook-intelligence ${nbi_ver}, GPL-3.0, unmodified, as published at" \
+        "https://pypi.org/project/notebook-intelligence/${nbi_ver}/ by its upstream." \
+        "Corresponding source for this version:" \
+        "https://github.com/plmbr/notebook-intelligence/tree/v${nbi_ver}" \
+        > /out/opt/notebook-intelligence/licenses/SOURCE \
     # JupyterLab discovers the federated extension here without a second copy.
     && install -d -m 0755 /out/usr/local/share/jupyter/labextensions/@plmbr /out/opt/scidesktop/manifest.d \
     && ln -s /opt/notebook-intelligence/lib/notebook_intelligence/labextension \
