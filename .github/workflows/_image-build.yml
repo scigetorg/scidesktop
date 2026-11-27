@@ -1,0 +1,292 @@
+---
+name: Image build (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      write-cache:
+        description: Write BuildKit registry cache tags to GHCR
+        type: boolean
+        default: false
+      push-candidates:
+        description: Push per-architecture candidate images to GHCR
+        type: boolean
+        default: false
+
+env:
+  # Must match env.PUBLISH in .github/workflows/image.yml (enforced by test/contract.py S6).
+  PUBLISH: scidesktop microdesktop datadesktop dermdesktop preclinicaldesktop moleculardesktop genomicsdesktop neurodesktop
+  # Shared BuildKit registry cache package (lowercased in .github/scripts/bake-args).
+  CACHE_REPO: ghcr.io/${{ github.repository_owner }}/scidesktop-cache
+  # This run's images before they are published: <candidate>-<arch>.
+  CANDIDATE: run-${{ github.run_id }}
+
+# Permissions are intentionally omitted here so each caller job in image.yml
+# controls its own token scope (packages: read for PRs, packages: write for main).
+
+jobs:
+  # One runner per architecture, each building its own: no emulation.
+  # test/contract.py (S7) keeps this list equal to components/target-arch.
+  build:
+    name: Build, test and smoke (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: blacksmith-8vcpu-ubuntu-2404-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Log in to GHCR before building. Caller permissions guarantee that PR
+      # jobs only hold packages: read (for reading scidesktop-cache even if
+      # private), while main jobs hold packages: write (for writing cache tags
+      # and pushing candidates). Fork PRs read anonymously once scidesktop-cache
+      # is public (docs/operator-runbook.md).
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # docs/components.md: the assembly only assembles, one copy of each version,
+      # every component has a target and a test.
+      - name: Contract (static)
+        run: python3 test/contract.py static
+
+      # Which tags the publish job moves, against a registry of the test's own.
+      - name: Publish script
+        run: ./test/publish-manifests-test.sh
+
+      - name: Free disk space (amd64)
+        if: matrix.arch == 'amd64'
+        run: |
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/share/boost \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      # Build the base image and every component's test stage first, then load
+      # each domain image sequentially so buildx does not stream all multi-GB
+      # image tarballs into dockerd at once (avoiding ENOSPC on ubuntu-24.04).
+      # Only main runs (inputs.write-cache=true) write GHCR registry cache tags,
+      # with separate export modes so `test` writes only `*-test-<arch>` tags
+      # and `scidesktop` writes only component + `scidesktop-<arch>` tags.
+      - name: Build components, component tests and images
+        env:
+          PLATFORM: linux/${{ matrix.arch }}
+          WRITE_CACHE: ${{ inputs.write-cache }}
+        run: |
+          # The build's own exit status, not tee's.
+          set -euo pipefail
+          run_bake() {
+              local cache_mode="$1"
+              shift
+              if [ "${cache_mode}" = read-cache ]; then
+                  mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci)
+              else
+                  mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci "${cache_mode}")
+              fi
+              if docker buildx bake "${args[@]}" "$@" 2>&1 | tee /tmp/bake.log; then
+                  return 0
+              fi
+              if grep -qE 'inconsistent graph state' /tmp/bake.log; then
+                  echo "::warning::Buildx hit a transient graph-state error; retrying with cache."
+                  docker buildx bake "${args[@]}" "$@"
+                  return $?
+              fi
+              if ! grep -qE 'blob unknown' /tmp/bake.log; then
+                  return 1
+              fi
+              echo "::warning::A registry cache blob vanished during the build; building once more without it."
+              mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci no-cache)
+              docker buildx bake "${args[@]}" "$@"
+          }
+          test_cache_mode=read-cache
+          base_cache_mode=read-cache
+          if [ "${WRITE_CACHE}" = true ]; then
+              test_cache_mode=write-test-cache
+              base_cache_mode=write-cache
+          fi
+          run_bake "${test_cache_mode}" test
+          run_bake "${base_cache_mode}" scidesktop
+          for dockerfile in images/*/Dockerfile; do
+              image="$(basename "$(dirname "${dockerfile}")")"
+              [ "${image}" != "scidesktop" ] || continue
+              run_bake read-cache "${image}"
+          done
+
+      # docs/components.md: what each component writes (no overlaps, no shadowing,
+      # no permission changes to shared folders, a manifest entry).
+      - name: Contract (layers)
+        env:
+          PLATFORM: linux/${{ matrix.arch }}
+        run: python3 test/contract.py layers
+
+      # The runner restricts unprivileged user namespaces through AppArmor,
+      # which refuses Apptainer's user mapping. Lifting it matches the
+      # clusters, whose `notebook` AppArmor profile allows user namespaces.
+      #
+      # test/image-smoke.sh runs every check an image needs: the components it
+      # holds, the base or flavour integrity checks (via contract.py surfaces),
+      # notebook/sciget & foreign-UID checks, and the checks of each added
+      # component (docs/images.md).
+      - name: Smoke test every image
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          failed=0
+          for dockerfile in images/*/Dockerfile; do
+              image="$(basename "$(dirname "${dockerfile}")")"
+              echo "::group::${image}"
+              ./test/image-smoke.sh "${image}" "${image}:ci" || failed=1
+              echo "::endgroup::"
+          done
+          exit "${failed}"
+
+      # Real headless Chrome + SwiftShader WebGL2 check of JupyterLab, NiiVue,
+      # FreeBrowse, RISE slides, Jupyter AI Chat personas, T3 Code, VS Code,
+      # and (on neurodesktop) ipyniivue widgets.
+      - name: Browser & WebGL2 smoke (amd64)
+        if: matrix.arch == 'amd64'
+        run: |
+          failed=0
+          for image in ${PUBLISH}; do
+              echo "::group::browser-smoke ${image}"
+              ./test/browser-smoke.sh "${image}:ci" || failed=1
+              echo "::endgroup::"
+          done
+          exit "${failed}"
+
+      # Vulnerability scan of built images (single Trivy pass per image using a
+      # SHA-verified binary) plus hashed pip-audit across all Python environments.
+      - name: Vulnerability scan (Trivy & Python pip-audit)
+        env:
+          PIP_AUDIT_SPECS: >-
+            scidesktop:ci:/opt/conda/bin/python
+            scidesktop:ci:/opt/selkies/bin/python
+            scidesktop:ci:/opt/datalad/bin/python
+            scidesktop:ci:/opt/lightcone/bin/python
+            scidesktop:ci:/opt/workflow-engines/snakemake/bin/python
+            microdesktop:ci:/opt/microscopy-env/bin/python
+            datadesktop:ci:/opt/datascience-env/bin/python
+            dermdesktop:ci:/opt/dermatology-env/bin/python
+            preclinicaldesktop:ci:/opt/preclinical-env/bin/python
+            moleculardesktop:ci:/opt/molecular-imaging-env/bin/python
+            genomicsdesktop:ci:/opt/genomics-env/bin/python
+            datadesktop:ci:/opt/ai-ready/env/bin/python
+            datadesktop:ci:/opt/ai-ready/airflow/bin/python
+            neurodesktop:ci:/opt/neuroimaging-env/bin/python
+        run: |
+          set -euo pipefail
+          ver="0.76.2"
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+              trivy_arch="ARM64"
+              sha="ab9d51f86e6a5fb936f605faff6b593ac51bc378fff4d3e8b9d58358b9c367c3"
+          else
+              trivy_arch="64bit"
+              sha="bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf"
+          fi
+          curl -fsSL -o /tmp/trivy.tar.gz \
+              "https://github.com/aquasecurity/trivy/releases/download/v${ver}/trivy_${ver}_Linux-${trivy_arch}.tar.gz"
+          printf '%s  %s\n' "${sha}" /tmp/trivy.tar.gz | sha256sum -c -
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          /tmp/trivy image --download-db-only \
+              --db-repository mirror.gcr.io/aquasec/trivy-db,ghcr.io/aquasecurity/trivy-db
+          failed=0
+          for image in ${PUBLISH}; do
+              echo "::group::trivy ${image}"
+              /tmp/trivy image --skip-db-update --scanners vuln --ignore-unfixed \
+                  --format json --output "/tmp/trivy-${image}.json" "${image}:ci"
+              python3 - "/tmp/trivy-${image}.json" <<'PY' || failed=1
+          import json, sys
+          data = json.load(open(sys.argv[1]))
+          os_high_crit, any_crit, lib_high = [], [], []
+          for res in data.get("Results") or []:
+              cls = res.get("Class", "")
+              tgt = res.get("Target", "")
+              for v in res.get("Vulnerabilities") or []:
+                  sev = v.get("Severity", "")
+                  entry = f"{tgt}: {v.get('PkgName')} {v.get('InstalledVersion')} {v.get('VulnerabilityID')} ({sev}, fix: {v.get('FixedVersion')})"
+                  if sev == "CRITICAL":
+                      any_crit.append(entry)
+                  if cls == "os-pkgs" and sev in ("HIGH", "CRITICAL"):
+                      os_high_crit.append(entry)
+                  elif cls != "os-pkgs" and sev == "HIGH":
+                      lib_high.append(entry)
+          print(f"OS HIGH/CRITICAL: {len(os_high_crit)}, Any CRITICAL: {len(any_crit)}, Library HIGH (informational): {len(lib_high)}")
+          for e in lib_high:
+              print("  [info]", e)
+          for e in os_high_crit + any_crit:
+              print("  [FAIL]", e)
+          sys.exit(1 if (os_high_crit or any_crit) else 0)
+          PY
+              rm -f "/tmp/trivy-${image}.json"
+              echo "::endgroup::"
+          done
+          python3 -m venv /tmp/pip-audit-venv
+          /tmp/pip-audit-venv/bin/pip install --quiet --no-deps --require-hashes \
+              -r .github/requirements/pip-audit.txt
+          for spec in ${PIP_AUDIT_SPECS}; do
+              img="${spec%:*}"
+              py="${spec##*:}"
+              echo "::group::pip-audit ${img} ${py}"
+              if ! docker run --rm --entrypoint "${py}" "${img}" -c \
+                  'import importlib.metadata as im; seen = set(); [print(n + "==" + d.version) for d in im.distributions() if (n := d.metadata.get("Name")) and (n.lower(), d.version) not in seen and not seen.add((n.lower(), d.version))]' \
+                  > /tmp/env-freeze.txt; then
+                  failed=1
+                  echo "::endgroup::"
+                  continue
+              fi
+              /tmp/pip-audit-venv/bin/pip-audit -r /tmp/env-freeze.txt --no-deps --disable-pip || failed=1
+              rm -f /tmp/env-freeze.txt
+              echo "::endgroup::"
+          done
+          rm -rf /tmp/pip-audit-venv /tmp/trivy /tmp/trivy.tar.gz
+          exit "${failed}"
+
+      # Pushed under a tag nothing deploys. The publish job gives the images
+      # their real tags once every architecture has passed. (Already logged in
+      # to GHCR before the build step.)
+      - name: Push tested images as candidates
+        if: inputs.push-candidates
+        run: |
+          set -euo pipefail
+          push_with_retry() {
+              local ref="$1"
+              local attempt delay=5
+              for attempt in 1 2 3 4; do
+                  if docker push "${ref}"; then
+                      return 0
+                  fi
+                  if [ "${attempt}" -eq 4 ]; then
+                      echo "::error::Failed to push ${ref} after ${attempt} attempts."
+                      return 1
+                  fi
+                  echo "::warning::docker push ${ref} failed (attempt ${attempt}/4); retrying in ${delay}s..."
+                  sleep "${delay}"
+                  delay=$((delay * 2))
+              done
+          }
+          for image in ${PUBLISH}; do
+              ref="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${image}:${CANDIDATE}-${{ matrix.arch }}"
+              docker tag "${image}:ci" "${ref}"
+              push_with_retry "${ref}"
+          done

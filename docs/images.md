@@ -220,9 +220,18 @@ A component it copies must be copied whole and be a bake context of the image.
 
 1. `test/contract.py image`: the image holds its components and nothing of any
    other (rule I1).
-2. `test/smoke.sh`, `test/notebook-and-sciget-smoke.sh`, and `test/hpc-smoke.sh`:
-   the base's checks, notebook/sciget checks, and foreign-UID startup checks,
-   which every image must still pass.
+2. Base-integrity, notebook/sciget, and foreign-UID checks:
+   - `test/smoke.sh` on the base image and any domain image whose added
+     components touch startup hooks, shell profiles, home defaults, modulepath,
+     CVMFS, or desktop menus (`python3 test/contract.py surfaces <image>`
+     returns `full`).
+   - `test/flavour-smoke.sh` on domain images whose added components only add
+     kernels, catalogs, Jupyter server config parts, or VS Code extensions
+     (`surfaces` returns `flavour`). Both share `test/hygiene-check.sh` for
+     SUID/SGID, file-capability, and `NoNewPrivs` enforcement. Set
+     `SMOKE_FULL_BASE=1` to force `test/smoke.sh` on any image.
+   - `test/notebook-and-sciget-smoke.sh` and `test/hpc-smoke.sh` run on every
+     image.
 3. `test/<component>-smoke.sh` for each component the image adds to the image
    it is `FROM` (`test/contract.py added`), when it has one. Set
    `SMOKE_ALL_COMPONENTS=1` to run the smoke test of every component the image
@@ -238,15 +247,22 @@ what makes `test/ai-ready-smoke.sh` run on it.
 image is built, cached and smoke-tested on amd64 and arm64 without a change
 to the workflow.
 
-- **Pull requests:** one job per architecture, each on a runner of that
-  architecture (no emulation). It runs the contract checks, builds every
-  component, test and image, and runs `test/image-smoke.sh` on every image.
-  Nothing is pushed.
-  The Actions cache holds 10 GB for the repository and evicts the rest. A
-  build that fails because a cached layer was evicted while it ran is run
-  once more without the cache; any other failure stands. Writing the cache
-  is best effort: GitHub throttles cache writes, and a build that passed
-  does not fail because its layers could not be saved.
+- **BuildKit cache:** CI stores BuildKit caches in GHCR under
+  `ghcr.io/<owner>/scidesktop-cache` (`.github/scripts/bake-args`). Each
+  component has separate `<component>-<arch>` and `<component>-test-<arch>`
+  tags so `bake test` and `bake scidesktop` never overwrite each other's cache
+  index, and both targets read from both tags. `scidesktop` caches its assembly
+  with `mode=min`; domain images read their components and base from the same
+  cache without writing separate image cache tags. Only non-PR runs on `main`
+  write cache tags; pull requests and `privileged-smoke.yml` read only. Make
+  the `scidesktop-cache` GHCR package public after its first push so fork PRs
+  can read it anonymously ([operator-runbook.md](operator-runbook.md#ghcr-build-cache-package)).
+- **Pull requests:** `.github/workflows/image.yml` invokes
+  `.github/workflows/_image-build.yml` with `packages: read` (one runner per
+  architecture, no emulation). It runs the contract checks, builds every
+  component, test and image (reading from the registry cache without writing),
+  and runs `test/image-smoke.sh`, browser smoke, Trivy and `pip-audit`.
+  Nothing is pushed and PR jobs never hold package write credentials.
 - **Pushes to `main`:** the same jobs, then each pushes the images named in
   `PUBLISH` to `ghcr.io/<owner>/<image>` under a candidate tag,
   `run-<run id>-<arch>`. When both architectures have passed, the `publish`
