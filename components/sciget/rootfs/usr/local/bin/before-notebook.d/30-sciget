@@ -18,19 +18,21 @@ fi
 
 # Run via run-as-user (or setpriv fallback in standalone component tests) so
 # the background refresh inherits NoNewPrivs=1 and zero capabilities, and the
-# log is opened by the notebook user so root never owns it.
+# log is opened by the notebook user so root never owns it. After refreshing
+# catalogs, sync any narrowed domain CVMFS module view so Lmod sees new tools.
+refresh_cmd='mkdir -p "$1" && timeout 300 sciget refresh >"$1/refresh.log" 2>&1; rc=$?; [ -x /opt/scidesktop/cvmfs-domain-modules ] && /opt/scidesktop/cvmfs-domain-modules --sync >>"$1/refresh.log" 2>&1 || true; exit "$rc"'
 if [ -x /opt/scidesktop/run-as-user ]; then
-    /opt/scidesktop/run-as-user bash -c 'mkdir -p "$1" && exec timeout 300 sciget refresh >"$1/refresh.log" 2>&1' \
+    /opt/scidesktop/run-as-user bash -c "${refresh_cmd}" \
         _ "${home}/.cache/sciget" </dev/null &
 elif [ "$(/usr/bin/id -u)" -eq 0 ]; then
     /usr/bin/env "HOME=${home}" "USER=${user}" /usr/bin/setpriv \
         --reuid "$(/usr/bin/id -u "${user}")" --regid "$(/usr/bin/id -g "${user}")" \
         --init-groups --no-new-privs --inh-caps -all --ambient-caps -all -- \
-        bash -c 'mkdir -p "$1" && exec timeout 300 sciget refresh >"$1/refresh.log" 2>&1' \
+        bash -c "${refresh_cmd}" \
         _ "${home}/.cache/sciget" </dev/null &
 else
     /usr/bin/setpriv --no-new-privs --inh-caps -all --ambient-caps -all -- \
-        bash -c 'mkdir -p "$1" && exec timeout 300 sciget refresh >"$1/refresh.log" 2>&1' \
+        bash -c "${refresh_cmd}" \
         _ "${home}/.cache/sciget" </dev/null &
 fi
 echo "[sciget] refreshing catalogs in the background"

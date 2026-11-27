@@ -20,11 +20,13 @@ ARG FREEBROWSE_COMMIT
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 COPY --from=freebrowse-src . /src
 COPY yarn.lock /src/jupyter/yarn.lock
+COPY patch_freebrowse_csp.py /tmp/patch_freebrowse_csp.py
 RUN --mount=type=bind,from=jupyter-env,source=/opt/conda,target=/opt/conda \
     --mount=type=cache,target=/root/.npm \
     --mount=type=cache,target=/root/.yarn/berry/cache \
     : "${FREEBROWSE_COMMIT:?}" \
     && export PATH="${PATH}:/opt/conda/bin" \
+    && /opt/conda/bin/python /tmp/patch_freebrowse_csp.py /src/jupyter/jupyterlab_freebrowse/handlers.py \
     # The viewer itself, built to run without a backend, into the Python
     # package's static folder. npm installs exactly its lock file.
     && cd /src/frontend \

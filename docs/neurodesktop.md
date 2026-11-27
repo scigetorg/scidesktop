@@ -224,7 +224,7 @@ earlier review of what belongs in the base is in
 | Apptainer, `singularity` command, GPU binding (`APPTAINER_NV`) | `apptainer` |
 | CVMFS client and its mount at start | the OS layer's client and `20-cvmfs` hook |
 | Lmod, the module panel in JupyterLab (`jupyterlmod`) | `lmod`, `jupyter-env` |
-| `MODULEPATH` with one folder per Neurodesk category | `sciget-neuroimaging`'s `/etc/scidesktop/modulepath.d/60-neurodesk-cvmfs` |
+| `MODULEPATH` with one folder per Neurodesk category | `sciget-all`'s `/etc/scidesktop/modulepath.d/60-neurodesk-cvmfs` (exposes all categories when `neuroimaging` is configured, and filters to domain-only CVMFS modules on narrowed non-neuroimaging images) |
 | Offline modules in `/neurodesktop-storage/containers` when CVMFS is missing | `sciget install` into the home |
 | neurocommand: the application menu, launchers and `fetch_and_run.sh` | sciget with `sciget-neuroimaging`'s `neuroimaging` catalog (built from the same `apps.json`): `sciget ui` on the taskbar, and a launcher tile per installed graphical application |
 | Home defaults restored at start | `startup`'s `/etc/scidesktop/home-defaults` |

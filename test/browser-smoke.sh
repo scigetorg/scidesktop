@@ -37,7 +37,10 @@ fi
 
 echo "browser smoke: ${IMAGE}"
 docker run -d --name "${NAME}" -p "127.0.0.1:${PORT}:8888" --shm-size=2g \
-    -e JUPYTER_TOKEN="${TOKEN}" "${IMAGE}" >/dev/null \
+    -e JUPYTER_TOKEN="${TOKEN}" \
+    -e SCIDESKTOP_WEBKNOSSOS_URL="https://webknossos.example.org/jh-auth/login" \
+    "${IMAGE}" start-notebook.py \
+    '--ServerApp.tornado_settings={"headers":{"Content-Security-Policy":"frame-ancestors '\''none'\''; report-uri /hub/security/csp-report"}}' >/dev/null \
     || { echo "  FAIL  container did not start"; exit 1; }
 
 for _ in $(seq 1 120); do

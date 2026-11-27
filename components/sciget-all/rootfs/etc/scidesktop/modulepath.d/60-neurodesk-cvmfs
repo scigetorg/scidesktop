@@ -1,14 +1,8 @@
 #!/bin/sh
-# Modules for the neuroimaging catalog's containers on CVMFS (sciget writes none
-# for containers on a share): one folder per category, so modules are named
-# <tool>/<version>. Listing the folder first mounts it where CVMFS is mounted
-# on demand. Skips when CVMFS is disabled or when a domain image narrowed
-# /etc/sciget/catalogs.json away from the Neurodesk CVMFS store.
-[ "${SCIDESKTOP_CVMFS_MODE:-external}" = disabled ] && exit 0
-grep -q '/cvmfs/neurodesk\.ardc\.edu\.au' /etc/sciget/catalogs.json 2>/dev/null || exit 0
-root=/cvmfs/neurodesk.ardc.edu.au/neurodesk-modules
-ls "${root}" >/dev/null 2>&1 || exit 0
-for d in "${root}"/*/; do
-    [ -d "${d}" ] && echo "${d%/}"
-done
-exit 0
+# Modules for containers on the Neurodesk CVMFS share:
+# - In scidesktop (sciget-all) and neurodesktop (sciget-neuroimaging), exposes
+#   /cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/*/.
+# - In narrowed non-neuroimaging domain images (e.g. microdesktop), exposes
+#   only a per-catalog filtered symlink view of /cvmfs/neurodesk.ardc.edu.au/containers/modules
+#   so Lmod lists that domain's tools instead of every Neurodesk module.
+exec /opt/scidesktop/cvmfs-domain-modules
