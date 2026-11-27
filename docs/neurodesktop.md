@@ -135,14 +135,19 @@ it does not show them.
 
 | Command | What it does |
 | --- | --- |
-| `scigethelpers cite` | writes `CITATIONS.md` in the home folder: a methods sentence and the reference for each container tool loaded as a module |
-| `scigethelpers kernel add <module>` | registers the Python inside a tool's container as a notebook kernel; `list` and `remove` manage them |
-| `scigethelpers check [cvmfs\|gpu\|slurm]` | read-only checks, each `PASS`, `FAIL` or `SKIP` |
-| `scigethelpers info` | the image's components, the session's CPUs and memory, GPUs and the CVMFS server |
-| `scigethelpers uv <init\|rebuild\|remove> <dir>` | manages a project-local `uv` virtual environment and registers it as a Jupyter kernel |
+| `scigethelpers cite [--status] [--json]` | writes `CITATIONS.md` in the home folder: a methods sentence and the reference for each container tool loaded as a module (`--status` inspects the usage log read-only) |
+| `scigethelpers kernel add <module>` | registers the Python inside a tool's container as a notebook kernel; `list [--json]` and `remove` manage them |
+| `scigethelpers uv <init\|rebuild\|remove\|list> [dir]` | manages project-local `uv` virtual environments and Jupyter kernels (with automatic `MODULEPATH` refresh at launch) |
+| `scigethelpers check [--json] [cvmfs\|gpu\|slurm\|t3]` | read-only checks (all configured CVMFS repos, NVIDIA + VirtualGL EGL/OpenGL, Slurm partitions, local T3 state), each `PASS`, `FAIL` or `SKIP` |
+| `scigethelpers info [--json] [--no-probes]` | the image's components, the session's CPUs and memory, GPUs and all configured CVMFS servers |
+| `scigethelpers agent preflight [--json] [--cwd dir]` | summarizes user/workspace agent guidance, Lmod, Slurm configured node capacity, active sciget catalogs, and session checks |
 
 `scigethelpers <command> --help` has each command's options. The standalone
 commands `scigethelpers-cite`, `scigethelpers-kernel` and `scigethelpers-uv` work too.
+Interactive Bash shells register tab completion for `scigethelpers` subcommands,
+and the `jupyterlab-scigethelpers` component adds a **Session Helpers** tile
+under **Scidesktop** in JupyterLab's Launcher (plus Command Palette entries and
+a background startup tab on fresh workspaces).
 
 `scigethelpers cite` knows what was loaded because Lmod records it: the
 component sets `LMOD_PACKAGE_PATH` to a site package that appends one line
@@ -155,7 +160,7 @@ catalogs (`/etc/sciget/catalogs.json` and `~/.config/sciget/catalogs.json`).
 wrappers and a container with `ipykernel`.
 
 The commands neurodesktop has and this image does not: `jobs`,
-`update`, `test`, `t3`, `agent preflight`, `astra` and `lightcone
+`update`, `test`, `t3`, `astra` and `lightcone
 materialize`. Each depends on a part of neurodesktop that was not ported
 ([Not in this change](#not-in-this-change)). Lightcone itself is here:
 upstream `lc materialize` builds outputs on the session's queue

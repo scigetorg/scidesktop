@@ -9,6 +9,7 @@ scidesktop images.
 from __future__ import annotations
 
 import argparse
+from contextlib import suppress
 import fcntl
 import hashlib
 import json
@@ -23,6 +24,8 @@ import tomllib
 from pathlib import Path
 
 MARKER = "scigethelpers_uv"
+KERNEL_WRAPPER = "/opt/scigethelpers-cli/lib/kernel_wrapper.sh"
+MODULEPATH_SCRIPT = "/etc/profile.d/z01_lmod_modulepath.sh"
 
 
 def clean_environment() -> dict[str, str]:
@@ -32,6 +35,39 @@ def clean_environment() -> dict[str, str]:
         if key not in {"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"}
         and not key.startswith("CONDA_")
     }
+
+
+def refresh_modulepath(env: dict[str, str]) -> None:
+    """Refresh MODULEPATH from z01_lmod_modulepath.sh if kernel_wrapper.sh did not run.
+
+    Existing kernelspecs written before kernel_wrapper.sh was added to argv
+    invoke this module's `launch` directly; refreshing here ensures they also
+    pick up module directories added after Jupyter started.
+    """
+    if env.get("_SCIGETHELPERS_MODULEPATH_REFRESHED") == "1":
+        return
+    if not (os.path.isfile(MODULEPATH_SCRIPT) and os.access(MODULEPATH_SCRIPT, os.R_OK)):
+        return
+    script = (
+        'source "$1" >/dev/null 2>&1; '
+        'printf "%s\\0%s" "${MODULEPATH:-}" "${LMOD_AVAIL_EXTENSIONS:-}"'
+    )
+    with suppress(OSError, subprocess.SubprocessError):
+        result = subprocess.run(
+            ["bash", "-c", script, "scigethelpers-uv-modulepath", MODULEPATH_SCRIPT],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=env,
+        )
+        if result.returncode == 0 and "\0" in result.stdout:
+            modulepath, avail_ext = result.stdout.split("\0", 1)
+            if modulepath:
+                env["MODULEPATH"] = modulepath
+            if avail_ext:
+                env["LMOD_AVAIL_EXTENSIONS"] = avail_ext
+            env["_SCIGETHELPERS_MODULEPATH_REFRESHED"] = "1"
 
 
 def kernel_name(project: Path) -> str:
@@ -77,6 +113,9 @@ def launch(project: Path, arguments: list[str]) -> None:
             f"Environment missing or moved. Run: scigethelpers uv rebuild {str(project)!r}"
         )
     env = clean_environment()
+    refresh_modulepath(env)
+    # Never leak the internal refresh guard into kernel processes.
+    env.pop("_SCIGETHELPERS_MODULEPATH_REFRESHED", None)
     env["VIRTUAL_ENV"] = str(venv)
     env["PATH"] = str(venv / "bin") + os.pathsep + env.get("PATH", "")
     env["PYTHONNOUSERSITE"] = "1"
@@ -100,9 +139,64 @@ def safe_home() -> Path | None:
     return None
 
 
-def prepare(project: Path, command: str) -> None:
+def kernels_dir() -> Path:
     from jupyter_core.paths import jupyter_data_dir
 
+    return Path(jupyter_data_dir()) / "kernels"
+
+
+def owned_uv_specs() -> list[dict[str, object]]:
+    root = kernels_dir()
+    if not root.is_dir():
+        return []
+    found: list[dict[str, object]] = []
+    for spec_dir in sorted(root.iterdir()):
+        if not spec_dir.is_dir() or spec_dir.is_symlink():
+            continue
+        target = spec_dir / "kernel.json"
+        try:
+            spec = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(spec, dict):
+            continue
+        meta = spec.get("metadata")
+        info = meta.get(MARKER) if isinstance(meta, dict) else None
+        if not isinstance(info, dict) or not isinstance(info.get("project"), str):
+            continue
+        project_str = info["project"]
+        project_path = Path(project_str)
+        available = False
+        with suppress(OSError, ValueError):
+            available = (
+                project_path.is_dir()
+                and (project_path / ".venv/bin/python").is_file()
+                and read_marker(project_path).get("project") == project_str
+            )
+        found.append({
+            "name": spec_dir.name,
+            "display_name": str(spec.get("display_name", spec_dir.name)),
+            "project": project_str,
+            "available": available,
+        })
+    return found
+
+
+def command_list(as_json: bool) -> int:
+    specs = owned_uv_specs()
+    if as_json:
+        print(json.dumps({"kernels": specs}, indent=2))
+        return 0
+    if not specs:
+        print("No uv kernels registered. Create one with: scigethelpers uv init <dir>")
+        return 0
+    for item in specs:
+        state = "" if item["available"] else "  [environment missing or moved]"
+        print(f"{item['name']}\t{item['project']}{state}")
+    return 0
+
+
+def prepare(project: Path, command: str, wrapper: Path) -> None:
     if os.geteuid() == 0:
         raise ValueError("Run as the notebook user, not root.")
     forbidden = {Path("/")}
@@ -113,7 +207,7 @@ def prepare(project: Path, command: str) -> None:
         raise ValueError("Choose an analysis subfolder, not a home or mount root.")
     if command != "remove" and not project.is_dir():
         raise ValueError("Create the analysis folder first.")
-    root = Path(jupyter_data_dir()) / "kernels"
+    root = kernels_dir()
     root.mkdir(parents=True, exist_ok=True)
     with (root / f".{MARKER}.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -135,6 +229,8 @@ def prepare(project: Path, command: str) -> None:
             shutil.rmtree(spec_dir)
             print("Removed registration; project files and environment retained.")
             return
+        if not wrapper.is_file() or not os.access(wrapper, os.X_OK):
+            raise ValueError(f"Kernel wrapper unavailable: {wrapper}")
         for parent in project.parents:
             manifest = parent / "pyproject.toml"
             if manifest.is_file():
@@ -202,7 +298,16 @@ def prepare(project: Path, command: str) -> None:
             atomic_json(
                 target,
                 {
-                    "argv": [sys.executable, "-I", str(Path(__file__).resolve()), "launch", str(project), "-f", "{connection_file}"],
+                    "argv": [
+                        str(wrapper),
+                        sys.executable,
+                        "-I",
+                        str(Path(__file__).resolve()),
+                        "launch",
+                        str(project),
+                        "-f",
+                        "{connection_file}",
+                    ],
                     "display_name": f"Python (uv: {project.name})",
                     "language": "python",
                     "metadata": {MARKER: {"project": str(project)}},
@@ -245,24 +350,48 @@ def prepare(project: Path, command: str) -> None:
         print(f"Registered {kernel_name(project)}. Select Python (uv: {project.name}).")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    # `launch` is the internal kernelspec entry point and forwards arbitrary
+    # ipykernel flags (e.g. `-f {connection_file}`) unchanged.
+    if raw_argv and raw_argv[0] == "launch":
+        if len(raw_argv) < 2:
+            print("scigethelpers uv: launch requires a project directory", file=sys.stderr)
+            return 2
+        try:
+            project = Path(raw_argv[1]).expanduser().resolve()
+            launch(project, raw_argv[2:])
+        except (OSError, ValueError, subprocess.CalledProcessError) as error:
+            print(f"scigethelpers uv: {error}", file=sys.stderr)
+            return 1
+        return 0
+
     parser = argparse.ArgumentParser(prog="scigethelpers uv", description=__doc__)
-    parser.add_argument(
-        "command",
-        choices=["init", "rebuild", "remove", "launch"],
-        metavar="{init,rebuild,remove}",
-        help="create, rebuild after a move or Python change, or unregister",
-    )
-    parser.add_argument("directory", type=Path, help="the uv project directory")
-    args, rest = parser.parse_known_args()
+    subparsers = parser.add_subparsers(dest="command", required=True, metavar="{init,rebuild,remove,list}")
+
+    for name, help_text in (
+        ("init", "create a project-local uv environment and register its Jupyter kernel"),
+        ("rebuild", "rebuild an existing uv environment after a move or Python change"),
+        ("remove", "unregister the uv Jupyter kernel (keeps project files and .venv)"),
+    ):
+        sub = subparsers.add_parser(name, help=help_text)
+        sub.add_argument("directory", type=Path, help="the uv project directory")
+        sub.add_argument(
+            "--kernel-wrapper",
+            type=Path,
+            default=Path(KERNEL_WRAPPER),
+            help=argparse.SUPPRESS,
+        )
+
+    listing = subparsers.add_parser("list", help="list registered uv kernels")
+    listing.add_argument("--json", action="store_true", help="print machine-readable JSON")
+
+    args = parser.parse_args(raw_argv)
     try:
+        if args.command == "list":
+            return command_list(args.json)
         project = args.directory.expanduser().resolve()
-        if args.command == "launch":
-            launch(project, rest)
-        else:
-            if rest:
-                parser.error(f"unexpected arguments: {rest}")
-            prepare(project, args.command)
+        prepare(project, args.command, args.kernel_wrapper.resolve())
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"scigethelpers uv: {error}", file=sys.stderr)
         return 1

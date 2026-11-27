@@ -1,0 +1,14 @@
+{
+  "title": "Session Helpers (scigethelpers)",
+  "description": "Settings for the scigethelpers Session Helpers panel in JupyterLab.",
+  "type": "object",
+  "properties": {
+    "showOnStartup": {
+      "type": "boolean",
+      "title": "Show Session Helpers on startup",
+      "description": "Open the Session Helpers tab in the background when starting a fresh JupyterLab workspace with only the default Launcher.",
+      "default": true
+    }
+  },
+  "additionalProperties": false
+}

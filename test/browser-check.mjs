@@ -323,7 +323,7 @@ async function main() {
     // 1. JupyterLab boot, WebGL2 availability, and launcher tiles
     const lab = await openTab(cdp);
     await lab.goto(`${BASE_URL}/lab?token=${encodeURIComponent(TOKEN)}`);
-    const expectedCards = ["Desktop", "scigent.ai", "Chat", "Slurm Dashboard", "WEBKNOSSOS"];
+    const expectedCards = ["Desktop", "scigent.ai", "Session Helpers", "Chat", "Slurm Dashboard", "WEBKNOSSOS"];
     if (HAS_VSCODE) expectedCards.push("VS Code");
     if (HAS_NEUROGLANCER) expectedCards.push("Neuroglancer");
     const launcher = await lab.waitFor(`(() => {
@@ -361,6 +361,52 @@ async function main() {
     })()`);
     if (webgl2) pass(`WebGL2 active (${webgl2})`);
     else fail("WebGL2 active in headless Chrome");
+
+    // 1b. Session Helpers startup tab (opened in background without stealing focus)
+    const helpersTab = await lab.waitFor(`(() => {
+      const tabs = [...document.querySelectorAll('.lm-TabBar-tabLabel')]
+        .filter(n => n.textContent.trim() === 'Session Helpers');
+      if (tabs.length === 0) return null;
+      const r = tabs[0].getBoundingClientRect();
+      return { count: tabs.length, x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+    })()`, 15000);
+    if (helpersTab && helpersTab.count === 1) {
+      pass("Session Helpers tab opened once in background on fresh startup");
+      await lab.clickAt(helpersTab.x, helpersTab.y, 1);
+      const helpersRendered = await lab.waitFor(`(() => {
+        const panel = document.querySelector('.jp-ScigetHelpers');
+        if (!panel) return null;
+        const text = panel.textContent || '';
+        return text.includes('Environment & Resources') && text.includes('CPUs / RAM') ? text.slice(0, 200) : null;
+      })()`, 15000);
+      if (helpersRendered) {
+        pass("Session Helpers panel rendered live overview from API");
+        // Click "Run Environment Check" to verify real browser cookie+XSRF POST end-to-end.
+        const checkBtn = await lab.eval(`(() => {
+          const b = [...document.querySelectorAll('.jp-ScigetHelpers button')]
+            .find(n => n.textContent.trim() === 'Run Environment Check');
+          if (!b) return null;
+          b.scrollIntoView({ block: 'center' });
+          const r = b.getBoundingClientRect();
+          return r.width > 0 ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null;
+        })()`);
+        if (checkBtn) {
+          await lab.clickAt(checkBtn.x, checkBtn.y, 1);
+          const checkDone = await lab.waitFor(`(() => {
+            const badges = [...document.querySelectorAll('.jp-ScigetHelpers-badge')].map(n => n.textContent.trim());
+            return badges.some(b => ['PASS', 'SKIP', 'FAIL'].includes(b)) ? badges : null;
+          })()`, 30000);
+          if (checkDone) pass(`Session Helpers browser check POST rendered badges (${checkDone.join(', ')})`);
+          else fail("Session Helpers browser check POST rendered badges");
+        } else {
+          fail("Session Helpers Run Environment Check button found");
+        }
+      } else {
+        fail("Session Helpers panel rendered live overview from API");
+      }
+    } else {
+      fail("Session Helpers tab opened once in background on fresh startup", JSON.stringify(helpersTab));
+    }
 
     // 2. Domain viewers inside JupyterLab (NiiVue on neurodesktop; Neuroglancer OME-Zarr on microdesktop)
     if (HAS_NIIVUE) {

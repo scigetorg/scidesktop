@@ -88,8 +88,9 @@ variable "OPENCODE_SHA256_AMD64" { default = "92690eee07a680d3cb760ca02ba43878de
 variable "OPENCODE_SHA256_ARM64" { default = "f8c5a82075fede9b5b044ed6c8a6d13ad807a7e62caea1cd0a878adef49eb053" }
 
 # Node.js for build stages (acp-adapters, jupyterlab-freebrowse,
-# jupyterlab-slurm, jupyterlab-neuroglancer). At runtime acp-adapters shares
-# code-server's Node binary (/opt/code-server/lib/node).
+# jupyterlab-slurm, jupyterlab-neuroglancer, jupyterlab-scigethelpers). At
+# runtime acp-adapters shares code-server's Node binary
+# (/opt/code-server/lib/node).
 # renovate: datasource=node-version depName=node
 variable "NODE_VERSION" { default = "24.22.3" }
 
@@ -272,6 +273,7 @@ group "test" {
     "neurodesk-cvmfs-test",
     "neurodesk-agents-test",
     "scigethelpers-cli-test",
+    "jupyterlab-scigethelpers-test",
     "vscode-core-test",
     "vscode-niivue-test",
     "vscode-coding-agents-test",
@@ -998,9 +1000,9 @@ target "vscode-coding-agents-test" {
   output   = ["type=cacheonly"]
 }
 
-# Optional: the `scigethelpers` command (cite, kernel, check, info). Its test
-# runs it with Lmod, the session's Slurm queue and the Jupyter environment's
-# Python, so it borrows those three components.
+# The `scigethelpers` command (cite, kernel, uv, check, info, agent preflight),
+# included in scidesktop. Its test runs with Lmod, the session's Slurm queue
+# and the Jupyter environment's Python, so it borrows those three components.
 target "scigethelpers-cli" {
   inherits = ["_component"]
   context  = "components/scigethelpers-cli"
@@ -1014,6 +1016,28 @@ target "scigethelpers-cli" {
 
 target "scigethelpers-cli-test" {
   inherits = ["scigethelpers-cli"]
+  target   = "test"
+  output   = ["type=cacheonly"]
+}
+
+# Session Helpers panel for JupyterLab (Launcher tile, Command Palette,
+# background startup tab on fresh workspaces, and authenticated API for
+# scigethelpers), included in scidesktop.
+target "jupyterlab-scigethelpers" {
+  inherits = ["_component"]
+  context  = "components/jupyterlab-scigethelpers"
+  target   = "component"
+  contexts = {
+    jupyter-env       = "target:jupyter-env"
+    scigethelpers-cli = "target:scigethelpers-cli"
+  }
+  args = {
+    NODE_VERSION = NODE_VERSION
+  }
+}
+
+target "jupyterlab-scigethelpers-test" {
+  inherits = ["jupyterlab-scigethelpers"]
   target   = "test"
   output   = ["type=cacheonly"]
 }
@@ -1309,34 +1333,35 @@ target "scidesktop" {
   inherits = ["_common"]
   context  = "images/scidesktop"
   contexts = {
-    os                    = "target:os-ubuntu"
-    startup               = "target:startup"
-    jupyter-env           = "target:jupyter-env"
-    selkies               = "target:selkies"
-    apptainer             = "target:apptainer"
-    lmod                  = "target:lmod"
-    sciget                = "target:sciget"
-    slurm                 = "target:slurm"
-    virtualgl             = "target:virtualgl"
-    datalad               = "target:datalad"
-    code-server           = "target:code-server"
-    vscode-core           = "target:vscode-core"
-    scigethelpers-cli     = "target:scigethelpers-cli"
-    jupyterlab-slurm      = "target:jupyterlab-slurm"
-    launcher-links        = "target:launcher-links"
-    workflow-engines      = "target:workflow-engines"
-    lightcone             = "target:lightcone"
-    sciget-all            = "target:sciget-all"
-    eessi-cvmfs           = "target:eessi-cvmfs"
-    coding-agents         = "target:coding-agents"
-    acp-adapters          = "target:acp-adapters"
-    antigravity-acp       = "target:antigravity-acp"
-    t3-code               = "target:t3-code"
-    t3-connect            = "target:t3-connect"
-    rclone                = "target:rclone"
-    gh                    = "target:gh"
-    aria2                 = "target:aria2"
-    tcsh                  = "target:tcsh"
+    os                       = "target:os-ubuntu"
+    startup                  = "target:startup"
+    jupyter-env              = "target:jupyter-env"
+    selkies                  = "target:selkies"
+    apptainer                = "target:apptainer"
+    lmod                     = "target:lmod"
+    sciget                   = "target:sciget"
+    slurm                    = "target:slurm"
+    virtualgl                = "target:virtualgl"
+    datalad                  = "target:datalad"
+    code-server              = "target:code-server"
+    vscode-core              = "target:vscode-core"
+    scigethelpers-cli        = "target:scigethelpers-cli"
+    jupyterlab-scigethelpers = "target:jupyterlab-scigethelpers"
+    jupyterlab-slurm         = "target:jupyterlab-slurm"
+    launcher-links           = "target:launcher-links"
+    workflow-engines         = "target:workflow-engines"
+    lightcone                = "target:lightcone"
+    sciget-all               = "target:sciget-all"
+    eessi-cvmfs              = "target:eessi-cvmfs"
+    coding-agents            = "target:coding-agents"
+    acp-adapters             = "target:acp-adapters"
+    antigravity-acp          = "target:antigravity-acp"
+    t3-code                  = "target:t3-code"
+    t3-connect               = "target:t3-connect"
+    rclone                   = "target:rclone"
+    gh                       = "target:gh"
+    aria2                    = "target:aria2"
+    tcsh                     = "target:tcsh"
   }
   tags   = [IMAGE]
   output = ["type=docker"]
