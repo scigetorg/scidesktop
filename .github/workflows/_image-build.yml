@@ -49,6 +49,7 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
+          driver-opts: network=host
           cleanup: false
 
       # Log in to GHCR before building. Caller permissions guarantee that PR
@@ -88,9 +89,37 @@ jobs:
             /opt/hostedtoolcache/CodeQL
           df -h /
 
-      # Build the base image and every component's test stage first, then load
-      # each domain image sequentially so buildx does not stream all multi-GB
-      # image tarballs into dockerd at once (avoiding ENOSPC on ubuntu-24.04).
+      # Ephemeral loopback registry on an OS-assigned port (reusing registry:2
+      # already cached by the publish/mirror tests above) so BuildKit exports
+      # deduplicated layers via type=registry instead of streaming 8 multi-GB
+      # type=docker tarballs, and Trivy scans via --image-src remote without
+      # docker-save temp tarballs.
+      - name: Start local registry
+        run: |
+          set -euo pipefail
+          cid="$(docker run -d --publish 127.0.0.1::5000 registry:2)"
+          echo "LOCAL_REGISTRY_CID=${cid}" >> "${GITHUB_ENV}"
+          addr="$(docker port "${cid}" 5000/tcp | head -n 1)"
+          port="${addr##*:}"
+          [ -n "${port}" ] || { echo "Failed to resolve local registry port for ${cid}" >&2; exit 1; }
+          endpoint="127.0.0.1:${port}"
+          echo "LOCAL_REGISTRY=${endpoint}" >> "${GITHUB_ENV}"
+          for _ in $(seq 1 30); do
+              [ "$(docker inspect -f '{{.State.Running}}' "${cid}")" = "true" ] || {
+                  echo "Local registry container ${cid} stopped unexpectedly" >&2
+                  docker logs "${cid}" >&2 || true
+                  exit 1
+              }
+              curl -fsS --max-time 2 "http://${endpoint}/v2/" >/dev/null && break
+              sleep 0.5
+          done
+          curl -fsS --max-time 2 "http://${endpoint}/v2/" >/dev/null
+          echo "Started local registry ${cid} on ${endpoint}"
+
+      # Build every component's test stage and the base image first, push
+      # deduplicated layers to the runner-local registry (without default
+      # provenance attestation indexes), pull scidesktop once into dockerd,
+      # then bake all domain images together and pull their deltas in parallel.
       # Only main runs (inputs.write-cache=true) write GHCR registry cache tags,
       # with separate export modes so `test` writes only `*-test-<arch>` tags
       # and `scidesktop` writes only component + `scidesktop-<arch>` tags.
@@ -98,17 +127,18 @@ jobs:
         env:
           PLATFORM: linux/${{ matrix.arch }}
           WRITE_CACHE: ${{ inputs.write-cache }}
+          BUILDX_NO_DEFAULT_ATTESTATIONS: '1'
         run: |
           # The build's own exit status, not tee's.
           set -euo pipefail
+          cache_repo_lc="${CACHE_REPO,,}"
+          cache_path="${cache_repo_lc#*/}"
           run_bake() {
               local cache_mode="$1"
               shift
               local args_out=""
               local args=()
-              if [ "${cache_mode}" = domain-cache ]; then
-                  args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci domain-cache "$1")" || return 1
-              elif [ "${cache_mode}" = read-cache ]; then
+              if [ "${cache_mode}" = read-cache ]; then
                   args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci)" || return 1
               else
                   args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci "${cache_mode}")" || return 1
@@ -125,7 +155,11 @@ jobs:
                       echo "::warning::Buildx hit a transient graph-state error; retrying with cache."
                       continue
                   fi
-                  if [ "${blob_retried}" -eq 0 ] && grep -qE 'blob unknown' /tmp/bake.log; then
+                  # Only retry no-cache on a blob-unknown error attributed to the
+                  # configured GHCR cache repository, never local-registry errors.
+                  if [ "${blob_retried}" -eq 0 ] && grep -Eiq \
+                      "(${cache_repo_lc}|/v2/${cache_path}/blobs/).*blob unknown|blob unknown.*(${cache_repo_lc}|/v2/${cache_path}/blobs/)" \
+                      /tmp/bake.log; then
                       blob_retried=1
                       echo "::warning::A registry cache blob vanished during the build; building once more without it."
                       args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci no-cache)" || return 1
@@ -141,13 +175,108 @@ jobs:
               test_cache_mode=write-test-cache
               base_cache_mode=write-cache
           fi
+
+          t0=$SECONDS
           run_bake "${test_cache_mode}" test
+          echo "Timing: bake test = $((SECONDS - t0))s"
+
+          t0=$SECONDS
           run_bake "${base_cache_mode}" scidesktop
+          echo "Timing: bake scidesktop -> local registry = $((SECONDS - t0))s"
+
+          t0=$SECONDS
+          docker pull --quiet "${LOCAL_REGISTRY}/scidesktop:ci"
+          docker tag "${LOCAL_REGISTRY}/scidesktop:ci" scidesktop:ci
+          echo "Timing: pull scidesktop -> dockerd = $((SECONDS - t0))s"
+
+          domain_images=()
           for dockerfile in images/*/Dockerfile; do
               image="$(basename "$(dirname "${dockerfile}")")"
               [ "${image}" != "scidesktop" ] || continue
-              run_bake domain-cache "${image}"
+              domain_images+=("${image}")
           done
+
+          if [ "${#domain_images[@]}" -gt 0 ]; then
+              t0=$SECONDS
+              # Use full read-cache here: with type=registry export, bake scidesktop
+              # can satisfy base components lazily from GHCR without materializing
+              # their intermediate stages locally, so the single batched domain bake
+              # needs cache-from for base components too.
+              run_bake read-cache "${domain_images[@]}"
+              echo "Timing: bake ${#domain_images[@]} domain images -> local registry = $((SECONDS - t0))s"
+
+              t0=$SECONDS
+              max_pull_workers=2
+              if [ "${{ matrix.arch }}" = "arm64" ]; then
+                  max_pull_workers=3
+              fi
+              pull_log_dir="$(mktemp -d)"
+              declare -A pull_pid_img=()
+              # shellcheck disable=SC2317,SC2329
+              cleanup_pulls() {
+                  local p="" img=""
+                  for p in "${!pull_pid_img[@]}"; do
+                      pkill -TERM -P "${p}" 2>/dev/null || true
+                      kill -TERM "${p}" 2>/dev/null || true
+                  done
+                  for p in "${!pull_pid_img[@]}"; do
+                      wait "${p}" 2>/dev/null || true
+                      img="${pull_pid_img[${p}]}"
+                      echo "::group::pull ${img} (unfinished)"
+                      cat "${pull_log_dir}/${img}.log" 2>/dev/null || true
+                      echo "::endgroup::"
+                  done
+                  rm -rf "${pull_log_dir}"
+              }
+              trap cleanup_pulls EXIT
+              trap 'exit 130' INT
+              trap 'exit 143' TERM
+
+              pull_active=0
+              pull_failed=0
+              reap_pull_one() {
+                  local done_pid="" rc=0 p=""
+                  wait -n -p done_pid || rc=$?
+                  if [ -z "${done_pid:-}" ]; then
+                      for p in "${!pull_pid_img[@]}"; do
+                          done_pid="${p}"
+                          break
+                      done
+                      rc=0
+                      wait "${done_pid}" || rc=$?
+                  fi
+                  local done_img="${pull_pid_img[${done_pid}]}"
+                  unset "pull_pid_img[${done_pid}]"
+                  pull_active=$((pull_active - 1))
+                  if [ "${rc}" -ne 0 ]; then
+                      echo "::group::pull ${done_img} (exit ${rc})"
+                      cat "${pull_log_dir}/${done_img}.log" 2>/dev/null || true
+                      echo "::endgroup::"
+                      pull_failed=1
+                  fi
+              }
+              for image in "${domain_images[@]}"; do
+                  while [ "${pull_active}" -ge "${max_pull_workers}" ]; do
+                      reap_pull_one
+                  done
+                  (
+                      docker pull --quiet "${LOCAL_REGISTRY}/${image}:ci"
+                      docker tag "${LOCAL_REGISTRY}/${image}:ci" "${image}:ci"
+                  ) >"${pull_log_dir}/${image}.log" 2>&1 &
+                  pid=$!
+                  pull_pid_img["${pid}"]="${image}"
+                  pull_active=$((pull_active + 1))
+              done
+              while [ "${pull_active}" -gt 0 ]; do
+                  reap_pull_one
+              done
+              [ "${pull_failed}" -eq 0 ] || exit 1
+              echo "Timing: pull ${#domain_images[@]} domain images -> dockerd = $((SECONDS - t0))s"
+          fi
+
+          mounts="$(docker logs "${LOCAL_REGISTRY_CID}" 2>&1 | grep -c 'mount=.* 201 ' || true)"
+          echo "Local registry cross-repo blob mounts (HTTP 201): ${mounts}"
+          df -h /
 
       # docs/components.md: what each component writes (no overlaps, no shadowing,
       # no permission changes to shared folders, a manifest entry).
@@ -514,18 +643,37 @@ jobs:
           failed=0
           for image in ${PUBLISH}; do
               echo "::group::trivy ${image}"
+              expected_layers="$(docker image inspect -f '{{json .RootFS.Layers}}' "${image}:ci")"
               trivy_rc=0
-              /tmp/trivy image --skip-db-update --scanners vuln --ignore-unfixed \
-                  --format json --output "/tmp/trivy-${image}.json" "${image}:ci" || trivy_rc=$?
+              /tmp/trivy image --image-src remote --skip-db-update --list-all-pkgs \
+                  --scanners vuln --ignore-unfixed \
+                  --format json --output "/tmp/trivy-${image}.json" \
+                  "${LOCAL_REGISTRY}/${image}:ci" || trivy_rc=$?
               if [ "${trivy_rc}" -ne 0 ]; then
                   echo "  [FAIL] trivy exited with status ${trivy_rc}"
                   failed=1
               else
-                  python3 - "/tmp/trivy-${image}.json" <<'PY' || failed=1
+                  python3 - "/tmp/trivy-${image}.json" "${expected_layers}" <<'PY' || failed=1
           import json, sys
           data = json.load(open(sys.argv[1]))
+          expected_layers = json.loads(sys.argv[2])
+          meta = data.get("Metadata") or {}
+          diff_ids = meta.get("DiffIDs") or []
+          os_family = (meta.get("OS") or {}).get("Family", "")
+          results = data.get("Results") or []
+          if diff_ids != expected_layers:
+              print(f"  [FAIL] Trivy scanned DiffIDs ({len(diff_ids)}) != dockerd image layers ({len(expected_layers)})")
+              sys.exit(1)
+          os_pkgs_count = sum(
+              len(r.get("Packages") or [])
+              for r in results
+              if r.get("Class") == "os-pkgs"
+          )
+          if os_family != "ubuntu" or os_pkgs_count == 0:
+              print(f"  [FAIL] Trivy did not scan Ubuntu OS packages (OS={os_family!r}, os_pkgs={os_pkgs_count}, classes={[r.get('Class') for r in results]})")
+              sys.exit(1)
           os_high_crit, any_crit, lib_high = [], [], []
-          for res in data.get("Results") or []:
+          for res in results:
               cls = res.get("Class", "")
               tgt = res.get("Target", "")
               for v in res.get("Vulnerabilities") or []:
@@ -537,7 +685,7 @@ jobs:
                       os_high_crit.append(entry)
                   elif cls != "os-pkgs" and sev == "HIGH":
                       lib_high.append(entry)
-          print(f"OS HIGH/CRITICAL: {len(os_high_crit)}, Any CRITICAL: {len(any_crit)}, Library HIGH (informational): {len(lib_high)}")
+          print(f"OS packages scanned: {os_pkgs_count} | OS HIGH/CRITICAL: {len(os_high_crit)}, Any CRITICAL: {len(any_crit)}, Library HIGH (informational): {len(lib_high)}")
           for e in lib_high:
               print("  [info]", e)
           for e in os_high_crit + any_crit:
@@ -575,6 +723,15 @@ jobs:
           fi
           echo "::endgroup::"
           exit "${failed}"
+
+      # Reclaim the local registry's anonymous volume before candidate pushes
+      # (and on early failures).
+      - name: Remove local registry
+        if: always()
+        run: |
+          if [ -n "${LOCAL_REGISTRY_CID:-}" ]; then
+              docker rm -fv "${LOCAL_REGISTRY_CID}" >/dev/null 2>&1 || true
+          fi
 
       # Pushed under a tag nothing deploys. The publish job gives the images
       # their real tags once every architecture has passed. (Already logged in

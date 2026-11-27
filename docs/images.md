@@ -253,14 +253,18 @@ to the workflow.
   component has separate `<component>-<arch>` and `<component>-test-<arch>`
   tags so `bake test` and `bake scidesktop` never overwrite each other's cache
   index, and both targets read from both tags. `scidesktop` caches its assembly
-  with `mode=min`; domain images scope `cache-from` (`domain-cache`) to
-  `scidesktop-<arch>`, the domain-only components they add
-  (`<component>-test-<arch>`), and any build-only components not copied into an
-  image (e.g. `micromamba`), without writing separate image cache tags. Only
+  with `mode=min`; domain images are baked together in one `read-cache` pass
+  without writing separate image cache tags. Only
   non-PR runs on `main` write cache tags; pull requests and
   `privileged-smoke.yml` read only. Make
   the `scidesktop-cache` GHCR package public after its first push so fork PRs
   can read it anonymously ([operator-runbook.md](operator-runbook.md#ghcr-build-cache-package)).
+  Inside each `.github/workflows/_image-build.yml` job, built images are
+  exported to an ephemeral loopback `registry:2` on an OS-assigned port
+  (`LOCAL_REGISTRY`, with `BUILDX_NO_DEFAULT_ATTESTATIONS=1`). This avoids
+  retransferring shared `scidesktop` layers in Docker export tarballs on load
+  into `dockerd` and lets Trivy scan via `--image-src remote` without full
+  `docker save` tarballs.
 - **Pull requests:** `.github/workflows/image.yml` invokes
   `.github/workflows/_image-build.yml` with `packages: read` (one runner per
   architecture, no emulation). It runs the contract checks, builds every
