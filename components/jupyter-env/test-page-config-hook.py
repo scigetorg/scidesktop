@@ -296,6 +296,19 @@ def main():
     )
     assert EXT in r15["disabledExtensions"], r15
 
+    # 16. Root page_config.json clears a drop-in disable of ext-a via JSON null,
+    # leaving ext-a enabled so ext-a's metadata still disables server-proxy.
+    r16 = run_case(
+        hook,
+        {
+            "disabledExtensions": {"ext-a": None, EXT: True},
+            "neurodeskSupporter": "false",
+        },
+        user_dropin_cfg={"disabledExtensions": {"ext-a": True}},
+        federated_exts={"ext-a": [EXT]},
+    )
+    assert EXT in r16["disabledExtensions"], r16
+
     print("PAGE_CONFIG_HOOK_TESTS_OK")
 
 

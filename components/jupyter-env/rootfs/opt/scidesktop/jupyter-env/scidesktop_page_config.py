@@ -130,21 +130,26 @@ def _disabled_without_legacy_user_entry(handler, user_dir):
 
     # Merge config layers in ConfigManager's exact back-to-front precedence,
     # subtracting only _REQUIRED_EXTENSION from the user layer's root
-    # page_config.json (while keeping any user page_config.d/*.json drop-ins).
+    # page_config.json (while preserving page_config.d/*.json drop-ins and
+    # JSON null deletions from root page_config.json onto those drop-ins).
     for path in all_config_paths[::-1]:
         labconfig_dir = os.path.join(path, "labconfig")
         if os.path.normpath(path) == user_norm:
-            dropins = BaseJSONConfigManager(
-                config_dir=labconfig_dir, read_directory=True
-            ).get("page_config", include_root=False)
-            recursive_update(static_cfg, dropins)
-            root_layer = BaseJSONConfigManager(
-                config_dir=labconfig_dir, read_directory=False
-            ).get("page_config")
-            layer_disabled = root_layer.get("disabledExtensions")
-            if isinstance(layer_disabled, dict):
-                layer_disabled.pop(_REQUIRED_EXTENSION, None)
-            recursive_update(static_cfg, root_layer)
+            cm = BaseJSONConfigManager(config_dir=labconfig_dir, read_directory=True)
+            user_layer = cm.get("page_config", include_root=False)
+            root_path = cm.file_name("page_config")
+            if os.path.isfile(root_path) and os.path.getsize(root_path):
+                try:
+                    with open(root_path, encoding="utf-8") as fh:
+                        raw_root = json.load(fh)
+                    if isinstance(raw_root, dict):
+                        root_disabled = raw_root.get("disabledExtensions")
+                        if isinstance(root_disabled, dict):
+                            root_disabled.pop(_REQUIRED_EXTENSION, None)
+                        recursive_update(user_layer, raw_root)
+                except (OSError, ValueError):
+                    pass
+            recursive_update(static_cfg, user_layer)
         else:
             layer = ConfigManager(read_config_path=[labconfig_dir]).get("page_config")
             recursive_update(static_cfg, layer)
