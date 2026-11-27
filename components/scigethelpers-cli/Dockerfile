@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1
 # The `scigethelpers` command at /opt/scigethelpers-cli: `scigethelpers cite`,
-# `scigethelpers kernel`, `scigethelpers check` and `scigethelpers info`,
-# generalized from neurodesk/neurodesktop's CLI (MIT) to work across sciget
-# domain images (neurodesktop, microdesktop, and others). Python scripts for
-# the Jupyter environment's interpreter and an Lmod site package; no software of
-# its own. Not part of the base image; domain images copy it (docs/images.md).
+# `scigethelpers kernel`, `scigethelpers uv`, `scigethelpers check`,
+# `scigethelpers info` and `scigethelpers agent preflight`, generalized from
+# neurodesk/neurodesktop's CLI (MIT) to work across sciget domain images.
+# Included in the scidesktop base image (images/scidesktop/Dockerfile).
+# Python scripts for the Jupyter environment's interpreter and an Lmod site
+# package; no software of its own.
 
 ARG UBUNTU_IMAGE
 
@@ -13,12 +14,14 @@ ARG UBUNTU_IMAGE
 FROM ${UBUNTU_IMAGE} AS rootfs
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 COPY rootfs/ /rootfs/
-# The manifest identifies the command by content, so a change to it shows in
-# an image's manifest. `scigethelpers --version` prints it.
+# The manifest identifies the command by content, so any change to its scripts,
+# wrapper, Lmod site package or Bash completion shows in an image's manifest.
+# `scigethelpers --version` prints it.
 RUN chmod -R a+rX,go-w /rootfs \
     && install -d -m 0755 /rootfs/opt/scidesktop/manifest.d \
-    && printf '{"cli_sha256": "%s"}\n' \
-        "$(cat /rootfs/opt/scigethelpers-cli/lib/*.py | sha256sum | cut -d ' ' -f 1)" \
+    && hash="$(find /rootfs/opt/scigethelpers-cli /rootfs/etc/bash.bashrc.d/scigethelpers-cli.sh \
+        -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d ' ' -f 1)" \
+    && printf '{"cli_sha256": "%s"}\n' "${hash}" \
         > /rootfs/opt/scidesktop/manifest.d/scigethelpers-cli.json
 
 FROM scratch AS component

@@ -321,8 +321,22 @@ def command_add(args: argparse.Namespace) -> int:
     return 0
 
 
-def command_list(_args: argparse.Namespace) -> int:
+def command_list(args: argparse.Namespace) -> int:
     specs = owned_specs()
+    if getattr(args, "json", False):
+        items = []
+        for name, spec in specs:
+            info = spec_info(spec) or {}
+            wrapper = str(info.get("python", ""))
+            items.append({
+                "name": name,
+                "display_name": str(spec.get("display_name", name)),
+                "module": str(info.get("module", "?")),
+                "python": wrapper,
+                "available": os.path.exists(wrapper),
+            })
+        print(json.dumps({"kernels": items}, indent=2))
+        return 0
     if not specs:
         print("No container kernels registered. Add one with: scigethelpers kernel add <module>")
         return 0
@@ -367,6 +381,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     add.set_defaults(handler=command_add)
 
     listing = commands.add_parser("list", help="list registered container kernels")
+    listing.add_argument("--json", action="store_true", help="print machine-readable JSON")
     listing.set_defaults(handler=command_list)
 
     remove = commands.add_parser("remove", help="remove a registered container kernel")
