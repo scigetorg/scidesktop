@@ -254,6 +254,84 @@ async def main():
 asyncio.run(main())
 PYTHON
 
+# Active-chat detection reads T3's V2 projection in statev2.sqlite, fails closed
+# on unreadable/incomplete schemas, and matches the live installed T3 server's DB.
+PYTHONPATH=/opt/t3-code/lib:/opt/t3-connect/lib "${python}" - "${work}/active-chats" <<'PYTHON'
+from contextlib import suppress
+import os, pathlib, signal, socket, sqlite3, subprocess, sys, time, urllib.error, urllib.request
+import t3_code_serve as serve, t3_connect
+
+work = pathlib.Path(sys.argv[1])
+t3home = work / "t3home"
+userdata = t3home / "userdata"
+userdata.mkdir(parents=True)
+manager = t3_connect.ConnectManager(environ={**os.environ, "T3CODE_HOME": str(t3home)})
+assert manager.active_chats() is False
+
+db_path = userdata / "statev2.sqlite"
+with sqlite3.connect(db_path) as db:
+    db.execute("PRAGMA journal_mode = WAL")
+    db.execute("CREATE TABLE projection_thread_sessions(status TEXT, active_turn_id TEXT)")
+assert manager.active_chats() is True, "missing V2 tables must fail closed"
+
+with sqlite3.connect(db_path) as db:
+    db.execute("CREATE TABLE orchestration_v2_projection_threads(thread_id TEXT PRIMARY KEY, deleted_at TEXT)")
+    db.execute("CREATE TABLE orchestration_v2_projection_runs(run_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, status TEXT NOT NULL)")
+    db.execute("INSERT INTO orchestration_v2_projection_threads VALUES ('t-live', NULL)")
+    db.execute("INSERT INTO orchestration_v2_projection_threads VALUES ('t-deleted', '2026-01-01T00:00:00Z')")
+    db.execute("INSERT INTO orchestration_v2_projection_runs VALUES ('r-del', 't-deleted', 'running')")
+    for index, status in enumerate(("completed", "interrupted", "failed", "cancelled", "rolled_back", "queued")):
+        db.execute("INSERT INTO orchestration_v2_projection_runs VALUES (?, 't-live', ?)", (f"r-idle-{index}", status))
+assert manager.active_chats() is False
+
+for status in ("preparing", "starting", "running", "waiting"):
+    with sqlite3.connect(db_path) as db:
+        db.execute("INSERT OR REPLACE INTO orchestration_v2_projection_runs VALUES ('r-active', 't-live', ?)", (status,))
+    assert manager.active_chats() is True, status
+
+with sqlite3.connect(db_path) as db:
+    db.execute("UPDATE orchestration_v2_projection_runs SET status = 'completed' WHERE run_id = 'r-active'")
+assert manager.active_chats() is False
+
+# Exercise the exact same query against the real installed T3 Code server's WAL DB.
+live_home = work / "live-t3home"
+live_home.mkdir(mode=0o700)
+with socket.socket() as probe:
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+env = serve.server_environment(live_home, os.environ)
+proc = subprocess.Popen(
+    [serve.T3, "serve", "--mode", "web", "--no-browser", "--host", "127.0.0.1",
+     "--port", str(port), "--base-dir", str(live_home), str(work)],
+    env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+)
+try:
+    deadline = time.monotonic() + 30
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    while time.monotonic() < deadline:
+        assert proc.poll() is None, "T3 exited during startup"
+        try:
+            with opener.open(f"http://127.0.0.1:{port}/.well-known/t3/environment", timeout=0.5):
+                break
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            time.sleep(0.1)
+    else:
+        raise AssertionError("T3 did not answer HTTP within 30 seconds")
+    assert (live_home / "userdata/statev2.sqlite").is_file()
+    live_manager = t3_connect.ConnectManager(environ={**os.environ, "T3CODE_HOME": str(live_home)})
+    assert live_manager.active_chats() is False
+finally:
+    with suppress(ProcessLookupError):
+        os.killpg(proc.pid, signal.SIGTERM)
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        with suppress(ProcessLookupError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=5)
+print("active-chat detection reads T3's V2 projection and matches the installed server")
+PYTHON
+
 # T3 Code learns of the relay client and of the page through its extension
 # points, and of nothing when the files are absent.
 PYTHONPATH=/opt/t3-code/lib "${python}" - "${work}" <<'PYTHON'
