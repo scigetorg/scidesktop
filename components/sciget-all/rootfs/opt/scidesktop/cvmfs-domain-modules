@@ -1,0 +1,374 @@
+#!/bin/bash
+# Manages CVMFS Lmod module paths for sciget catalogs backed by the Neurodesk
+# CVMFS store (/cvmfs/neurodesk.ardc.edu.au).
+#
+#   cvmfs-domain-modules            sync if needed and print MODULEPATH dirs
+#   cvmfs-domain-modules --sync     force-sync narrowed domain symlink views
+#   cvmfs-domain-modules --ensure   sync narrowed domain views only when stale
+#
+# When the active sciget catalogs include `neuroimaging` (scidesktop with
+# sciget-all, or neurodesktop with sciget-neuroimaging), prints the canonical
+# /cvmfs/neurodesk.ardc.edu.au/neurodesk-modules/*/ category folders as before.
+#
+# When active catalogs are narrowed to non-neuroimaging domain(s) (e.g.
+# microscopy in microdesktop), never exposes the full Neurodesk module tree;
+# instead maintains an architecture- and mount-scoped symlink view under
+# <cache_dir>/cvmfs-modules/<arch>-<root_hash>/<catalog>-<cat_hash> pointing at
+# only the catalog-listed tool versions compatible with the host architecture
+# under /cvmfs/neurodesk.ardc.edu.au/containers/modules.
+set -uo pipefail
+
+MODE=paths
+case "${1:-}" in
+    --sync) MODE=sync ;;
+    --ensure) MODE=ensure ;;
+esac
+
+[ "${SCIDESKTOP_CVMFS_MODE:-external}" = disabled ] && exit 0
+
+SYS_CATALOGS="${SCIGET_SYSTEM_CATALOGS:-/etc/sciget/catalogs.json}"
+SYS_CONFIG="${SCIGET_SYSTEM_CONFIG:-/etc/sciget/config.json}"
+USER_CONFIG="${SCIGET_CONFIG:-${XDG_CONFIG_HOME:-${HOME}/.config}/sciget/config.json}"
+USER_CATALOGS="$(dirname "${USER_CONFIG}")/catalogs.json"
+CVMFS_ROOT="${NEURODESK_CVMFS_ROOT:-/cvmfs/neurodesk.ardc.edu.au}"
+
+# Resolve sciget's cache_dir (user config overrides system config; default
+# matches sciget's XDG cache dir).
+sciget_cache=""
+for cfg in "${USER_CONFIG}" "${SYS_CONFIG}"; do
+    [ -r "${cfg}" ] || continue
+    val="$(jq -r 'if type == "object" and (.cache_dir | type) == "string" then .cache_dir else "" end' "${cfg}" 2>/dev/null || true)"
+    if [ -n "${val}" ]; then
+        sciget_cache="${val}"
+        break
+    fi
+done
+if [ -z "${sciget_cache}" ]; then
+    sciget_cache="${XDG_CACHE_HOME:-${HOME}/.cache}/sciget"
+elif [ "${sciget_cache}" = "~" ]; then
+    sciget_cache="${HOME}"
+else
+    # Literal leading "~/" check (not tilde expansion).
+    # shellcheck disable=SC2088
+    if [ "${sciget_cache:0:2}" = "~/" ]; then
+        sciget_cache="${HOME}/${sciget_cache:2}"
+    fi
+fi
+
+# Combine user and system catalogs.json using sciget's catalogLayers.combined()
+# semantics: user entries with a URL come first and hide same-named system
+# entries; user entries without a URL toggle the system entry's `use` flag.
+user_json="[]"
+sys_json="[]"
+if [ -r "${USER_CATALOGS}" ] && jq -e 'type == "array"' "${USER_CATALOGS}" >/dev/null 2>&1; then
+    user_json="$(cat "${USER_CATALOGS}")"
+fi
+if [ -r "${SYS_CATALOGS}" ] && jq -e 'type == "array"' "${SYS_CATALOGS}" >/dev/null 2>&1; then
+    sys_json="$(cat "${SYS_CATALOGS}")"
+fi
+
+# Emit enabled catalogs backed by CVMFS_ROOT as: name<TAB>url<TAB>domain
+mapfile -t CATALOG_ROWS < <(jq -rn \
+    --arg root "${CVMFS_ROOT}" \
+    --argjson user "${user_json}" \
+    --argjson sys "${sys_json}" '
+    def norm_use: if .use == false then false else true end;
+    def entries($a): if ($a | type) == "array" then $a else [] end;
+    (entries($user)) as $u
+    | (entries($sys)) as $s
+    | (
+        [ $u[] | select((.url // "") != "") | . + {use: norm_use} ]
+        + [
+            $s[]
+            | .name as $n
+            | (first($u[] | select(.name == $n)) // null) as $override
+            | if $override != null and (($override.url // "") != "") then
+                empty
+              elif $override != null then
+                . + {use: ($override | norm_use)}
+              else
+                . + {use: norm_use}
+              end
+          ]
+      )
+    | .[]
+    | select(.use == true)
+    | select((.dir // "") | (. == $root or startswith($root + "/")))
+    | select((.name // "") != "" and (.url // "") != "")
+    | "\(.name)\t\(.url)\t\(.domain // "")"
+' 2>/dev/null || true)
+
+[ "${#CATALOG_ROWS[@]}" -gt 0 ] || exit 0
+
+# Base scidesktop (sciget-all) and neurodesktop (sciget-neuroimaging) keep the
+# full Neurodesk CVMFS category tree.
+has_neuroimaging=0
+for row in "${CATALOG_ROWS[@]}"; do
+    IFS=$'\t' read -r cat _url dom <<<"${row}"
+    if [ "${cat}" = "neuroimaging" ] || [ "${dom}" = "neuroimaging" ]; then
+        has_neuroimaging=1
+        break
+    fi
+done
+
+if [ "${has_neuroimaging}" -eq 1 ]; then
+    [ "${MODE}" != "paths" ] && exit 0
+    root="${CVMFS_ROOT}/neurodesk-modules"
+    ls "${root}" >/dev/null 2>&1 || exit 0
+    for d in "${root}"/*/; do
+        [ -d "${d}" ] && printf '%s\n' "${d%/}"
+    done
+    exit 0
+fi
+
+# Narrowed non-neuroimaging domain image: trigger autofs and check containers/modules.
+cvmfs_modules="${CVMFS_ROOT}/containers/modules"
+ls "${cvmfs_modules}" >/dev/null 2>&1 || exit 0
+
+# Pick a private, writable base directory for the symlink views. Never fall back
+# to a predictable path in world-writable /tmp.
+view_base="${sciget_cache}/cvmfs-modules"
+if ! mkdir -p "${view_base}" 2>/dev/null || [ ! -w "${view_base}" ]; then
+    view_base=""
+    if [ -n "${XDG_RUNTIME_DIR:-}" ] \
+        && [ -d "${XDG_RUNTIME_DIR}" ] \
+        && [ ! -L "${XDG_RUNTIME_DIR}" ] \
+        && [ -O "${XDG_RUNTIME_DIR}" ] \
+        && [ "$(stat -c '%a' "${XDG_RUNTIME_DIR}" 2>/dev/null || true)" = "700" ]; then
+        candidate="${XDG_RUNTIME_DIR}/sciget-cvmfs-modules"
+        if mkdir -p "${candidate}" 2>/dev/null && [ -w "${candidate}" ]; then
+            view_base="${candidate}"
+        fi
+    fi
+    [ -n "${view_base}" ] || exit 0
+fi
+
+raw_arch="$(arch 2>/dev/null || jq -r '.arch // "x86_64"' /opt/scidesktop/manifest.d/os-ubuntu.json 2>/dev/null || echo x86_64)"
+case "${raw_arch}" in
+    arm64 | aarch64) arch="aarch64" ;;
+    amd64 | x86_64 | x86-64 | x64) arch="x86_64" ;;
+    *) arch="${raw_arch}" ;;
+esac
+
+root_hash="$(printf '%s' "${CVMFS_ROOT}" | sha256sum | cut -c1-12)"
+arch_scope="${arch}-${root_hash}"
+state_dir="${view_base}/.state/${arch_scope}"
+mkdir -p "${state_dir}" 2>/dev/null || exit 0
+
+cvmfs_state="$(stat -c '%Y:%i' "${cvmfs_modules}" 2>/dev/null || echo 0)"
+if command -v getfattr >/dev/null 2>&1; then
+    cvmfs_rev="$(getfattr --only-values -n user.revision "${CVMFS_ROOT}" 2>/dev/null || true)"
+    [ -n "${cvmfs_rev}" ] && cvmfs_state="${cvmfs_state}:rev${cvmfs_rev}"
+fi
+
+prune_all_links() {
+    local dir="$1"
+    find "${dir}" -mindepth 2 -maxdepth 2 -type l -delete 2>/dev/null || true
+    find "${dir}" -mindepth 1 -maxdepth 1 -type d -empty -delete 2>/dev/null || true
+}
+
+sync_catalog() {
+    local cat="$1" url="$2" dom="$3" cat_hash="$4" view_dir="$5"
+    local lock_file="${state_dir}/${cat}-${cat_hash}.lock"
+    local stamp_file="${state_dir}/${cat}-${cat_hash}.stamp"
+    mkdir -p "${view_dir}" 2>/dev/null || return 0
+
+    # Exact sciget catalog cache directory: <cache_dir>/catalogs/<name>-<sha256(url\ndomain)[:12]>/apps.json
+    local apps_json="${sciget_cache}/catalogs/${cat}-${cat_hash}/apps.json"
+
+    if [ ! -r "${apps_json}" ]; then
+        # Cache not yet downloaded or was removed: clear any stale links.
+        if [ -r "${stamp_file}" ] \
+            || [ -n "$(find "${view_dir}" -mindepth 2 -maxdepth 2 -type l -print -quit 2>/dev/null)" ]; then
+            (
+                flock -w 10 9 || exit 0
+                if [ ! -r "${apps_json}" ]; then
+                    prune_all_links "${view_dir}"
+                    rm -f "${stamp_file}"
+                fi
+            ) 9>"${lock_file}"
+        fi
+        return 0
+    fi
+
+    local want_stamp
+    want_stamp="${arch}|${cvmfs_modules}|${cvmfs_state}|${apps_json}|$(stat -c '%Y:%s' "${apps_json}" 2>/dev/null || echo 0)"
+    if [ "${MODE}" != "sync" ] && [ -r "${stamp_file}" ] \
+        && [ "$(cat "${stamp_file}" 2>/dev/null)" = "${want_stamp}" ]; then
+        return 0
+    fi
+
+    (
+        flock -w 10 9 || exit 0
+        if [ ! -r "${apps_json}" ]; then
+            prune_all_links "${view_dir}"
+            rm -f "${stamp_file}"
+            exit 0
+        fi
+        if [ "${MODE}" != "sync" ] && [ -r "${stamp_file}" ] \
+            && [ "$(cat "${stamp_file}" 2>/dev/null)" = "${want_stamp}" ]; then
+            exit 0
+        fi
+
+        local keep_list
+        keep_list="$(mktemp "${state_dir}/.keep-${cat}-${cat_hash}.XXXXXX")" || exit 0
+        trap 'rm -f "${keep_list}"' EXIT
+
+        local tool img mod_dir mod_ver src ext rel tmp_link meta meta_src meta_rel
+        # Parse apps.json using sciget's parseCatalog + effectiveArch + compatibleWithHost rules.
+        while IFS=$'\t' read -r tool img; do
+            [ -n "${tool}" ] && [ -n "${img}" ] || continue
+
+            # Resolve (mod_dir, mod_ver) from `image` ("<tool>_<ver>").
+            if [[ "${img}" == "${tool}_"* ]]; then
+                mod_dir="${tool}"
+                mod_ver="${img#"${tool}_"}"
+            else
+                continue
+            fi
+
+            # Handle legacy `<tool>_<ver>_arm64` images whose CVMFS folder is `<tool>_<ver>/arm64`.
+            if [ ! -f "${cvmfs_modules}/${mod_dir}/${mod_ver}.lua" ] \
+                && [ ! -f "${cvmfs_modules}/${mod_dir}/${mod_ver}" ] \
+                && [[ "${img}" == *_* ]]; then
+                mod_dir="${img%_*}"
+                mod_ver="${img##*_}"
+            fi
+
+            # Strict path-segment validation: never traverse directories.
+            [[ "${mod_dir}" =~ ^[A-Za-z0-9._+-]+$ ]] || continue
+            [[ "${mod_ver}" =~ ^[A-Za-z0-9._+-]+$ ]] || continue
+            [ "${mod_dir}" != "." ] && [ "${mod_dir}" != ".." ] || continue
+            [ "${mod_ver}" != "." ] && [ "${mod_ver}" != ".." ] || continue
+
+            if [ -f "${cvmfs_modules}/${mod_dir}/${mod_ver}.lua" ]; then
+                src="${cvmfs_modules}/${mod_dir}/${mod_ver}.lua"
+                ext=".lua"
+            elif [ -f "${cvmfs_modules}/${mod_dir}/${mod_ver}" ]; then
+                src="${cvmfs_modules}/${mod_dir}/${mod_ver}"
+                ext=""
+            else
+                continue
+            fi
+
+            rel="${mod_dir}/${mod_ver}${ext}"
+            printf '%s\n' "${rel}" >> "${keep_list}"
+            mkdir -p "${view_dir}/${mod_dir}" 2>/dev/null || continue
+            if [ "$(readlink "${view_dir}/${rel}" 2>/dev/null || true)" != "${src}" ]; then
+                tmp_link="${view_dir}/${mod_dir}/.${mod_ver}${ext}.tmp.$$"
+                if ln -s "${src}" "${tmp_link}" 2>/dev/null; then
+                    mv -fT "${tmp_link}" "${view_dir}/${rel}" 2>/dev/null || rm -f "${tmp_link}"
+                fi
+            fi
+
+            # Preserve Lmod default-version metadata files when present in CVMFS.
+            for meta in .version .modulerc .modulerc.lua; do
+                meta_src="${cvmfs_modules}/${mod_dir}/${meta}"
+                [ -f "${meta_src}" ] || continue
+                meta_rel="${mod_dir}/${meta}"
+                printf '%s\n' "${meta_rel}" >> "${keep_list}"
+                if [ "$(readlink "${view_dir}/${meta_rel}" 2>/dev/null || true)" != "${meta_src}" ]; then
+                    tmp_link="${view_dir}/${mod_dir}/${meta}.tmp.$$"
+                    if ln -s "${meta_src}" "${tmp_link}" 2>/dev/null; then
+                        mv -fT "${tmp_link}" "${view_dir}/${meta_rel}" 2>/dev/null || rm -f "${tmp_link}"
+                    fi
+                fi
+            done
+        done < <(jq -r --arg host_arch "${arch}" '
+            def trim: sub("^\\s+"; "") | sub("\\s+$"; "");
+            def normalize_arch:
+                (ascii_downcase | trim) as $raw
+                | if $raw == "" then ""
+                  else
+                    ($raw | contains("/")) as $has_slash
+                    | (if $has_slash then
+                         ($raw | split("/")) as $parts
+                         | if ($parts | any(. == "" or (. | trim) != .)) then $raw
+                           elif ($parts[0] | IN("linux", "darwin", "windows", "freebsd", "openbsd", "netbsd")) then $parts[1]
+                           else $parts[0]
+                           end
+                       else $raw
+                       end) as $a
+                    | if ($a | IN("all", "any", "noarch")) then
+                        if $has_slash then $raw else "any" end
+                      elif ($a | IN("amd64", "x86_64", "x86-64", "x64")) then "x86_64"
+                      elif ($a | IN("arm64", "aarch64")) then "aarch64"
+                      elif ($a | IN("386", "i386", "i686")) then "386"
+                      elif ($a | IN("arm", "armv7", "armv7l", "armhf")) then "arm"
+                      else $a
+                      end
+                  end;
+            def infer_arch($tool; $ver):
+                (($tool | test("(^|[._+-])(arm64|aarch64)($|[._+-])"; "i"))
+                 or ($ver | test("(^|[._+-])(arm64|aarch64)($|[._+-])"; "i"))) as $arm
+                | (($tool | test("(^|[._+-])(x86[_-]64|amd64|x64)($|[._+-])"; "i"))
+                   or ($ver | test("(^|[._+-])(x86[_-]64|amd64|x64)($|[._+-])"; "i"))) as $x86
+                | if ($arm and ($x86 | not)) then "aarch64"
+                  elif ($x86 and ($arm | not)) then "x86_64"
+                  else ""
+                  end;
+            if type == "object" then . else {} end
+            | [
+                to_entries[]
+                | .key as $tool
+                | (.value.apps // {})
+                | to_entries[]
+                | .key as $app_key
+                | .value as $app
+                | (if ($app.image // "") != "" then $app.image
+                   else
+                     ($app_key | rindex(" ")) as $idx
+                     | if $idx != null then "\($tool)_\($app_key[$idx + 1:])" else "" end
+                   end) as $img
+                | select($img != "" and ($img | startswith($tool + "_")))
+                | ($img[($tool | length) + 1:]) as $ver
+                | select($ver != "")
+                | {
+                    tool: $tool,
+                    img: $img,
+                    ver: $ver,
+                    arch: (if ($app.architecture // "") != "" then ($app.architecture | normalize_arch) else "" end)
+                  }
+              ]
+            | group_by([.tool, .img])
+            | .[]
+            | .[0].tool as $tool
+            | .[0].img as $img
+            | .[0].ver as $ver
+            | ([ .[] | select(.arch != "") | .arch ] | unique) as $explicit
+            | if ($explicit | length) > 1 then empty
+              else
+                (if ($explicit | length) == 1 then $explicit[0]
+                 else infer_arch($tool; $ver)
+                 end) as $eff_arch
+                | select($eff_arch == "" or $eff_arch == "any" or $eff_arch == $host_arch)
+                | "\($tool)\t\($img)"
+              end
+        ' "${apps_json}" 2>/dev/null)
+
+        # Prune symlinks removed from the catalog, then empty tool directories.
+        local existing_rel
+        while IFS= read -r existing_rel; do
+            [ -n "${existing_rel}" ] || continue
+            if ! grep -Fxq "${existing_rel}" "${keep_list}"; then
+                rm -f "${view_dir}/${existing_rel}"
+            fi
+        done < <(cd "${view_dir}" && find . -mindepth 2 -maxdepth 2 -type l | sed 's|^\./||')
+        find "${view_dir}" -mindepth 1 -maxdepth 1 -type d -empty -delete 2>/dev/null || true
+
+        printf '%s\n' "${want_stamp}" > "${stamp_file}.tmp.$$" \
+            && mv -f "${stamp_file}.tmp.$$" "${stamp_file}" || rm -f "${stamp_file}.tmp.$$"
+    ) 9>"${lock_file}"
+}
+
+for row in "${CATALOG_ROWS[@]}"; do
+    IFS=$'\t' read -r cat url dom <<<"${row}"
+    [[ "${cat}" =~ ^[A-Za-z0-9._-]+$ ]] || continue
+    cat_hash="$(printf '%s\n%s' "${url}" "${dom}" | sha256sum | cut -c1-12)"
+    view_dir="${view_base}/${arch_scope}/${cat}-${cat_hash}"
+    sync_catalog "${cat}" "${url}" "${dom}" "${cat_hash}" "${view_dir}"
+    if [ "${MODE}" = "paths" ]; then
+        printf '%s\n' "${view_dir}"
+    fi
+done
+exit 0

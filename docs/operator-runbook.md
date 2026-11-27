@@ -109,9 +109,11 @@ the launcher.
 | `SCIDESKTOP_CVMFS_REPOSITORIES` | `software.eessi.io`; `neurodesk.ardc.edu.au,software.eessi.io` in neurodesktop | Repositories to mount in `internal` mode, comma-separated. Images include `eessi-cvmfs` by default, and `neurodesktop` adds `neurodesk-cvmfs`. |
 | `CVMFS_HTTP_PROXY`, `CVMFS_QUOTA_LIMIT`, `CVMFS_CACHE_BASE` | `DIRECT`, `5000`, `/var/lib/cvmfs` | CVMFS client settings in `internal` mode. |
 | `CVMFS_NFILES` | `65536`, or the container's hard open-file limit when that is lower | The open-file limit the CVMFS client sets for itself in `internal` mode. The client refuses to mount when it may not raise the limit that far. |
-| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. |
+| `SCIDESKTOP_SCIGET_REFRESH` | `yes` | Download sciget's catalogs in the background at start. Narrowed domain images (such as `microdesktop`) derive their CVMFS Lmod module view from the cached catalog, so disabling refresh offline leaves CVMFS modules empty until `sciget refresh` has populated the cache. |
 | `SCIDESKTOP_SLURM` | `yes` | Start the session's Slurm queue, sized from `CPU_LIMIT` and `MEM_LIMIT`. It needs no privilege. `SCIDESKTOP_SLURM_PARTITION` and `SCIDESKTOP_SLURM_MEMORY_RESERVE_MB` are in [slurm.md](slurm.md). |
 | `SELKIES_BASIC_AUTH_PASSWORD` | generated | The desktop's internal credential; generated per container when unset. |
+| `SCIDESKTOP_WEBKNOSSOS_URL` | unset | Optional URL for a **WEBKNOSSOS** tile on the JupyterLab launcher (`components/launcher-links`), opened in a new browser tab (e.g. a cluster's JupyterHub OAuth2 bridge `https://webknossos.<domain>/jh-auth/login`). |
+| `SCIDESKTOP_LAUNCHER_LINKS` | unset | Optional JSON array of `{"title","url","category"?,"caption"?,"icon"?}` entries rendered as external JupyterLab launcher tiles (`http`/`https` only). |
 | `CPU_LIMIT`, `MEM_LIMIT` | from the pod's cgroup | Set by KubeSpawner, or derived at start from the cgroup when it does not. `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS` and `NUMEXPR_NUM_THREADS` follow `CPU_LIMIT` unless set, so numerical libraries use the pod's CPUs. |
 
 sciget's settings and catalog for every user are its system layer in

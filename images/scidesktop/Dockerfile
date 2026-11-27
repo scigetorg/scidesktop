@@ -31,6 +31,7 @@ COPY --link --from=vscode-core / /
 COPY --link --from=vscode-coding-agents / /
 COPY --link --from=scigethelpers-cli / /
 COPY --link --from=jupyterlab-slurm / /
+COPY --link --from=launcher-links / /
 COPY --link --from=workflow-engines / /
 COPY --link --from=lightcone / /
 COPY --link --from=sciget-all / /

@@ -35,6 +35,7 @@ c.ServerProxy.servers.update({  # noqa: F821
         'launcher_entry': {
             'path_info': 'desktop',
             'title': 'Desktop',
+            'icon_path': '/opt/scidesktop/desktop.svg',
             'category': 'Scidesktop',
         },
     }

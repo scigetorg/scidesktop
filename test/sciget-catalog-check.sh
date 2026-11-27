@@ -20,7 +20,10 @@ FAILED=0
 pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 
-cleanup() { docker rm -f "${NAME}" >/dev/null 2>&1 || true; }
+cleanup() {
+    docker rm -f "${NAME}" "${NAME}-cvmfs" >/dev/null 2>&1 || true
+    [ -z "${MOCK_CVMFS:-}" ] || rm -rf "${MOCK_CVMFS:?}"
+}
 trap cleanup EXIT
 
 as_user() { docker exec -u jovyan -w /tmp "${NAME}" bash "${2:--lc}" "$1" 2>/dev/null; }
@@ -80,6 +83,62 @@ paths="$(docker exec "${NAME}" curl -s -H "Authorization: token ${TOKEN}" "http:
 grep -q "sciget/modules/${CATALOG}" <<<"${paths}" \
     && pass "sciget modules on the Jupyter server's path" \
     || fail "sciget modules on the Jupyter server's path"
+
+# Narrowed non-neuroimaging catalogs must not expose all of Neurodesk's CVMFS
+# neurodesk-modules/* tree; instead Lmod sees only the catalog's own CVMFS tools.
+if [ "${CATALOG}" != "neuroimaging" ]; then
+    MOCK_CVMFS="$(mktemp -d)"
+    sample_entry="$(as_user "sciget find" | awk -F '\t' -v cat="${CATALOG}" '
+        $2 == cat && index($1, "/") > 1 {
+            i = index($1, "/")
+            print substr($1, 1, i - 1) "\t" substr($1, i + 1)
+            exit
+        }')"
+    sample_tool="${sample_entry%%$'\t'*}"
+    sample_ver="${sample_entry#*$'\t'}"
+    if [ -z "${sample_tool}" ] || [ -z "${sample_ver}" ] || [ "${sample_tool}" = "${sample_entry}" ]; then
+        fail "could not pick a ${CATALOG} sample tool for CVMFS Lmod isolation check"
+    else
+        mkdir -p \
+            "${MOCK_CVMFS}/neurodesk-modules/functional_imaging/afni" \
+            "${MOCK_CVMFS}/containers/modules/afni" \
+            "${MOCK_CVMFS}/containers/modules/${sample_tool}"
+        printf 'whatis("afni")\n' > "${MOCK_CVMFS}/neurodesk-modules/functional_imaging/afni/26.0.lua"
+        printf 'whatis("afni")\n' > "${MOCK_CVMFS}/containers/modules/afni/26.0.lua"
+        printf 'whatis("%s")\nsetenv("SCIDESKTOP_CVMFS_MOD_LOADED", "1")\n' "${sample_tool}" \
+            > "${MOCK_CVMFS}/containers/modules/${sample_tool}/${sample_ver}.lua"
+        chmod -R a+rX "${MOCK_CVMFS}"
+        cvmfs_name="${NAME}-cvmfs"
+        docker run -d --name "${cvmfs_name}" -e JUPYTER_TOKEN="${TOKEN}" \
+            -e SCIDESKTOP_SCIGET_REFRESH=no \
+            -v "${MOCK_CVMFS}:/cvmfs/neurodesk.ardc.edu.au:ro" "${IMAGE}" >/dev/null
+        for _ in $(seq 1 120); do
+            docker exec "${cvmfs_name}" curl -fsS -o /dev/null "http://127.0.0.1:8888/api" 2>/dev/null && break
+            sleep 1
+        done
+        # Prime jupyterlmod's avail cache before the catalog exists, then run a
+        # manual `sciget refresh` and confirm the running panel picks up the new
+        # CVMFS modules without restarting Jupyter.
+        docker exec "${cvmfs_name}" curl -fsS -o /dev/null -H "Authorization: token ${TOKEN}" \
+            "http://127.0.0.1:8888/module/modules" 2>/dev/null || true
+        docker exec -u jovyan "${cvmfs_name}" bash -lc 'sciget refresh >/dev/null' 2>/dev/null || true
+        lmod_modules="$(docker exec "${cvmfs_name}" curl -s -H "Authorization: token ${TOKEN}" "http://127.0.0.1:8888/module/modules" 2>/dev/null)"
+        if grep -q "\"${sample_tool}/${sample_ver}\"" <<<"${lmod_modules}" && ! grep -q '"afni/' <<<"${lmod_modules}"; then
+            pass "Jupyter Lmod shows ${CATALOG} CVMFS module (${sample_tool}/${sample_ver}) and excludes afni"
+        else
+            fail "Jupyter Lmod shows ${CATALOG} CVMFS module (${sample_tool}/${sample_ver}) and excludes afni (got: ${lmod_modules:0:200})"
+        fi
+        if docker exec -u jovyan -w /tmp "${cvmfs_name}" bash -lc \
+            "module load '${sample_tool}/${sample_ver}' && [ \"\${SCIDESKTOP_CVMFS_MOD_LOADED:-}\" = 1 ]" >/dev/null 2>&1; then
+            pass "symlinked ${CATALOG} CVMFS module (${sample_tool}/${sample_ver}) loads via Lmod"
+        else
+            fail "symlinked ${CATALOG} CVMFS module (${sample_tool}/${sample_ver}) loads via Lmod"
+        fi
+        docker rm -f "${cvmfs_name}" >/dev/null 2>&1 || true
+    fi
+    rm -rf "${MOCK_CVMFS}"
+    MOCK_CVMFS=""
+fi
 
 echo
 if [ "${FAILED}" -eq 0 ]; then

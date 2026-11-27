@@ -33,6 +33,7 @@ port="$("${python}" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1",
 "${python}" -m jupyter lab --no-browser --ip=127.0.0.1 --port="${port}" --ServerApp.port_retries=0 \
     --MCPExtensionApp.mcp_port=0 \
     --ServerApp.base_url="${base}" --IdentityProvider.token=viewer-test --ServerApp.root_dir="${HOME}" \
+    '--ServerApp.tornado_settings={"headers":{"Content-Security-Policy":"default-src '\''self'\'', frame-ancestors '\''none'\''; report-uri /hub/security/csp-report"}}' \
     >"${work}/jupyter.log" 2>&1 &
 server=$!
 for _ in $(seq 60); do
@@ -41,6 +42,22 @@ for _ in $(seq 60); do
 done
 "${python}" /tmp/viewer-check.py "http://127.0.0.1:${port}${base}" viewer-test "${component}" \
     || { grep -v "Skipped non-installed" "${work}/jupyter.log" | tail -n 60; exit 1; }
+
+# Verify comma-separated CSP policies are preserved in both orders for framed viewers.
+case "${component}" in
+    jupyterlab-neuroglancer|jupyterlab-freebrowse)
+        "${python}" - "${component}" <<'PY'
+import importlib, sys
+sys.path.insert(0, f"/opt/{sys.argv[1]}/lib")
+mod_name = sys.argv[1].replace("-", "_") + ".handlers"
+fn = importlib.import_module(mod_name)._allow_same_origin_framing
+assert fn("frame-ancestors 'none', default-src 'none'") == "frame-ancestors 'self', default-src 'none'"
+assert fn("default-src 'none', frame-ancestors 'none'; report-uri /r") == "default-src 'none', frame-ancestors 'self'; report-uri /r"
+assert fn("default-src 'self'") == "default-src 'self'; frame-ancestors 'self'"
+assert fn("") == "frame-ancestors 'self'"
+PY
+        ;;
+esac
 
 # Nothing root-owned is writable by group or others, and the user can read it all.
 if find "/opt/${component}" /usr/local/share/jupyter/labextensions \
