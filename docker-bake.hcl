@@ -204,7 +204,7 @@ variable "NEURODESKTOP_IMAGE" { default = "neurodesktop:latest" }
 # sciget is built from source at this commit until it publishes an image
 # (Renovate tracks its main branch). For local sciget development, build your
 # working copy instead: SCIGET_SRC=../sciget docker buildx bake --allow=fs.read=..
-variable "SCIGET_COMMIT" { default = "ac5c4abdbe35ab10a7f6d2f724b3d3ad92c3ecb4" }
+variable "SCIGET_COMMIT" { default = "fbf26959d6d7496630d7abe3db6c7acf65a91cd9" }
 variable "SCIGET_SRC" { default = "https://github.com/scigetorg/sciget.git#${SCIGET_COMMIT}" }
 # Intersect Australia's AI Ready workshop (Apache-2.0): its notebooks, DAGs and
 # requirements are taken from this commit (Renovate tracks its main branch).
