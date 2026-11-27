@@ -1,0 +1,149 @@
+#!/opt/lightcone/bin/python -I
+"""Lightcone's `lc`, with a compute catalog that fits this session's Slurm queue.
+
+The queue is sized per session (components/slurm), so a fixed catalog would
+ask some sessions for a node they do not have, and Slurm would fail the job.
+When the user has no catalog of their own (LC_COMPUTE_CONFIG unset and no
+~/.lightcone/compute.yaml) and the session's queue answers `sinfo`, this
+writes one for the queue as it is now and points LC_COMPUTE_CONFIG at it.
+Otherwise `lc` runs unchanged.
+"""
+
+import os
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+import yaml
+
+LC = "/opt/lightcone/bin/lc"
+PYTHON = "/opt/lightcone/bin/python"
+SESSION_SLURM_CONF = "/etc/slurm/slurm.conf"
+STANDARD_CPUS = 2
+STANDARD_MEMORY_MB = 8192
+
+
+def catalog(cpus, memory_mb):
+    """`standard` is Neurodesktop's 2 CPUs and 8 GiB, cut to the node; `node` is all of it."""
+    shapes = [("standard", min(STANDARD_CPUS, cpus), min(STANDARD_MEMORY_MB, memory_mb))]
+    if shapes[0][1:] != (cpus, memory_mb):
+        shapes.append(("node", cpus, memory_mb))
+    return {
+        "allow_local": False,
+        "offers": [
+            {
+                "name": name,
+                "provider": "slurm",
+                "resources": {"cpus": offer_cpus, "memory": f"{offer_memory}MB"},
+                "max_nodes": 1,
+                "time": {"default": "2h"},
+                # No partition: Slurm takes the default one sinfo was asked about,
+                # whatever its name (lc accepts fewer names than Slurm does).
+                "config": {"python": PYTHON},
+            }
+            for name, offer_cpus, offer_memory in shapes
+        ],
+    }
+
+
+def session_queue():
+    """(CPUs, MB) of a node in the session queue's default partition, or None."""
+    # A cluster the session did not start (an HPC login node) has nodes
+    # without this image's Python; its catalog is the site's to write.
+    if os.environ.get("SLURM_CONF", SESSION_SLURM_CONF) != SESSION_SLURM_CONF:
+        return None
+    # sbatch, as lc runs it, sees neither SINFO_* selections nor SLURM_CLUSTERS,
+    # so sinfo must not either, or it would size a queue lc does not submit to.
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith("SINFO_") and key != "SLURM_CLUSTERS"}
+    try:
+        result = subprocess.run(
+            ["sinfo", "--noheader", "--format=%P %c %m"],
+            capture_output=True, text=True, errors="replace", env=env,
+            timeout=10, check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    rows = [line.split() for line in result.stdout.splitlines()]
+    default = [row for row in rows
+               if len(row) == 3 and row[0].endswith("*") and row[1].isdigit() and row[2].isdigit()]
+    if not default:
+        return None
+    _, cpus, memory_mb = default[0]
+    return int(cpus), int(memory_mb)
+
+
+def trusted(directory):
+    """True if no other user can rename anything on the way to and inside directory."""
+    try:
+        directory = Path(directory).resolve(strict=True)
+        for part in (directory, *directory.parents):
+            info = part.stat()
+            if info.st_uid not in (0, os.getuid()):
+                return False
+            if info.st_mode & 0o022 and not info.st_mode & stat.S_ISVTX:
+                return False
+    except OSError:
+        return False
+    return True
+
+
+def private_directory():
+    """The user's own directory for the catalog, or None if someone else could change it."""
+    bases = [base for base in (os.environ.get("XDG_RUNTIME_DIR"), tempfile.gettempdir())
+             if base and trusted(base)]
+    if not bases:
+        return None
+    path = Path(bases[0]).resolve() / f"scidesktop-lightcone-{os.getuid()}"
+    try:
+        path.mkdir(mode=0o700, exist_ok=True)
+        info = path.lstat()
+    except OSError:
+        return None
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
+        print(f"lc: not writing a compute catalog to {path}: it is not a private "
+              "directory of this user", file=sys.stderr)
+        return None
+    return path
+
+
+def write_catalog():
+    """Write the session queue's catalog and return its path, or None to leave lc alone."""
+    if "LC_COMPUTE_CONFIG" in os.environ:
+        return None
+    if Path("~/.lightcone/compute.yaml").expanduser().exists():
+        return None
+    queue = session_queue()
+    if queue is None:
+        return None
+    directory = private_directory()
+    if directory is None:
+        return None
+    path = directory / "compute.yaml"
+    # Concurrent lc commands each write their own file and swap it in whole.
+    temporary = None
+    try:
+        fd, temporary = tempfile.mkstemp(dir=directory, prefix=".compute-", suffix=".yaml")
+        with os.fdopen(fd, "w") as file:
+            file.write("# Written by /usr/local/bin/lc for this session's Slurm queue.\n"
+                       "# Your own ~/.lightcone/compute.yaml or LC_COMPUTE_CONFIG replaces it.\n")
+            yaml.safe_dump(catalog(*queue), file, sort_keys=False)
+        os.replace(temporary, path)
+    except OSError as error:
+        print(f"lc: not writing a compute catalog to {path}: {error}", file=sys.stderr)
+        if temporary is not None:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+        return None
+    return path
+
+
+if __name__ == "__main__":
+    generated = write_catalog()
+    if generated is not None:
+        os.environ["LC_COMPUTE_CONFIG"] = str(generated)
+    os.execv(LC, [LC, *sys.argv[1:]])

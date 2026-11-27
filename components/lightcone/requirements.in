@@ -1,0 +1,5 @@
+# Lightcone's `lc` and the ASTRA packages it was released with, in a venv of
+# their own: its Dask dependency graph must not move the Jupyter environment's.
+lightcone-cli==0.5.0
+astra-tools==0.2.18
+astra-spec==0.0.14

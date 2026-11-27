@@ -1,0 +1,4 @@
+# Components this one needs in the same image at runtime
+# (test/contract.py S9).
+jupyter-env  # its venv runs on the Jupyter environment's Python; lc needs its uv
+datalad      # lc needs git-annex on PATH, and datalad puts it there
