@@ -8,10 +8,17 @@
 #
 #   1. The image holds the components its bake target names and nothing of
 #      any other component (test/contract.py image).
-#   2. The base's checks, which every image must still pass (test/smoke.sh),
-#      its notebook and sciget checks (whose catalog differs per image), and
-#      the foreign-UID / HPC startup checks (test/hpc-smoke.sh), which exercise
-#      every image's startup hooks under unprivileged foreign UIDs.
+#   2. Base-integrity checks:
+#      - test/smoke.sh on the base image and any domain image whose added
+#        components touch startup hooks, shell profiles, home defaults,
+#        modulepath, CVMFS, or desktop menus (test/contract.py surfaces -> full).
+#      - test/flavour-smoke.sh on domain images whose added components only add
+#        kernels, catalogs, Jupyter config parts, or VS Code extensions
+#        (test/contract.py surfaces -> flavour). Set SMOKE_FULL_BASE=1 to force
+#        test/smoke.sh on every image.
+#      - test/notebook-and-sciget-smoke.sh (whose catalog differs per image)
+#        and test/hpc-smoke.sh (foreign-UID startup & loopback-only check) run
+#        on every image.
 #   3. The checks of each component the image adds to the image it is FROM
 #      (test/contract.py added): test/<component>-smoke.sh. A component is
 #      tested once, in the first image that holds it; the images built FROM
@@ -34,7 +41,13 @@ run() {
 }
 
 run python3 "${here}/contract.py" image "${image}" "${ref}"
-run "${here}/smoke.sh" "${ref}"
+surface="$(python3 "${here}/contract.py" surfaces "${image}")" \
+    || { echo "  FAIL  cannot determine test surface of ${image}"; exit 1; }
+if [ "${SMOKE_FULL_BASE:-0}" = 1 ] || [ "${surface}" = full ]; then
+    run "${here}/smoke.sh" "${ref}"
+else
+    run "${here}/flavour-smoke.sh" "${ref}"
+fi
 run "${here}/notebook-and-sciget-smoke.sh" "${ref}"
 run "${here}/hpc-smoke.sh" "${ref}"
 if [ "${SMOKE_ALL_COMPONENTS:-0}" = 1 ]; then

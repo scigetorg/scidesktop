@@ -6,9 +6,14 @@
 #   - Getting Started notebook seeded into new homes
 
 ARG UBUNTU_IMAGE
-FROM os-build AS build
+FROM ${UBUNTU_IMAGE} AS build
 ARG NF_NEURO_MODULES_COMMIT
+ARG TARGETARCH
+ARG APT_CACHE_ID
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install --no-install-recommends -y git
 COPY --from=nf-neuro-src . /tmp/nf-neuro
 RUN : "${NF_NEURO_MODULES_COMMIT:?}" \
     && install -d -m 0755 /out/opt/nf-neuro/modules /out/opt/scidesktop/manifest.d \

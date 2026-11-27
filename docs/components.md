@@ -70,9 +70,7 @@ components/<component>/
   install build dependencies there, even when compiling against OS libraries:
   the same release has the same ABI, and OS package updates (snapshot bumps)
   then neither rebuild the component nor change its layer. The test stage runs
-  it on the real OS layer and catches any missing library. `os-build` (the
-  snapshot OS) is there only for a component that needs the exact OS packages
-  at build time.
+  it on the real OS layer and catches any missing library.
 
 ### Versions
 
@@ -218,10 +216,14 @@ too where it is used, so the file says what the component relies on.
 `test/image-smoke.sh <image>` runs the smoke test of each component the image
 adds to the image it is `FROM` (`python3 test/contract.py added <image>`):
 the base tests its components, a domain image only its own, since it holds
-the base's layers unchanged. Every image also runs the base's session checks
-(`test/smoke.sh`), its notebook and sciget checks, and the foreign-UID checks
+the base's layers unchanged. `python3 test/contract.py surfaces <image>`
+decides whether the image needs the full base session suite (`test/smoke.sh`
+when added components touch startup hooks, shell profiles, home defaults,
+modulepath, CVMFS, or desktop menus) or the lightweight base-integrity check
+(`test/flavour-smoke.sh`). Every image also runs its notebook/sciget checks
+(`test/notebook-and-sciget-smoke.sh`) and foreign-UID/loopback checks
 (`test/hpc-smoke.sh`). `SMOKE_ALL_COMPONENTS=1` tests every component an image
-holds.
+holds, and `SMOKE_FULL_BASE=1` forces `test/smoke.sh` on any image.
 
 ### Order and layers
 

@@ -329,14 +329,6 @@ target "os-ubuntu" {
   }
 }
 
-# The OS layer as installed from the snapshot, before its runtime integration files. Components
-# that compile against the OS build FROM it ("os-build"), so changes to the
-# OS's own integration files do not rebuild them.
-target "os-ubuntu-build" {
-  inherits = ["os-ubuntu"]
-  target   = "build"
-}
-
 target "os-ubuntu-test" {
   inherits = ["os-ubuntu"]
   target   = "test"
@@ -345,8 +337,8 @@ target "os-ubuntu-test" {
 
 # --- Components ------------------------------------------------------------------
 
-# Every component: "os" is the runtime OS its test runs on, "os-build" the OS it
-# compiles against; UBUNTU_IMAGE is for the stage that lays out its rootfs/.
+# Every component: "os" is the runtime OS its test runs on; UBUNTU_IMAGE is for
+# the build stage and the stage that lays out its rootfs/.
 target "_component" {
   inherits = ["_common"]
   args = {
@@ -355,7 +347,6 @@ target "_component" {
   }
   contexts = {
     os         = "target:os-ubuntu"
-    os-build   = "target:os-ubuntu-build"
     micromamba = "target:micromamba"
     tests      = "test"
     components = "components"
