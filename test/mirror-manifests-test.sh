@@ -96,7 +96,7 @@ holds() {
     rc=$?
     set -e
     if [ "${rc}" -ne 0 ]; then
-        if grep -Eiq 'MANIFEST_UNKNOWN|NAME_UNKNOWN|404' "${err_file}"; then
+        if grep -Eiq 'MANIFEST_UNKNOWN|NAME_UNKNOWN|status code 404|HTTP/[0-9.]+ 404' "${err_file}"; then
             rm -f "${out_file}" "${err_file}"
             echo "none"
             return 0

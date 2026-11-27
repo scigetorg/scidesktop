@@ -107,13 +107,14 @@ jobs:
   # one runner per image in parallel with attest. Gated on the QUAY_ORG
   # repository variable (matching neurodesktop) so forks without it simply skip.
   # test/contract.py (S6) keeps this matrix equal to PUBLISH.
-  # Budget: 3 copy attempts * 10m + 1.5m backoff + metadata/setup <= 45m.
+  # Budget: 3 copy attempts * 10m + 1.5m backoff (31.5m) + 3 metadata ops *
+  # (3 * 1m + 1.5m = 4.5m -> 13.5m) + setup/branch lookups (~6m) <= 60m.
   mirror-quay:
     name: Mirror to Quay.io (${{ matrix.image }})
     needs: publish
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.QUAY_ORG != ''
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

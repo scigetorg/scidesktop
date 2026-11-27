@@ -293,14 +293,14 @@ transient failures (including Quay's `DENIED: System is currently read-only`
 maintenance response), and fails fast on authentication errors. Candidate tags
 (`run-<run id>-<arch>`) stay on GHCR and are not mirrored.
 
-For builds published after mirroring is enabled, any tag that has successfully
-mirrored can be pulled interchangeably from **GHCR**
-(`ghcr.io/scigetorg/<image>:<tag>`) or **Quay.io**
-(`quay.io/scigetorg/<image>:<tag>`). Older GHCR tags are not backfilled,
+For builds published after mirroring is enabled, any immutable short-SHA tag
+(`<short sha>`) that has successfully mirrored can be pulled interchangeably
+from **GHCR** (`ghcr.io/scigetorg/<image>:<short sha>`) or **Quay.io**
+(`quay.io/scigetorg/<image>:<short sha>`). Older GHCR tags are not backfilled,
 individual image mirrors can fail independently (`fail-fast: false`), and
-rolling tags (`<YYYY-MM-DD>`, `latest`) are skipped if `main` advances before
-tagging completes. GHCR remains the primary registry carrying GitHub build
-provenance attestations.
+rolling tags (`<YYYY-MM-DD>`, `latest`) can lag behind GHCR if a Quay mirror
+fails or is skipped when `main` advances before tagging completes. GHCR remains
+the primary registry carrying GitHub build provenance attestations.
 
 Mirroring is enabled by the `QUAY_ORG` repository variable (matching
 `neurodesktop`), so forks or repositories without it configured simply skip the

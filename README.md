@@ -81,7 +81,7 @@ scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, molecula
 - **GHCR** (primary, with build provenance attestations): `ghcr.io/scigetorg/<image>:<tag>`
 - **Quay.io** (optional mirror, populated for builds published after mirroring is configured): `quay.io/scigetorg/<image>:<tag>`
 
-Any tag that has successfully mirrored can be pulled interchangeably from Quay.io (older GHCR tags are not backfilled). See [docs/images.md](docs/images.md#mirroring-to-quayio) for publishing and mirror details.
+Any short-SHA tag (`<short sha>`) that has successfully mirrored can be pulled interchangeably from Quay.io (older GHCR tags are not backfilled, and rolling tags such as `latest` or `<YYYY-MM-DD>` can lag behind GHCR if a Quay mirror fails or is skipped). See [docs/images.md](docs/images.md#mirroring-to-quayio) for publishing and mirror details.
 
 ## What is in it
 

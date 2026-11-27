@@ -34,11 +34,12 @@ short_sha="$(printf '%.7s' "${sha}")"
 branch="${PUBLISH_BRANCH:-main}"
 date="$(TZ=UTC git show --no-patch --date=format-local:%Y-%m-%d --format=%cd "${sha}")"
 
-# Budget aligned with mirror-quay's 45m job timeout:
-# up to 3 copy attempts * 10m (600s) + 1.5m backoff + metadata/setup <= 45m.
+# Budget aligned with mirror-quay's 60m job timeout:
+# copy (3 * 600s + 90s = 31.5m) + 3 metadata ops (3 * (3 * 60s + 90s) = 13.5m)
+# + setup/branch lookups (~6m) <= 60m.
 max_attempts="${CRANE_MAX_ATTEMPTS:-3}"
 copy_timeout="${CRANE_ATTEMPT_TIMEOUT_SECONDS:-600}"
-metadata_timeout="${CRANE_METADATA_TIMEOUT_SECONDS:-120}"
+metadata_timeout="${CRANE_METADATA_TIMEOUT_SECONDS:-60}"
 # Space-separated retry delays in seconds; the last value repeats if needed.
 retry_delays_str="${CRANE_RETRY_DELAYS:-30 60 120}"
 read -r -a retry_delays <<< "${retry_delays_str}"

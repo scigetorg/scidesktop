@@ -7,11 +7,12 @@ or an immutable short-SHA tag, not `latest`:
 - **GHCR** (primary, with GitHub build provenance attestations): `ghcr.io/scigetorg/<image>`
 - **Quay.io** (optional mirror, populated for builds published after mirroring is enabled): `quay.io/scigetorg/<image>`
 
-For any tag that has successfully mirrored to Quay.io (older GHCR tags are not
-backfilled, and per-image mirrors can fail independently or skip rolling tags
-if `main` advances), `quay.io/scigetorg/<image>:<short-sha>` can be used
-interchangeably with `ghcr.io/scigetorg/<image>:<short-sha>` in the `docker run`
-and `c.KubeSpawner.image` examples below.
+For any immutable short-SHA tag (`<short-sha>`) that has successfully mirrored
+to Quay.io, `quay.io/scigetorg/<image>:<short-sha>` can be used interchangeably
+with `ghcr.io/scigetorg/<image>:<short-sha>` in the `docker run` and
+`c.KubeSpawner.image` examples below (older GHCR tags are not backfilled, and
+rolling tags such as `latest` or `<YYYY-MM-DD>` can lag behind GHCR if a
+per-image mirror fails or is skipped when `main` advances).
 
 Every tag is one image for amd64 and arm64; each node pulls its own
 architecture.
