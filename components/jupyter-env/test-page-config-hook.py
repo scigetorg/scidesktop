@@ -56,6 +56,7 @@ def run_case(
     federated_exts=None,
     source_ext_metadata=None,
     app_page_cfg=None,
+    user_dropin_cfg=None,
 ):
     with tempfile.TemporaryDirectory() as td:
         root = pathlib.Path(td)
@@ -76,8 +77,15 @@ def run_case(
             lc = home / ".jupyter" / "labconfig"
             lc.mkdir(parents=True)
             pc_file = lc / "page_config.json"
-            orig = json.dumps(user_cfg)
-            pc_file.write_text(orig, encoding="utf-8")
+            orig = json.dumps(user_cfg) if user_cfg is not None else None
+            if orig is not None:
+                pc_file.write_text(orig, encoding="utf-8")
+            if user_dropin_cfg is not None:
+                dropin_dir = lc / "page_config.d"
+                dropin_dir.mkdir(parents=True)
+                (dropin_dir / "policy.json").write_text(
+                    json.dumps(user_dropin_cfg), encoding="utf-8"
+                )
 
         if extra_setup is not None:
             extra_setup(home)
@@ -142,7 +150,8 @@ def run_case(
                 else None
             )
             res = hook(handler, merged)
-            assert pc_file.read_text(encoding="utf-8") == orig, "page_config.json mutated"
+            if orig is not None:
+                assert pc_file.read_text(encoding="utf-8") == orig, "page_config.json mutated"
             return res
         finally:
             for k, v in old_env.items():
@@ -268,6 +277,24 @@ def main():
         app_page_cfg={"disabledExtensions": {EXT: False}},
     )
     assert EXT in r13["disabledExtensions"], r13
+
+    # 14. User page_config.d drop-in alone disabling server-proxy on a legacy home must be preserved.
+    r14 = run_case(
+        hook,
+        None,
+        extra_setup=lambda h: (h / "neurodesktop-storage").symlink_to("/tmp"),
+        user_dropin_cfg={"disabledExtensions": {EXT: True}},
+    )
+    assert EXT in r14["disabledExtensions"], r14
+
+    # 15. User page_config.d drop-in AND legacy page_config.json both disabling server-proxy:
+    # drop-in must still keep server-proxy disabled after subtracting legacy page_config.json.
+    r15 = run_case(
+        hook,
+        {"disabledExtensions": {EXT: True}, "neurodeskSupporter": "false"},
+        user_dropin_cfg={"disabledExtensions": {EXT: True}},
+    )
+    assert EXT in r15["disabledExtensions"], r15
 
     print("PAGE_CONFIG_HOOK_TESTS_OK")
 

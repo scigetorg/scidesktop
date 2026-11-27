@@ -22,7 +22,11 @@ import os
 import stat
 
 from jupyter_core import paths as jupyter_paths
-from jupyter_server.services.config.manager import ConfigManager, recursive_update
+from jupyter_server.services.config.manager import (
+    BaseJSONConfigManager,
+    ConfigManager,
+    recursive_update,
+)
 from jupyterlab_server.config import get_federated_extensions, load_config
 
 _REQUIRED_EXTENSION = "@jupyterhub/jupyter-server-proxy"
@@ -125,16 +129,25 @@ def _disabled_without_legacy_user_entry(handler, user_dir):
                 break
 
     # Merge config layers in ConfigManager's exact back-to-front precedence,
-    # subtracting only _REQUIRED_EXTENSION from the user layer's disabledExtensions.
+    # subtracting only _REQUIRED_EXTENSION from the user layer's root
+    # page_config.json (while keeping any user page_config.d/*.json drop-ins).
     for path in all_config_paths[::-1]:
-        layer = ConfigManager(
-            read_config_path=[os.path.join(path, "labconfig")]
-        ).get("page_config")
+        labconfig_dir = os.path.join(path, "labconfig")
         if os.path.normpath(path) == user_norm:
-            layer_disabled = layer.get("disabledExtensions")
+            dropins = BaseJSONConfigManager(
+                config_dir=labconfig_dir, read_directory=True
+            ).get("page_config", include_root=False)
+            recursive_update(static_cfg, dropins)
+            root_layer = BaseJSONConfigManager(
+                config_dir=labconfig_dir, read_directory=False
+            ).get("page_config")
+            layer_disabled = root_layer.get("disabledExtensions")
             if isinstance(layer_disabled, dict):
                 layer_disabled.pop(_REQUIRED_EXTENSION, None)
-        recursive_update(static_cfg, layer)
+            recursive_update(static_cfg, root_layer)
+        else:
+            layer = ConfigManager(read_config_path=[labconfig_dir]).get("page_config")
+            recursive_update(static_cfg, layer)
 
     if _ext_enabled_in(static_cfg.get("lockedExtensions"), _REQUIRED_EXTENSION):
         return True
@@ -294,12 +307,12 @@ def _load_jupyter_server_extension(server_app):
         ):
             return page_config
         user_dir = os.path.normpath(jupyter_paths.jupyter_config_dir())
-        user_cfg = ConfigManager(
-            read_config_path=[os.path.join(user_dir, "labconfig")]
+        user_root_cfg = BaseJSONConfigManager(
+            config_dir=os.path.join(user_dir, "labconfig"), read_directory=False
         ).get("page_config")
         if (
-            _ext_enabled_in(user_cfg.get("disabledExtensions"), _REQUIRED_EXTENSION)
-            and _has_legacy_neurodesk_provenance(user_cfg)
+            _ext_enabled_in(user_root_cfg.get("disabledExtensions"), _REQUIRED_EXTENSION)
+            and _has_legacy_neurodesk_provenance(user_root_cfg)
             and not _disabled_without_legacy_user_entry(handler, user_dir)
         ):
             if isinstance(disabled, list):
