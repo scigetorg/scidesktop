@@ -92,9 +92,16 @@ def _disabled_without_legacy_user_entry(handler, user_dir):
             path = os.path.join(app_settings_dir, name)
             if os.path.isfile(path) and os.path.getsize(path):
                 data = load_config(path)
-                for key in ("disabledExtensions", "lockedExtensions"):
-                    if isinstance(data.get(key), list):
-                        data[key] = {ext: True for ext in data[key]}
+                # Mirror jupyterlab_server.config.get_page_config: every key in
+                # app-level disabledExtensions becomes True (even dict values of False).
+                if "disabledExtensions" in data:
+                    data["disabledExtensions"] = {
+                        ext: True for ext in data["disabledExtensions"]
+                    }
+                if isinstance(data.get("lockedExtensions"), list):
+                    data["lockedExtensions"] = {
+                        ext: True for ext in data["lockedExtensions"]
+                    }
                 recursive_update(static_cfg, data)
                 break
 

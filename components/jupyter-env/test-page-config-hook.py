@@ -48,6 +48,7 @@ def run_case(
     symlink_user_to_op=False,
     federated_exts=None,
     source_ext_metadata=None,
+    app_page_cfg=None,
 ):
     with tempfile.TemporaryDirectory() as td:
         root = pathlib.Path(td)
@@ -75,14 +76,20 @@ def run_case(
             extra_setup(home)
 
         app_settings_dir = None
-        if source_ext_metadata is not None:
+        if source_ext_metadata is not None or app_page_cfg is not None:
             app_dir = root / "app"
             (app_dir / "settings").mkdir(parents=True)
             (app_dir / "static").mkdir(parents=True)
-            (app_dir / "static" / "package.json").write_text(
-                json.dumps({"jupyterlab": {"extensionMetadata": source_ext_metadata}}),
-                encoding="utf-8",
-            )
+            if source_ext_metadata is not None:
+                (app_dir / "static" / "package.json").write_text(
+                    json.dumps({"jupyterlab": {"extensionMetadata": source_ext_metadata}}),
+                    encoding="utf-8",
+                )
+            if app_page_cfg is not None:
+                (app_dir / "settings" / "page_config.json").write_text(
+                    json.dumps(app_page_cfg),
+                    encoding="utf-8",
+                )
             app_settings_dir = str(app_dir / "settings")
 
         old_env = {
@@ -244,6 +251,15 @@ def main():
         source_ext_metadata={"ext-a": {"disabledExtensions": [EXT]}},
     )
     assert EXT not in r12["disabledExtensions"], r12
+
+    # 13. App-level page_config.json mapping disabledExtensions[EXT]=False is treated
+    # as disabled by jupyterlab_server 2.28.1; preserve that app-level disable.
+    r13 = run_case(
+        hook,
+        {"disabledExtensions": {EXT: True}, "neurodeskSupporter": "false"},
+        app_page_cfg={"disabledExtensions": {EXT: False}},
+    )
+    assert EXT in r13["disabledExtensions"], r13
 
     print("PAGE_CONFIG_HOOK_TESTS_OK")
 

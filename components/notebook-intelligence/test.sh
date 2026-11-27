@@ -2,7 +2,10 @@
 set -euo pipefail
 export PATH="/opt/conda/bin:${PATH}"
 
-! test -e /opt/notebook-intelligence/lib/claude_agent_sdk/_bundled
+if test -e /opt/notebook-intelligence/lib/claude_agent_sdk/_bundled; then
+    echo "vendored claude_agent_sdk/_bundled binary still present" >&2
+    exit 1
+fi
 command -v claude >/dev/null
 # Match the server's sys.path order (base /opt/conda first, NBI delta appended).
 python -c 'import runpy, sys; sys.path.append("/opt/notebook-intelligence/lib"); sys.argv = ["pip", "check"]; runpy.run_module("pip", run_name="__main__")'
