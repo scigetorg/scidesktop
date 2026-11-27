@@ -1,36 +1,51 @@
 #!/bin/bash
 # Arguments for `docker buildx bake` in CI, one per line.
 #
-#   bake-args <arch> <tag> [write-cache|no-cache]
+#   CACHE_REPO=ghcr.io/<owner>/scidesktop-cache bake-args <arch> <tag> [write-test-cache|write-cache|no-cache]
 #
-# Every folder in components/ and images/ gets its own GitHub Actions cache
-# scope per architecture, so an unchanged component is not rebuilt and the two
-# architectures do not evict each other's layers. Every image in images/ is
-# tagged <image>:<tag>. The lists come from the folders: a new component or
-# image needs no change here or in the workflows. `no-cache` names no cache
-# at all, for a build that must not depend on what the cache still holds.
+# Every component in components/ gets two GHCR registry cache tags per
+# architecture: <component>-<arch> (its component graph) and
+# <component>-test-<arch> (its test stage). Both the component target and its
+# `-test` target inherit `cache-from` for both tags, so domain-only components
+# cached by `test` hit the cache when assembling domain images.
 #
-# Writing the cache is best effort (ignore-error): GitHub throttles cache
-# writes per repository, and a build that passed must not fail because its
-# layers could not be saved for the next one.
+# Cache exports are split by invocation so linked component targets solved
+# during `bake test` do not duplicate exports with `bake scidesktop`:
+#   - `write-test-cache`: exports only `<component>-test-<arch>` (for `bake test`)
+#   - `write-cache`:      exports only `<component>-<arch>` and
+#                         `scidesktop-<arch>` with mode=min (for `bake scidesktop`)
+# Domain images get no cache lines because their components and base are already
+# cached. Every image in images/ is tagged <image>:<tag>. The lists come from
+# the folders: a new component or image needs no change here or in the workflows.
+#
+# When CACHE_REPO is unset (local runs) or `no-cache` is passed, no cache flags
+# are emitted. Writing the cache is best effort (ignore-error=true) so a passing
+# build does not fail if a transient registry error prevents saving cache tags.
 set -euo pipefail
-arch="${1:?usage: bake-args <arch> <tag> [write-cache|no-cache]}"
-tag="${2:?usage: bake-args <arch> <tag> [write-cache|no-cache]}"
+arch="${1:?usage: bake-args <arch> <tag> [write-test-cache|write-cache|no-cache]}"
+tag="${2:?usage: bake-args <arch> <tag> [write-test-cache|write-cache|no-cache]}"
+mode="${3:-}"
+cache_repo="${CACHE_REPO:-}"
+cache_repo="${cache_repo,,}"
 cd "$(dirname "$0")/../.."
-for dockerfile in components/*/Dockerfile images/*/Dockerfile; do
-    target="$(basename "$(dirname "${dockerfile}")")"
-    [ "${3:-}" != no-cache ] || continue
-    echo "--set=${target}.cache-from=type=gha,scope=${target}-${arch}"
-    if [ "${3:-}" = write-cache ]; then
-        echo "--set=${target}.cache-to=type=gha,scope=${target}-${arch},mode=max,ignore-error=true"
-    fi
-done
-if [ "${3:-}" != no-cache ]; then
-    echo "--set=os-ubuntu-build.cache-from=type=gha,scope=os-ubuntu-build-${arch}"
-    if [ "${3:-}" = write-cache ]; then
-        echo "--set=os-ubuntu-build.cache-to=type=gha,scope=os-ubuntu-build-${arch},mode=max,ignore-error=true"
+
+if [ -n "${cache_repo}" ] && [ "${mode}" != no-cache ]; then
+    for dockerfile in components/*/Dockerfile; do
+        target="$(basename "$(dirname "${dockerfile}")")"
+        echo "--set=${target}.cache-from=type=registry,ref=${cache_repo}:${target}-${arch}"
+        echo "--set=${target}.cache-from=type=registry,ref=${cache_repo}:${target}-test-${arch}"
+        if [ "${mode}" = write-test-cache ]; then
+            echo "--set=${target}-test.cache-to=type=registry,ref=${cache_repo}:${target}-test-${arch},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
+        elif [ "${mode}" = write-cache ]; then
+            echo "--set=${target}.cache-to=type=registry,ref=${cache_repo}:${target}-${arch},mode=max,image-manifest=true,oci-mediatypes=true,ignore-error=true"
+        fi
+    done
+    echo "--set=scidesktop.cache-from=type=registry,ref=${cache_repo}:scidesktop-${arch}"
+    if [ "${mode}" = write-cache ]; then
+        echo "--set=scidesktop.cache-to=type=registry,ref=${cache_repo}:scidesktop-${arch},mode=min,image-manifest=true,oci-mediatypes=true,ignore-error=true"
     fi
 fi
+
 for dockerfile in images/*/Dockerfile; do
     image="$(basename "$(dirname "${dockerfile}")")"
     echo "--set=${image}.tags=${image}:${tag}"

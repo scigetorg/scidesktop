@@ -15,6 +15,16 @@ architecture.
 | `latest` | with every build of `main` | trying it out |
 | `run-<number>-<arch>` | never | none: single-architecture parts of the tags above |
 
+### GHCR build cache package
+
+CI writes BuildKit layer caches on `main` pushes to
+`ghcr.io/scigetorg/scidesktop-cache`. New organisation packages on GHCR start
+private by default: after the first `main` push creates `scidesktop-cache`,
+an org admin should set its visibility to **Public** (and confirm the
+`scigetorg/scidesktop` repository has **Write** access under Package Settings
+-> Manage Actions access) so fork pull requests and local developers can read
+the cache anonymously without hitting a cold rebuild.
+
 ## Platform requirements
 
 scidesktop exists to launch containerised tools with Apptainer, inside the
