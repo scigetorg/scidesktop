@@ -14,8 +14,8 @@ FROM ${UBUNTU_IMAGE} AS rootfs
 ARG TARGETARCH
 ARG APT_CACHE_ID
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=private \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=private \
     apt-get update && apt-get install --no-install-recommends -y openssl
 COPY rootfs/ /rootfs/
 # The manifest records the key by its fingerprint, so a changed key shows in

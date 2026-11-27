@@ -48,6 +48,8 @@ jobs:
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       # Log in to GHCR before building. Caller permissions guarantee that PR
       # jobs only hold packages: read (for reading scidesktop-cache even if
@@ -98,25 +100,36 @@ jobs:
           run_bake() {
               local cache_mode="$1"
               shift
-              if [ "${cache_mode}" = read-cache ]; then
-                  mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci)
+              local args_out=""
+              local args=()
+              if [ "${cache_mode}" = domain-cache ]; then
+                  args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci domain-cache "$1")" || return 1
+              elif [ "${cache_mode}" = read-cache ]; then
+                  args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci)" || return 1
               else
-                  mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci "${cache_mode}")
+                  args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci "${cache_mode}")" || return 1
               fi
-              if docker buildx bake "${args[@]}" "$@" 2>&1 | tee /tmp/bake.log; then
-                  return 0
-              fi
-              if grep -qE 'inconsistent graph state' /tmp/bake.log; then
-                  echo "::warning::Buildx hit a transient graph-state error; retrying with cache."
-                  docker buildx bake "${args[@]}" "$@"
-                  return $?
-              fi
-              if ! grep -qE 'blob unknown' /tmp/bake.log; then
+              mapfile -t args <<<"${args_out}"
+
+              local graph_retried=0 blob_retried=0
+              while true; do
+                  if docker buildx bake "${args[@]}" "$@" 2>&1 | tee /tmp/bake.log; then
+                      return 0
+                  fi
+                  if [ "${graph_retried}" -eq 0 ] && grep -qE 'inconsistent graph state' /tmp/bake.log; then
+                      graph_retried=1
+                      echo "::warning::Buildx hit a transient graph-state error; retrying with cache."
+                      continue
+                  fi
+                  if [ "${blob_retried}" -eq 0 ] && grep -qE 'blob unknown' /tmp/bake.log; then
+                      blob_retried=1
+                      echo "::warning::A registry cache blob vanished during the build; building once more without it."
+                      args_out="$(.github/scripts/bake-args "${{ matrix.arch }}" ci no-cache)" || return 1
+                      mapfile -t args <<<"${args_out}"
+                      continue
+                  fi
                   return 1
-              fi
-              echo "::warning::A registry cache blob vanished during the build; building once more without it."
-              mapfile -t args < <(.github/scripts/bake-args "${{ matrix.arch }}" ci no-cache)
-              docker buildx bake "${args[@]}" "$@"
+              done
           }
           test_cache_mode=read-cache
           base_cache_mode=read-cache
@@ -129,7 +142,7 @@ jobs:
           for dockerfile in images/*/Dockerfile; do
               image="$(basename "$(dirname "${dockerfile}")")"
               [ "${image}" != "scidesktop" ] || continue
-              run_bake read-cache "${image}"
+              run_bake domain-cache "${image}"
           done
 
       # docs/components.md: what each component writes (no overlaps, no shadowing,
@@ -149,15 +162,125 @@ jobs:
       # component (docs/images.md).
       - name: Smoke test every image
         run: |
+          set -euo pipefail
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
               sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
-          failed=0
+
+          # Order heaviest images first (LPT scheduling) while still picking up
+          # any new folder added under images/.
+          images=()
+          declare -A seen=()
+          for img in datadesktop scidesktop neurodesktop genomicsdesktop; do
+              if [ -f "images/${img}/Dockerfile" ]; then
+                  images+=("${img}")
+                  seen["${img}"]=1
+              fi
+          done
           for dockerfile in images/*/Dockerfile; do
-              image="$(basename "$(dirname "${dockerfile}")")"
-              echo "::group::${image}"
-              ./test/image-smoke.sh "${image}" "${image}:ci" || failed=1
+              img="$(basename "$(dirname "${dockerfile}")")"
+              if [ -z "${seen[${img}]:-}" ]; then
+                  images+=("${img}")
+                  seen["${img}"]=1
+              fi
+          done
+
+          max_workers=2
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+              max_workers=3
+          fi
+          mem_gb="$(awk '/^MemAvailable:/ { printf "%d", $2 / 1048576 }' /proc/meminfo)"
+          mem_cap=$((mem_gb / 5))
+          [ "${mem_cap}" -ge 1 ] || mem_cap=1
+          if [ "${mem_cap}" -lt "${max_workers}" ]; then
+              max_workers="${mem_cap}"
+          fi
+          # On 4-vCPU amd64 with 2 image workers, overlapping ai-ready-smoke.sh
+          # inside datadesktop would stack 3 heavy suites without shortening the
+          # 2-worker makespan. Keep it enabled on 8-vCPU arm64 or single-worker runs.
+          parallel_ai_ready=1
+          if [ "${max_workers}" -gt 1 ] && [ "${{ matrix.arch }}" != "arm64" ]; then
+              parallel_ai_ready=0
+          elif [ "${mem_gb}" -lt $((max_workers * 5 + 4)) ]; then
+              parallel_ai_ready=0
+          fi
+          echo "Running image smoke tests with concurrency=${max_workers}, parallel_ai_ready=${parallel_ai_ready} (MemAvailable=${mem_gb} GiB)"
+
+          log_dir="$(mktemp -d)"
+          declare -A pid_slot=()
+          declare -A pid_img=()
+          # shellcheck disable=SC2317,SC2329
+          cleanup_smoke() {
+              local p="" img=""
+              for p in "${!pid_img[@]}"; do
+                  pkill -TERM -P "${p}" 2>/dev/null || true
+                  kill -TERM "${p}" 2>/dev/null || true
+              done
+              for p in "${!pid_img[@]}"; do
+                  wait "${p}" 2>/dev/null || true
+                  img="${pid_img[${p}]}"
+                  echo "::group::${img} (unfinished)"
+                  cat "${log_dir}/${img}.log" 2>/dev/null || true
+                  echo "::endgroup::"
+              done
+              rm -rf "${log_dir}"
+          }
+          trap cleanup_smoke EXIT INT TERM
+
+          free_slots=()
+          for ((s = 0; s < max_workers; s++)); do
+              free_slots+=("${s}")
+          done
+
+          failed=0
+          reap_one() {
+              local done_pid="" rc=0 p=""
+              wait -n -p done_pid || rc=$?
+              # Bash 5.2 can return 127 with done_pid unset if a tracked worker
+              # exited via signal while the parent was printing logs. Fall back
+              # to an explicit wait on a tracked PID to recover its exit status.
+              if [ -z "${done_pid:-}" ]; then
+                  for p in "${!pid_img[@]}"; do
+                      done_pid="${p}"
+                      break
+                  done
+                  rc=0
+                  wait "${done_pid}" || rc=$?
+              fi
+              local slot="${pid_slot[${done_pid}]}"
+              local done_img="${pid_img[${done_pid}]}"
+              unset "pid_slot[${done_pid}]" "pid_img[${done_pid}]"
+              free_slots+=("${slot}")
+              echo "::group::${done_img} (exit ${rc})"
+              cat "${log_dir}/${done_img}.log"
               echo "::endgroup::"
+              if [ "${rc}" -ne 0 ]; then
+                  failed=1
+              fi
+          }
+
+          for image in "${images[@]}"; do
+              while [ "${#free_slots[@]}" -eq 0 ]; do
+                  reap_one
+              done
+              slot="${free_slots[0]}"
+              free_slots=("${free_slots[@]:1}")
+              base_port=$((18100 + slot * 10))
+              (
+                  export SMOKE_PORT="${base_port}"
+                  export SMOKE_SINGLEUSER_PORT="$((base_port + 1))"
+                  export SMOKE_TILE_PORT="$((base_port + 2))"
+                  export SMOKE_AI_READY_PORT="$((base_port + 3))"
+                  export SMOKE_PARALLEL_AI_READY="${parallel_ai_ready}"
+                  ./test/image-smoke.sh "${image}" "${image}:ci"
+              ) >"${log_dir}/${image}.log" 2>&1 &
+              pid=$!
+              pid_slot["${pid}"]="${slot}"
+              pid_img["${pid}"]="${image}"
+          done
+
+          while [ "${#pid_slot[@]}" -gt 0 ]; do
+              reap_one
           done
           exit "${failed}"
 
@@ -167,16 +290,86 @@ jobs:
       - name: Browser & WebGL2 smoke (amd64)
         if: matrix.arch == 'amd64'
         run: |
+          set -euo pipefail
+          max_workers=2
+          log_dir="$(mktemp -d)"
+          declare -A pid_slot=()
+          declare -A pid_img=()
+          # shellcheck disable=SC2317,SC2329
+          cleanup_browser() {
+              local p="" img=""
+              for p in "${!pid_img[@]}"; do
+                  pkill -TERM -P "${p}" 2>/dev/null || true
+                  kill -TERM "${p}" 2>/dev/null || true
+              done
+              for p in "${!pid_img[@]}"; do
+                  wait "${p}" 2>/dev/null || true
+                  img="${pid_img[${p}]}"
+                  echo "::group::browser-smoke ${img} (unfinished)"
+                  cat "${log_dir}/${img}.log" 2>/dev/null || true
+                  echo "::endgroup::"
+              done
+              rm -rf "${log_dir}"
+          }
+          trap cleanup_browser EXIT INT TERM
+
+          free_slots=()
+          for ((s = 0; s < max_workers; s++)); do
+              free_slots+=("${s}")
+          done
+
           failed=0
-          for image in ${PUBLISH}; do
-              echo "::group::browser-smoke ${image}"
-              ./test/browser-smoke.sh "${image}:ci" || failed=1
+          reap_one() {
+              local done_pid="" rc=0 p=""
+              wait -n -p done_pid || rc=$?
+              if [ -z "${done_pid:-}" ]; then
+                  for p in "${!pid_img[@]}"; do
+                      done_pid="${p}"
+                      break
+                  done
+                  rc=0
+                  wait "${done_pid}" || rc=$?
+              fi
+              local slot="${pid_slot[${done_pid}]}"
+              local done_img="${pid_img[${done_pid}]}"
+              unset "pid_slot[${done_pid}]" "pid_img[${done_pid}]"
+              free_slots+=("${slot}")
+              echo "::group::browser-smoke ${done_img} (exit ${rc})"
+              cat "${log_dir}/${done_img}.log"
               echo "::endgroup::"
+              if [ "${rc}" -ne 0 ]; then
+                  failed=1
+              fi
+          }
+          # Keep the slot wait in a helper so `for image in ${PUBLISH}; do` has
+          # no nested `done` (enforced by test/contract.py S6).
+          acquire_slot() {
+              while [ "${#free_slots[@]}" -eq 0 ]; do
+                  reap_one
+              done
+          }
+
+          for image in ${PUBLISH}; do
+              acquire_slot
+              slot="${free_slots[0]}"
+              free_slots=("${free_slots[@]:1}")
+              (
+                  export BROWSER_SMOKE_PORT="$((18200 + slot))"
+                  ./test/browser-smoke.sh "${image}:ci"
+              ) >"${log_dir}/${image}.log" 2>&1 &
+              pid=$!
+              pid_slot["${pid}"]="${slot}"
+              pid_img["${pid}"]="${image}"
+          done
+
+          while [ "${#pid_slot[@]}" -gt 0 ]; do
+              reap_one
           done
           exit "${failed}"
 
-      # Vulnerability scan of built images (single Trivy pass per image using a
-      # SHA-verified binary) plus hashed pip-audit across all Python environments.
+      # Vulnerability scan of built images (sequential Trivy pass per image
+      # sharing its warmed layer-analysis cache, overlapped with parallel
+      # hashed pip-audit workers across all Python environments).
       - name: Vulnerability scan (Trivy & Python pip-audit)
         env:
           PIP_AUDIT_SPECS: >-
@@ -196,6 +389,110 @@ jobs:
             neurodesktop:ci:/opt/neuroimaging-env/bin/python
         run: |
           set -euo pipefail
+          audit_dir="$(mktemp -d)"
+          pip_audit_pid=""
+          # shellcheck disable=SC2317,SC2329
+          cleanup_scan() {
+              if [ -n "${pip_audit_pid}" ]; then
+                  pkill -TERM -P "${pip_audit_pid}" 2>/dev/null || true
+                  kill -TERM "${pip_audit_pid}" 2>/dev/null || true
+                  wait "${pip_audit_pid}" 2>/dev/null || true
+                  local idx=0 spec="" img="" py=""
+                  for spec in ${PIP_AUDIT_SPECS}; do
+                      idx=$((idx + 1))
+                      if [ -s "${audit_dir}/log-${idx}.txt" ]; then
+                          img="${spec%:*}"
+                          py="${spec##*:}"
+                          echo "::group::pip-audit ${img} ${py} (unfinished)"
+                          cat "${audit_dir}/log-${idx}.txt" || true
+                          echo "::endgroup::"
+                      fi
+                  done
+              fi
+              rm -rf "${audit_dir}" /tmp/pip-audit-venv /tmp/trivy /tmp/trivy.tar.gz
+          }
+          trap cleanup_scan EXIT INT TERM
+
+          python3 -m venv /tmp/pip-audit-venv
+          /tmp/pip-audit-venv/bin/pip install --quiet --no-deps --require-hashes \
+              -r .github/requirements/pip-audit.txt
+
+          # Run pip-audit workers (network-bound, sharing an atomic cache dir)
+          # in parallel alongside the sequential Trivy pass below.
+          (
+              set -euo pipefail
+              max_audit_workers=4
+              declare -A pid_idx=()
+              active=0
+              audit_failed=0
+              # shellcheck disable=SC2317,SC2329
+              cleanup_audit_workers() {
+                  local p=""
+                  for p in "${!pid_idx[@]}"; do
+                      pkill -TERM -P "${p}" 2>/dev/null || true
+                      kill -TERM "${p}" 2>/dev/null || true
+                  done
+                  for p in "${!pid_idx[@]}"; do
+                      wait "${p}" 2>/dev/null || true
+                  done
+                  exit 143
+              }
+              trap cleanup_audit_workers TERM INT
+
+              reap_audit_one() {
+                  local done_pid="" rc=0 p=""
+                  wait -n -p done_pid || rc=$?
+                  if [ -z "${done_pid:-}" ]; then
+                      for p in "${!pid_idx[@]}"; do
+                          done_pid="${p}"
+                          break
+                      done
+                      rc=0
+                      wait "${done_pid}" || rc=$?
+                  fi
+                  local done_idx="${pid_idx[${done_pid}]}"
+                  unset "pid_idx[${done_pid}]"
+                  active=$((active - 1))
+                  printf '%s\n' "${rc}" > "${audit_dir}/rc-${done_idx}"
+                  if [ "${rc}" -ne 0 ]; then
+                      audit_failed=1
+                  fi
+              }
+              # Keep the slot wait in a helper so `for spec in ${PIP_AUDIT_SPECS}; do`
+              # has no nested `done` (enforced by test/contract.py S6).
+              wait_audit_slot() {
+                  while [ "${active}" -ge "${max_audit_workers}" ]; do
+                      reap_audit_one
+                  done
+              }
+              idx=0
+              for spec in ${PIP_AUDIT_SPECS}; do
+                  wait_audit_slot
+                  idx=$((idx + 1))
+                  img="${spec%:*}"
+                  py="${spec##*:}"
+                  freeze="${audit_dir}/freeze-${idx}.txt"
+                  log="${audit_dir}/log-${idx}.txt"
+                  (
+                      if docker run --rm --entrypoint "${py}" "${img}" -c \
+                          'import importlib.metadata as im; seen = set(); [print(n + "==" + d.version) for d in im.distributions() if (n := d.metadata.get("Name")) and (n.lower(), d.version) not in seen and not seen.add((n.lower(), d.version))]' \
+                          > "${freeze}"; then
+                          /tmp/pip-audit-venv/bin/pip-audit -r "${freeze}" --cache-dir "${audit_dir}/cache" --no-deps --disable-pip
+                      else
+                          exit 1
+                      fi
+                  ) >"${log}" 2>&1 &
+                  pid=$!
+                  pid_idx["${pid}"]="${idx}"
+                  active=$((active + 1))
+              done
+              while [ "${active}" -gt 0 ]; do
+                  reap_audit_one
+              done
+              exit "${audit_failed}"
+          ) &
+          pip_audit_pid=$!
+
           ver="0.76.2"
           if [ "${{ matrix.arch }}" = "arm64" ]; then
               trivy_arch="ARM64"
@@ -213,9 +510,14 @@ jobs:
           failed=0
           for image in ${PUBLISH}; do
               echo "::group::trivy ${image}"
+              trivy_rc=0
               /tmp/trivy image --skip-db-update --scanners vuln --ignore-unfixed \
-                  --format json --output "/tmp/trivy-${image}.json" "${image}:ci"
-              python3 - "/tmp/trivy-${image}.json" <<'PY' || failed=1
+                  --format json --output "/tmp/trivy-${image}.json" "${image}:ci" || trivy_rc=$?
+              if [ "${trivy_rc}" -ne 0 ]; then
+                  echo "  [FAIL] trivy exited with status ${trivy_rc}"
+                  failed=1
+              else
+                  python3 - "/tmp/trivy-${image}.json" <<'PY' || failed=1
           import json, sys
           data = json.load(open(sys.argv[1]))
           os_high_crit, any_crit, lib_high = [], [], []
@@ -238,28 +540,27 @@ jobs:
               print("  [FAIL]", e)
           sys.exit(1 if (os_high_crit or any_crit) else 0)
           PY
+              fi
               rm -f "/tmp/trivy-${image}.json"
               echo "::endgroup::"
           done
-          python3 -m venv /tmp/pip-audit-venv
-          /tmp/pip-audit-venv/bin/pip install --quiet --no-deps --require-hashes \
-              -r .github/requirements/pip-audit.txt
+
+          pip_audit_rc=0
+          wait "${pip_audit_pid}" || pip_audit_rc=$?
+          pip_audit_pid=""
+          if [ "${pip_audit_rc}" -ne 0 ]; then
+              failed=1
+          fi
+          idx=0
           for spec in ${PIP_AUDIT_SPECS}; do
+              idx=$((idx + 1))
               img="${spec%:*}"
               py="${spec##*:}"
-              echo "::group::pip-audit ${img} ${py}"
-              if ! docker run --rm --entrypoint "${py}" "${img}" -c \
-                  'import importlib.metadata as im; seen = set(); [print(n + "==" + d.version) for d in im.distributions() if (n := d.metadata.get("Name")) and (n.lower(), d.version) not in seen and not seen.add((n.lower(), d.version))]' \
-                  > /tmp/env-freeze.txt; then
-                  failed=1
-                  echo "::endgroup::"
-                  continue
-              fi
-              /tmp/pip-audit-venv/bin/pip-audit -r /tmp/env-freeze.txt --no-deps --disable-pip || failed=1
-              rm -f /tmp/env-freeze.txt
+              rc="$(cat "${audit_dir}/rc-${idx}" 2>/dev/null || echo 1)"
+              echo "::group::pip-audit ${img} ${py} (exit ${rc})"
+              cat "${audit_dir}/log-${idx}.txt" 2>/dev/null || true
               echo "::endgroup::"
           done
-          rm -rf /tmp/pip-audit-venv /tmp/trivy /tmp/trivy.tar.gz
           exit "${failed}"
 
       # Pushed under a tag nothing deploys. The publish job gives the images
@@ -285,8 +586,84 @@ jobs:
                   delay=$((delay * 2))
               done
           }
+
+          # Push scidesktop first so shared base layers are already in GHCR
+          # before domain images push concurrently.
+          domain_images=()
           for image in ${PUBLISH}; do
               ref="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${image}:${CANDIDATE}-${{ matrix.arch }}"
               docker tag "${image}:ci" "${ref}"
-              push_with_retry "${ref}"
+              if [ "${image}" = "scidesktop" ]; then
+                  echo "::group::push ${image}"
+                  base_rc=0
+                  push_with_retry "${ref}" || base_rc=$?
+                  echo "::endgroup::"
+                  [ "${base_rc}" -eq 0 ] || exit "${base_rc}"
+              else
+                  domain_images+=("${image}")
+              fi
           done
+
+          max_workers=2
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+              max_workers=3
+          fi
+          log_dir="$(mktemp -d)"
+          declare -A pid_img=()
+          # shellcheck disable=SC2317,SC2329
+          cleanup_push() {
+              local p="" img=""
+              for p in "${!pid_img[@]}"; do
+                  pkill -TERM -P "${p}" 2>/dev/null || true
+                  kill -TERM "${p}" 2>/dev/null || true
+              done
+              for p in "${!pid_img[@]}"; do
+                  wait "${p}" 2>/dev/null || true
+                  img="${pid_img[${p}]}"
+                  echo "::group::push ${img} (unfinished)"
+                  cat "${log_dir}/${img}.log" 2>/dev/null || true
+                  echo "::endgroup::"
+              done
+              rm -rf "${log_dir}"
+          }
+          trap cleanup_push EXIT INT TERM
+
+          active=0
+          failed=0
+          reap_push_one() {
+              local done_pid="" rc=0 p=""
+              wait -n -p done_pid || rc=$?
+              if [ -z "${done_pid:-}" ]; then
+                  for p in "${!pid_img[@]}"; do
+                      done_pid="${p}"
+                      break
+                  done
+                  rc=0
+                  wait "${done_pid}" || rc=$?
+              fi
+              local done_img="${pid_img[${done_pid}]}"
+              unset "pid_img[${done_pid}]"
+              active=$((active - 1))
+              echo "::group::push ${done_img} (exit ${rc})"
+              cat "${log_dir}/${done_img}.log"
+              echo "::endgroup::"
+              if [ "${rc}" -ne 0 ]; then
+                  failed=1
+              fi
+          }
+
+          for image in "${domain_images[@]}"; do
+              while [ "${active}" -ge "${max_workers}" ]; do
+                  reap_push_one
+              done
+              ref="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${image}:${CANDIDATE}-${{ matrix.arch }}"
+              push_with_retry "${ref}" >"${log_dir}/${image}.log" 2>&1 &
+              pid=$!
+              pid_img["${pid}"]="${image}"
+              active=$((active + 1))
+          done
+
+          while [ "${active}" -gt 0 ]; do
+              reap_push_one
+          done
+          exit "${failed}"

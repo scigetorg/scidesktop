@@ -114,27 +114,46 @@ async function launchChrome(browserBin, userDataDir) {
   ];
   const proc = spawn(browserBin, args, { stdio: ["ignore", "pipe", "pipe"] });
   let stderr = "";
-  const wsUrl = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Chrome failed to start:\n${stderr}`)), 25000);
-    proc.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-      const m = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
-      if (m) {
-        clearTimeout(timer);
-        resolve(m[1]);
-      }
-    });
-    proc.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Chrome exited early (${code}):\n${stderr}`));
-    });
+  let ws = null;
+  let timer = null;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Chrome startup timed out:\n${stderr}`)), 25000);
   });
-  const ws = new WebSocket(wsUrl);
-  await new Promise((resolve, reject) => {
-    ws.addEventListener("open", resolve, { once: true });
-    ws.addEventListener("error", (e) => reject(new Error(`WebSocket error: ${e.message || e}`)), { once: true });
-  });
-  return { proc, cdp: new CDP(ws) };
+  try {
+    const wsUrl = await Promise.race([
+      new Promise((resolve, reject) => {
+        proc.stderr.on("data", (chunk) => {
+          stderr += chunk.toString();
+          const m = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
+          if (m) resolve(m[1]);
+        });
+        proc.on("error", (err) => reject(new Error(`Chrome failed to spawn: ${err.message}`)));
+        proc.on("exit", (code) => reject(new Error(`Chrome exited early (${code}):\n${stderr}`)));
+      }),
+      deadline,
+    ]);
+    ws = new WebSocket(wsUrl);
+    await Promise.race([
+      new Promise((resolve, reject) => {
+        ws.addEventListener("open", resolve, { once: true });
+        ws.addEventListener("error", (e) => reject(new Error(`WebSocket error: ${e.message || e}`)), { once: true });
+      }),
+      deadline,
+    ]);
+    clearTimeout(timer);
+    return { proc, cdp: new CDP(ws) };
+  } catch (err) {
+    clearTimeout(timer);
+    if (ws) {
+      try { ws.close(); } catch { /* ignore */ }
+    }
+    try { proc.kill("SIGKILL"); } catch { /* ignore */ }
+    await Promise.race([
+      new Promise((resolve) => proc.once("close", resolve)),
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]);
+    throw err;
+  }
 }
 
 async function openTab(cdp) {
@@ -318,8 +337,10 @@ async function main() {
     process.exit(1);
   }
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "scidesktop-cdp-"));
-  const { proc, cdp } = await launchChrome(browserBin, userDataDir);
+  let proc = null;
+  let cdp = null;
   try {
+    ({ proc, cdp } = await launchChrome(browserBin, userDataDir));
     // 1. JupyterLab boot, WebGL2 availability, and launcher tiles
     const lab = await openTab(cdp);
     await lab.goto(`${BASE_URL}/lab?token=${encodeURIComponent(TOKEN)}`);
@@ -802,9 +823,17 @@ async function main() {
       await nvTab.close();
     }
   } finally {
-    cdp.close();
-    proc.kill("SIGKILL");
-    await new Promise((r) => setTimeout(r, 200));
+    if (cdp) cdp.close();
+    if (proc) {
+      const exited = proc.exitCode !== null || proc.signalCode !== null;
+      if (!exited) {
+        try { proc.kill("SIGKILL"); } catch { /* ignore */ }
+        await Promise.race([
+          new Promise((resolve) => proc.once("close", resolve)),
+          new Promise((resolve) => setTimeout(resolve, 2000)),
+        ]);
+      }
+    }
     try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch { /* ignore */ }
   }
 

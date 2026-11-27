@@ -252,9 +252,12 @@ to the workflow.
   component has separate `<component>-<arch>` and `<component>-test-<arch>`
   tags so `bake test` and `bake scidesktop` never overwrite each other's cache
   index, and both targets read from both tags. `scidesktop` caches its assembly
-  with `mode=min`; domain images read their components and base from the same
-  cache without writing separate image cache tags. Only non-PR runs on `main`
-  write cache tags; pull requests and `privileged-smoke.yml` read only. Make
+  with `mode=min`; domain images scope `cache-from` (`domain-cache`) to
+  `scidesktop-<arch>`, the domain-only components they add
+  (`<component>-test-<arch>`), and any build-only components not copied into an
+  image (e.g. `micromamba`), without writing separate image cache tags. Only
+  non-PR runs on `main` write cache tags; pull requests and
+  `privileged-smoke.yml` read only. Make
   the `scidesktop-cache` GHCR package public after its first push so fork PRs
   can read it anonymously ([operator-runbook.md](operator-runbook.md#ghcr-build-cache-package)).
 - **Pull requests:** `.github/workflows/image.yml` invokes

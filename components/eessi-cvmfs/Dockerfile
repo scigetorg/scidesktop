@@ -16,8 +16,8 @@ ARG APT_CACHE_ID
 ARG EESSI_CVMFS_CONFIG_VERSION
 ARG EESSI_CVMFS_CONFIG_SHA256
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=private \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=private \
     apt-get update && apt-get install --no-install-recommends -y ca-certificates curl openssl
 COPY rootfs/ /rootfs/
 RUN tmp="$(mktemp -d)" \

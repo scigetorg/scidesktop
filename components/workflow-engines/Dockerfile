@@ -22,8 +22,8 @@ ARG TEMURIN_JRE_VERSION
 ARG TEMURIN_JRE_SHA256_AMD64
 ARG TEMURIN_JRE_SHA256_ARM64
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=private \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=private \
     apt-get update && apt-get install --no-install-recommends -y ca-certificates curl
 RUN --mount=type=bind,from=components,source=check-lock,target=/usr/local/bin/check-lock \
     --mount=type=bind,source=.,target=/src \
