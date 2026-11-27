@@ -18,40 +18,48 @@ cfg=$(jupyter server --show-config 2>/dev/null)
 grep -q "'notebook_intelligence': True" <<<"${cfg}"
 
 python - <<'PY'
-import json, socket, subprocess, time, urllib.request
+import json, os, socket, subprocess, tempfile, time, urllib.request
 
-with socket.socket() as s:
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
+with tempfile.TemporaryDirectory() as home, tempfile.TemporaryFile(mode="w+") as log:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
 
-proc = subprocess.Popen(
-    [
-        "jupyter", "server", "--no-browser", "--ip=127.0.0.1", f"--port={port}",
-        "--IdentityProvider.token=nbi-test", "--ServerApp.open_browser=False",
-    ],
-    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-)
-try:
-    url = f"http://127.0.0.1:{port}/notebook-intelligence/capabilities"
-    for _ in range(60):
-        if proc.poll() is not None:
-            raise RuntimeError(f"jupyter server exited early:\n{proc.stdout.read()}")
-        try:
-            req = urllib.request.Request(url, headers={"Authorization": "token nbi-test"})
-            with urllib.request.urlopen(req, timeout=2) as resp:
-                assert resp.status == 200, resp.status
-                data = json.loads(resp.read().decode())
-                assert isinstance(data, dict) and data, data
-                print("NBI capabilities keys:", sorted(data.keys()))
-                break
-        except Exception:
-            time.sleep(0.5)
-    else:
-        raise RuntimeError(f"timed out waiting for {url}")
-finally:
-    proc.terminate()
+    env = {**os.environ, "HOME": home}
+    proc = subprocess.Popen(
+        [
+            "jupyter", "server", "--no-browser", "--ip=127.0.0.1", f"--port={port}",
+            "--ServerApp.port_retries=0", "--MCPExtensionApp.mcp_port=0",
+            "--IdentityProvider.token=nbi-test", "--ServerApp.open_browser=False",
+            f"--ServerApp.root_dir={home}",
+        ],
+        env=env, stdout=log, stderr=subprocess.STDOUT, text=True,
+    )
     try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
+        url = f"http://127.0.0.1:{port}/notebook-intelligence/capabilities"
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                log.seek(0)
+                raise RuntimeError(f"jupyter server exited early ({proc.returncode}):\n{log.read()}")
+            try:
+                req = urllib.request.Request(url, headers={"Authorization": "token nbi-test"})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    assert resp.status == 200, resp.status
+                    data = json.loads(resp.read().decode())
+                    assert isinstance(data, dict) and data, data
+                    print("NBI capabilities keys:", sorted(data.keys()))
+                    break
+            except Exception:
+                time.sleep(0.5)
+        else:
+            log.seek(0)
+            raise RuntimeError(f"timed out waiting for {url}\n--- server log ---\n{log.read()}")
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
 PY
