@@ -16,12 +16,15 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
-  # Images pushed to GHCR as ghcr.io/<owner>/<image>. Every folder in images/
-  # is built and smoke-tested on every architecture; add a name here to
-  # publish it too.
+  # Images pushed to GHCR as ghcr.io/<owner>/<image> and mirrored to Quay.io
+  # when the QUAY_ORG repository variable is set. Every folder in images/ is
+  # built and smoke-tested on every architecture; add a name here to publish
+  # it too.
   PUBLISH: scidesktop microdesktop datadesktop dermdesktop preclinicaldesktop moleculardesktop genomicsdesktop neurodesktop
   # This run's images before they are published: <candidate>-<arch>.
   CANDIDATE: run-${{ github.run_id }}
+  # Optional Quay.io mirror namespace (also the on/off switch, matching neurodesktop).
+  QUAY_ORG: ${{ vars.QUAY_ORG }}
 
 jobs:
   # One runner per architecture, each building its own: no emulation.
@@ -65,6 +68,10 @@ jobs:
       # Which tags the publish job moves, against a registry of the test's own.
       - name: Publish script
         run: ./test/publish-manifests-test.sh
+
+      # Multi-arch mirroring, rolling-tag guards and retry/auth handling for Quay.io.
+      - name: Mirror script
+        run: ./test/mirror-manifests-test.sh
 
       - name: Free disk space (amd64)
         if: matrix.arch == 'amd64'
@@ -311,6 +318,71 @@ jobs:
         run: |
           # shellcheck disable=SC2086
           .github/scripts/publish-manifests "ghcr.io/${GITHUB_REPOSITORY_OWNER}" "${CANDIDATE}" ${PUBLISH}
+
+      - name: Write publish summary
+        run: |
+          short_sha="$(printf '%.7s' "${GITHUB_SHA}")"
+          date="$(TZ=UTC git show --no-patch --date=format-local:%Y-%m-%d --format=%cd "${GITHUB_SHA}")"
+          {
+            echo "## Image publish summary"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA}\` (short SHA \`${short_sha}\`, date \`${date}\`)"
+            echo "- GHCR: \`ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/<image>\`"
+            if [ -n "${QUAY_ORG}" ]; then
+              echo "- Quay.io mirror: \`quay.io/${QUAY_ORG,,}/<image>\`"
+            else
+              echo "- Quay.io mirror: skipped (\`QUAY_ORG\` repository variable is empty)"
+            fi
+            echo ""
+            echo "Images: \`${PUBLISH}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  # Quay.io is a mirror of the multi-arch images published to GHCR, fanned out
+  # one runner per image in parallel with attest. Gated on the QUAY_ORG
+  # repository variable (matching neurodesktop) so forks without it simply skip.
+  # test/contract.py (S6) keeps this matrix equal to PUBLISH.
+  mirror-quay:
+    name: Mirror to Quay.io (${{ matrix.image }})
+    needs: publish
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.QUAY_ORG != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [scidesktop, microdesktop, datadesktop, dermdesktop, preclinicaldesktop, moleculardesktop, genomicsdesktop, neurodesktop]
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install crane
+        run: |
+          .github/scripts/install-crane "${RUNNER_TEMP}/bin"
+          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Quay.io
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+      - name: Mirror multi-arch image to Quay.io
+        env:
+          IMAGE_NAME: ${{ matrix.image }}
+        run: |
+          .github/scripts/mirror-manifests "ghcr.io/${GITHUB_REPOSITORY_OWNER}" "quay.io/${QUAY_ORG}" "${IMAGE_NAME}"
 
   attest:
     name: Attest build provenance (${{ matrix.image }})

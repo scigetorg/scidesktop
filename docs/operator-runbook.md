@@ -2,8 +2,13 @@
 
 How to run scidesktop as a JupyterHub single-user image, what the platform
 must provide, and how to check and triage a deployment. Deploy an image digest
-or an immutable short-SHA tag from `ghcr.io/scigetorg/scidesktop`, not
-`latest`.
+or an immutable short-SHA tag, not `latest`. Every published image can be
+pulled from either registry using the same tags:
+
+- **GHCR** (primary, with GitHub build provenance attestations): `ghcr.io/scigetorg/<image>`
+- **Quay.io** (mirror): `quay.io/scigetorg/<image>`
+
+In the `docker run` and `c.KubeSpawner.image` examples below, `quay.io/scigetorg/<image>:<short-sha>` can be used interchangeably with `ghcr.io/scigetorg/<image>:<short-sha>`.
 
 Every tag is one image for amd64 and arm64; each node pulls its own
 architecture.

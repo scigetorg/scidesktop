@@ -1,0 +1,37 @@
+#!/bin/bash
+# Downloads and SHA-256 verifies crane (google/go-containerregistry) into a
+# target directory.
+#
+#   install-crane [dest-dir]
+set -euo pipefail
+
+dest_dir="${1:-/usr/local/bin}"
+version="0.22.1"
+
+case "$(uname -m)" in
+    x86_64|amd64)
+        arch="x86_64"
+        sha="0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0"
+        ;;
+    aarch64|arm64)
+        arch="arm64"
+        sha="898c0cff975f898a33e8c4580bdafb0e7c02c7faa33374e946762f97c4ab7110"
+        ;;
+    *)
+        echo "install-crane: unsupported architecture $(uname -m)" >&2
+        exit 1
+        ;;
+esac
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "${tmp}"' EXIT
+
+tarball="${tmp}/go-containerregistry.tar.gz"
+url="https://github.com/google/go-containerregistry/releases/download/v${version}/go-containerregistry_Linux_${arch}.tar.gz"
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o "${tarball}" "${url}"
+printf '%s  %s\n' "${sha}" "${tarball}" | sha256sum -c -
+tar -xzf "${tarball}" -C "${tmp}" crane
+
+mkdir -p "${dest_dir}"
+install -m 0755 "${tmp}/crane" "${dest_dir}/crane"
+"${dest_dir}/crane" version

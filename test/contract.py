@@ -332,12 +332,13 @@ def static():
     else:
         pub_imgs = publish_raw.split()
 
-        # Attestation matrix: jobs.attest.strategy.matrix.image
-        att_imgs = (((jobs.get("attest") or {}).get("strategy") or {}).get("matrix") or {}).get("image")
-        if not isinstance(att_imgs, list) or not att_imgs:
-            fail("S6", f"{rel(CI)}: jobs.attest.strategy.matrix.image is missing or empty")
-        elif set(pub_imgs) != {str(x) for x in att_imgs}:
-            fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match attest matrix ({', '.join(map(str, att_imgs))})")
+        # Attestation and Quay mirror matrices must both match PUBLISH.
+        for job_name in ("attest", "mirror-quay"):
+            mat_imgs = (((jobs.get(job_name) or {}).get("strategy") or {}).get("matrix") or {}).get("image")
+            if not isinstance(mat_imgs, list) or not mat_imgs:
+                fail("S6", f"{rel(CI)}: jobs.{job_name}.strategy.matrix.image is missing or empty")
+            elif set(pub_imgs) != {str(x) for x in mat_imgs}:
+                fail("S6", f"{rel(CI)}: PUBLISH ({', '.join(pub_imgs)}) does not match {job_name} matrix ({', '.join(map(str, mat_imgs))})")
 
         # Browser smoke step: must loop over ${PUBLISH} and invoke ./test/browser-smoke.sh "${image}:ci".
         build_steps = build_job.get("steps") or []
