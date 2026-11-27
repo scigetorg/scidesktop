@@ -99,7 +99,7 @@ commit's short SHA, the date and `latest`.
 | Batch jobs | A [Slurm queue](docs/slurm.md) for the session (`sbatch`, `srun`) plus the `jupyterlab-slurm` Queue Manager extension in JupyterLab; [Lightcone](docs/slurm.md#lightcone)'s `lc` (lightcone-cli, `astra-tools`, `astra-spec`) at `/opt/lightcone`, launching on that queue with a catalog sized to it |
 | VS Code | [code-server](docs/neurodesktop.md#vs-code) behind the notebook server's login, opened from the **VS Code** launcher tile, with `vscode-core` preinstalled (plus `vscode-niivue` and `vscode-coding-agents` on `neurodesktop`) |
 | Data & workflows | DataLad (`datalad-container`, `datalad-osf`, `osf`) and git-annex at `/opt/datalad`; Nextflow, nf-test, Viash and Snakemake (+ Slurm executor plugin and `/etc/scidesktop/nextflow/scidesktop.config` Apptainer/Slurm profiles) at `/opt/workflow-engines`; `rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`, `gh` |
-| Helper CLI | The `scigethelpers` command (`cite`, `kernel`, `check`, `info`, `uv`) at `/opt/scigethelpers-cli` |
+| Helper CLI & Panel | The `scigethelpers` command (`cite`, `kernel`, `uv`, `check`, `info`, `agent preflight`, with Bash completion) at `/opt/scigethelpers-cli` and its **Session Helpers** JupyterLab panel (`jupyterlab-scigethelpers`) |
 
 The domain images add domain-specific components the base leaves out (and narrow
 the sciget catalog to their domain; [which image has which](docs/images.md)):

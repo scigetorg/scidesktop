@@ -285,9 +285,28 @@ def configured_catalogue_sources() -> list[CatalogueSource]:
     return sources or [CatalogueSource(FALLBACK_CATALOGUE_URL)]
 
 
-def write_atomically(path: Path, text: str) -> None:
-    """Replace *path* in one step; the file gets the usual umask permissions."""
+def write_atomically(path: Path, text: str, *, no_clobber: bool = False) -> None:
+    """Replace *path* in one step, or create it atomically without overwriting."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    if no_clobber:
+        temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        temporary.write_text(text, encoding="utf-8")
+        try:
+            os.link(temporary, path)
+            return
+        except FileExistsError:
+            raise
+        except OSError:
+            # Filesystems without hardlinks fall back to atomic O_CREAT|O_EXCL.
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(text)
+            return
+        finally:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     temporary.write_text(text, encoding="utf-8")
     os.replace(temporary, path)
@@ -420,17 +439,64 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--clear", action="store_true", help="empty the usage log and exit"
     )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="show recorded module load status without fetching catalogues or writing CITATIONS.md",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="print machine-readable JSON",
+    )
+    parser.add_argument(
+        "--no-clobber",
+        action="store_true",
+        help="fail without overwriting if the output file already exists",
+    )
     return parser.parse_args(argv)
+
+
+def _status_payload(
+    log: Path, uses: Sequence[ModuleUse], output: Path
+) -> dict[str, object]:
+    unique: dict[tuple[str, str], None] = {}
+    for use in uses:
+        unique[(use.name, use.version)] = None
+    citations_exists = output.is_file()
+    citations_mtime: str | None = None
+    if citations_exists:
+        try:
+            citations_mtime = (
+                datetime.fromtimestamp(output.stat().st_mtime, tz=UTC)
+                .strftime(TIMESTAMP_FORMAT)
+            )
+        except OSError:
+            citations_mtime = None
+    return {
+        "log_path": str(log),
+        "load_count": len(uses),
+        "unique_tools": [{"name": name, "version": version} for name, version in unique],
+        "first_load": min(use.loaded_at for use in uses).strftime(TIMESTAMP_FORMAT) if uses else None,
+        "last_load": max(use.loaded_at for use in uses).strftime(TIMESTAMP_FORMAT) if uses else None,
+        "citations_path": str(output),
+        "citations_exists": citations_exists,
+        "citations_mtime": citations_mtime,
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     log = state_dir() / "module-usage.tsv"
+    output = args.output or default_output()
     if args.clear:
         for path in (log, legacy_log()):
             if path.exists():
                 path.write_text("")
-        print(f"Cleared {log}.")
+        if args.json:
+            print(json.dumps({"cleared": True, "log_path": str(log)}, indent=2))
+        else:
+            print(f"Cleared {log}.")
         return 0
     uses: list[ModuleUse] = []
     for path in (legacy_log(), log):
@@ -440,28 +506,76 @@ def main(argv: Sequence[str] | None = None) -> int:
             pass
     if args.since is not None:
         uses = [use for use in uses if use.loaded_at.date() >= args.since]
+    if args.status:
+        payload = _status_payload(log, uses, output)
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            tools_list = payload["unique_tools"]
+            assert isinstance(tools_list, list)
+            print(f"Recorded module loads: {payload['load_count']} ({len(tools_list)} unique tool version(s))")
+            print(f"Usage log: {log}")
+            if payload["citations_exists"]:
+                print(f"CITATIONS.md: {output} (updated {payload['citations_mtime'] or 'unknown'})")
+            else:
+                print(f"CITATIONS.md: not yet generated ({output})")
+        return 0
     if not uses:
-        print(f"No container module loads are recorded in {log}.", file=sys.stderr)
-        print(
-            "Load a tool with ml, a notebook or the Applications menu, then run scigethelpers cite again.",
-            file=sys.stderr,
-        )
+        if args.json:
+            print(json.dumps({
+                "ok": False,
+                "error": f"No container module loads are recorded in {log}.",
+                "log_path": str(log),
+                "output": str(output),
+            }, indent=2))
+        else:
+            print(f"No container module loads are recorded in {log}.", file=sys.stderr)
+            print(
+                "Load a tool with ml, a notebook or the Applications menu, then run scigethelpers cite again.",
+                file=sys.stderr,
+            )
         return 1
     tools = resolve(uses, load_catalogues(configured_catalogue_sources()))
     # A deployment that versions its image names it here.
     version = os.environ.get("SCIDESKTOP_VERSION") or os.environ.get("NEURODESKTOP_VERSION") or ""
-    output = args.output or default_output()
     try:
-        write_atomically(output, render(tools, version, uses))
-    except OSError as error:
-        print(f"Could not write {output}: {error}", file=sys.stderr)
+        write_atomically(output, render(tools, version, uses), no_clobber=args.no_clobber)
+    except FileExistsError:
+        if args.json:
+            print(json.dumps({
+                "ok": False,
+                "needs_overwrite": True,
+                "output": str(output),
+                "error": f"{output} already exists; pass without --no-clobber to replace it.",
+            }, indent=2))
+        else:
+            print(f"{output} already exists; refusing to overwrite (--no-clobber).", file=sys.stderr)
         return 1
-    for tool in tools:
-        if tool.entry is None:
-            print(
-                f"{tool.name}/{tool.version} is not in the configured tool catalogue.",
-                file=sys.stderr,
-            )
+    except OSError as error:
+        if args.json:
+            print(json.dumps({
+                "ok": False,
+                "error": f"Could not write {output}: {error}",
+                "output": str(output),
+            }, indent=2))
+        else:
+            print(f"Could not write {output}: {error}", file=sys.stderr)
+        return 1
+    missing = [f"{tool.name}/{tool.version}" for tool in tools if tool.entry is None]
+    if args.json:
+        print(json.dumps({
+            "ok": True,
+            "output": str(output),
+            "tool_count": len(tools),
+            "load_count": len(uses),
+            "missing_from_catalogue": missing,
+        }, indent=2))
+        return 0
+    for item in missing:
+        print(
+            f"{item} is not in the configured tool catalogue.",
+            file=sys.stderr,
+        )
     print(f"Wrote citations for {len(tools)} tool versions to {output}")
     return 0
 

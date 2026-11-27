@@ -30,20 +30,33 @@ done
 terminal '/opt/slurm/bin/slurm-session wait' >/dev/null
 
 help="$(terminal 'scigethelpers --help')"
-grep -q '^usage: scigethelpers <command>' <<<"${help}" && grep -q '^  cite ' <<<"${help}" && grep -q '^  kernel ' <<<"${help}" \
+grep -q '^usage: scigethelpers <command>' <<<"${help}" \
+    && grep -q '^  cite ' <<<"${help}" \
+    && grep -q '^  kernel ' <<<"${help}" \
+    && grep -q '^  uv ' <<<"${help}" \
+    && grep -q '^  agent preflight ' <<<"${help}" \
     && pass "scigethelpers --help lists the commands" || fail "scigethelpers --help lists the commands"
 [ "$(terminal 'scigethelpers check slurm')" = "[PASS] slurm  partitions: scidesktop*" ] \
     && pass "scigethelpers check slurm finds the session's queue" \
     || fail "scigethelpers check slurm finds the session's queue (got: $(terminal 'scigethelpers check slurm'))"
 [ "$(terminal 'scigethelpers check gpu')" = "[SKIP] gpu    no NVIDIA GPU visible in this container" ] \
     && pass "scigethelpers check gpu skips without a GPU" || fail "scigethelpers check gpu skips without a GPU"
+terminal 'scigethelpers check t3' | grep -q '^\[SKIP\] t3 ' \
+    && pass "scigethelpers check t3 skips before T3 Code is started" \
+    || fail "scigethelpers check t3 skips before T3 Code is started (got: $(terminal 'scigethelpers check t3'))"
 info="$(terminal 'scigethelpers info')"
 grep -q '^Image: .*scigethelpers-cli.*slurm' <<<"${info}" && grep -qE '^CPUs: +2$' <<<"${info}" \
     && grep -qE '^Memory: +2\.0 GiB$' <<<"${info}" \
     && pass "scigethelpers info shows the components and the container's 2 CPUs and 2 GiB" \
     || { fail "scigethelpers info shows the components and the container's 2 CPUs and 2 GiB"; printf '%s\n' "${info}" | sed 's/^/        /'; }
+preflight_json="$(terminal 'scigethelpers agent preflight --json')"
+python3 -c 'import json, sys; d = json.loads(sys.argv[1]); assert d["lmod"]["available"] and d["slurm_capacity"]["available"]' "${preflight_json}" 2>/dev/null \
+    && pass "scigethelpers agent preflight --json reports Lmod and Slurm capacity" \
+    || fail "scigethelpers agent preflight --json reports Lmod and Slurm capacity"
 [ "$(terminal 'scigethelpers kernel list')" = "No container kernels registered. Add one with: scigethelpers kernel add <module>" ] \
     && pass "scigethelpers kernel list answers" || fail "scigethelpers kernel list answers"
+[ "$(terminal 'scigethelpers uv list')" = "No uv kernels registered. Create one with: scigethelpers uv init <dir>" ] \
+    && pass "scigethelpers uv list answers" || fail "scigethelpers uv list answers"
 
 # A module loaded in a terminal is recorded, and scigethelpers cite reads the
 # record. The catalogue is a local file: this check needs no network.
@@ -93,25 +106,52 @@ with tempfile.TemporaryDirectory() as td:
     run_uv("init", project)
     specs = list((data_dir / "kernels").glob("*/kernel.json"))
     assert len(specs) == 1, specs
+    spec_data = json.loads(specs[0].read_text())
+    assert spec_data["argv"][0] == "/opt/scigethelpers-cli/lib/kernel_wrapper.sh", spec_data["argv"]
     kernel_name = specs[0].parent.name
 
-    def exec_on_kernel(kname, folder):
+    # Verify `scigethelpers uv list --json` sees the registered kernel.
+    list_res = subprocess.run(["scigethelpers", "uv", "list", "--json"], env=env, capture_output=True, text=True, timeout=30)
+    assert list_res.returncode == 0, list_res.stderr
+    listed = json.loads(list_res.stdout)["kernels"]
+    assert len(listed) == 1 and listed[0]["name"] == kernel_name and listed[0]["available"] is True, listed
+
+    # Discover an expected MODULEPATH entry from the live modulepath.d provider
+    # and prove kernel_wrapper.sh / launch() restores it even when MODULEPATH
+    # is unset in the launching Jupyter server environment.
+    mp_probe = subprocess.run(
+        ["/etc/scidesktop/modulepath.d/50-sciget"],
+        capture_output=True, text=True, timeout=15,
+    )
+    expected_mod_dirs = [line.strip() for line in mp_probe.stdout.splitlines() if line.strip()]
+    assert expected_mod_dirs, f"50-sciget returned no module directories: {mp_probe.stderr}"
+    late_mod_dir = Path(expected_mod_dirs[0])
+
+    def exec_on_kernel(kname, folder, expect_mod_dir=None):
         km = KernelManager(
             kernel_name=kname,
             kernel_spec_manager=KernelSpecManager(kernel_dirs=[str(data_dir / "kernels")]),
         )
-        km.start_kernel(cwd=str(folder), env=dict(os.environ, CONDA_PREFIX="/other-env", PYTHONPATH="/missing"))
+        start_env = dict(os.environ, CONDA_PREFIX="/other-env", PYTHONPATH="/missing")
+        start_env.pop("MODULEPATH", None)
+        start_env.pop("_SCIGETHELPERS_MODULEPATH_REFRESHED", None)
+        km.start_kernel(cwd=str(folder), env=start_env)
         try:
             kc = km.blocking_client()
             kc.start_channels()
             try:
                 kc.wait_for_ready(timeout=60)
+                mod_check = (
+                    f"assert {str(expect_mod_dir)!r} in os.environ.get('MODULEPATH', '').split(':'), os.environ.get('MODULEPATH')\n"
+                    if expect_mod_dir else ""
+                )
                 code = (
                     "import os, sys\n"
                     f"assert sys.prefix == {str(folder / '.venv')!r}, sys.prefix\n"
                     "assert 'CONDA_PREFIX' not in os.environ\n"
                     "assert 'PYTHONPATH' not in os.environ\n"
-                    "print('UV_KERNEL_OK')\n"
+                    + mod_check
+                    + "print('UV_KERNEL_OK')\n"
                 )
                 msg_id = kc.execute(code)
                 out = []
@@ -131,7 +171,14 @@ with tempfile.TemporaryDirectory() as td:
         finally:
             km.shutdown_kernel(now=True)
 
-    exec_on_kernel(kernel_name, project)
+    exec_on_kernel(kernel_name, project, expect_mod_dir=late_mod_dir)
+
+    # Also verify a legacy kernelspec (without kernel_wrapper.sh in argv) still
+    # refreshes MODULEPATH inside launch().
+    legacy_spec = dict(spec_data, argv=spec_data["argv"][1:])
+    specs[0].write_text(json.dumps(legacy_spec, indent=2) + "\n")
+    exec_on_kernel(kernel_name, project, expect_mod_dir=late_mod_dir)
+    specs[0].write_text(json.dumps(spec_data, indent=2) + "\n")
 
     # Move the project, rebuild offline, re-execute, and cleanly remove.
     moved = tmp / "renamed analysis"

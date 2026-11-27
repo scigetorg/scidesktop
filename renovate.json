@@ -520,7 +520,7 @@
       ]
     },
     {
-      "description": "Shared Node.js build version (acp-adapters, jupyterlab-freebrowse, jupyterlab-slurm, jupyterlab-neuroglancer).",
+      "description": "Shared Node.js build version (acp-adapters, jupyterlab-freebrowse, jupyterlab-slurm, jupyterlab-neuroglancer, jupyterlab-scigethelpers).",
       "matchFileNames": [
         "docker-bake.hcl"
       ],
@@ -531,7 +531,18 @@
       "addLabels": [
         "component:acp-adapters",
         "component:jupyterlab-freebrowse",
-        "component:jupyterlab-slurm"
+        "component:jupyterlab-slurm",
+        "component:jupyterlab-scigethelpers"
+      ]
+    },
+    {
+      "description": "Component jupyterlab-scigethelpers: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/jupyterlab-scigethelpers/**"
+      ],
+      "groupName": "component jupyterlab-scigethelpers",
+      "addLabels": [
+        "component:jupyterlab-scigethelpers"
       ]
     },
     {
