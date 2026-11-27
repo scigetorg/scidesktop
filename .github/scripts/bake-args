@@ -1,7 +1,8 @@
 #!/bin/bash
 # Arguments for `docker buildx bake` in CI, one per line.
 #
-#   CACHE_REPO=ghcr.io/<owner>/scidesktop-cache bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|domain-cache|no-cache] [image]
+#   CACHE_REPO=ghcr.io/<owner>/scidesktop-cache [LOCAL_REGISTRY=127.0.0.1:5000] \
+#       bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|domain-cache|no-cache] [image...]
 #
 # Every component in components/ gets two GHCR registry cache tags per
 # architecture: <component>-<arch> (its component graph) and
@@ -14,8 +15,8 @@
 #   - `write-test-cache`: exports only `<component>-test-<arch>` (for `bake test`)
 #   - `write-cache`:      exports only `<component>-<arch>` and
 #                         `scidesktop-<arch>` with mode=min (for `bake scidesktop`)
-#   - `domain-cache <image>`: emits `cache-from` only for `scidesktop-<arch>`,
-#                         the domain-only components added by `<image>`
+#   - `domain-cache <image>...`: emits `cache-from` only for `scidesktop-<arch>`,
+#                         the domain-only components added by `<image>...`
 #                         (`<component>-test-<arch>`), and any build-only
 #                         components not copied into any image (e.g.
 #                         `micromamba`), avoiding ~100 redundant GHCR manifest
@@ -23,36 +24,49 @@
 #                         protection against BuildKit lazy cache loading or
 #                         local GC eviction.
 # Domain images get no cache-to lines because their components and base are
-# already cached. Every image in images/ is tagged <image>:<tag>. The lists come
-# from the folders: a new component or image needs no change here or in the
-# workflows.
+# already cached. Every image in images/ is tagged <image>:<tag> (or
+# ${LOCAL_REGISTRY}/<image>:<tag> with `type=registry,registry.insecure=true`
+# when LOCAL_REGISTRY is set). The lists come from the folders: a new component
+# or image needs no change here or in the workflows.
 #
 # When CACHE_REPO is unset (local runs) or `no-cache` is passed, no cache flags
 # are emitted. Writing the cache is best effort (ignore-error=true) so a passing
 # build does not fail if a transient registry error prevents saving cache tags.
 set -euo pipefail
-arch="${1:?usage: bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|domain-cache|no-cache] [image]}"
-tag="${2:?usage: bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|domain-cache|no-cache] [image]}"
+arch="${1:?usage: bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|domain-cache|no-cache] [image...]}"
+tag="${2:?usage: bake-args <arch> <tag> [read-cache|write-test-cache|write-cache|domain-cache|no-cache] [image...]}"
 mode="${3:-}"
-image_filter="${4:-}"
+if [ "$#" -ge 3 ]; then
+    shift 3
+else
+    shift "$#"
+fi
 cache_repo="${CACHE_REPO:-}"
 cache_repo="${cache_repo,,}"
+local_registry="${LOCAL_REGISTRY:-}"
+local_registry="${local_registry%/}"
 cd "$(dirname "$0")/../.."
 
 if [ -n "${cache_repo}" ] && [ "${mode}" != no-cache ]; then
     if [ "${mode}" = domain-cache ]; then
-        df="images/${image_filter:?domain-cache requires <image>}/Dockerfile"
-        [ -f "${df}" ] || { echo "bake-args: missing ${df}" >&2; exit 1; }
+        if [ "$#" -eq 0 ]; then
+            echo "bake-args: domain-cache requires at least one <image>" >&2
+            exit 1
+        fi
+        for image_filter in "$@"; do
+            df="images/${image_filter}/Dockerfile"
+            [ -f "${df}" ] || { echo "bake-args: missing ${df}" >&2; exit 1; }
+        done
         # Resolve added domain components and build-only components (such as
         # micromamba) from the canonical Bake graph via test/contract.py.
-        domain_lines="$(python3 - "${image_filter}" "${cache_repo}" "${arch}" <<'PY'
+        domain_lines="$(python3 - "${cache_repo}" "${arch}" "$@" <<'PY'
 import sys
 sys.path.insert(0, "test")
 import contract
 
-image, cache_repo, arch = sys.argv[1:4]
+cache_repo, arch, *images = sys.argv[1:]
 targets = contract.bake_print()["target"]
-added = sorted(contract.added_components(targets, image))
+added = sorted(set().union(*(contract.added_components(targets, img) for img in images)))
 build_only = sorted(
     set(contract.component_names())
     - {contract.OS_COMPONENT}
@@ -87,5 +101,10 @@ fi
 
 for dockerfile in images/*/Dockerfile; do
     image="$(basename "$(dirname "${dockerfile}")")"
-    echo "--set=${image}.tags=${image}:${tag}"
+    if [ -n "${local_registry}" ]; then
+        echo "--set=${image}.tags=${local_registry}/${image}:${tag}"
+        echo "--set=${image}.output=type=registry,registry.insecure=true"
+    else
+        echo "--set=${image}.tags=${image}:${tag}"
+    fi
 done

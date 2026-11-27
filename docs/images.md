@@ -260,6 +260,12 @@ to the workflow.
   `privileged-smoke.yml` read only. Make
   the `scidesktop-cache` GHCR package public after its first push so fork PRs
   can read it anonymously ([operator-runbook.md](operator-runbook.md#ghcr-build-cache-package)).
+  Inside each `.github/workflows/_image-build.yml` job, built images are
+  exported to an ephemeral loopback `registry:2` on an OS-assigned port
+  (`LOCAL_REGISTRY`, with `BUILDX_NO_DEFAULT_ATTESTATIONS=1`). This avoids
+  retransferring shared `scidesktop` layers in Docker export tarballs on load
+  into `dockerd` and lets Trivy scan via `--image-src remote` without full
+  `docker save` tarballs.
 - **Pull requests:** `.github/workflows/image.yml` invokes
   `.github/workflows/_image-build.yml` with `packages: read` (one runner per
   architecture, no emulation). It runs the contract checks, builds every
