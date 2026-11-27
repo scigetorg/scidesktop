@@ -87,5 +87,25 @@ RUN printf '#!/bin/bash\necho hook-ran\n' > /usr/local/bin/before-notebook.d/10-
     && rm -rf "${empty_home}" \
     && grep -q "ll is aliased to" <<<"${out}" \
     && grep -qxF 'PS1=neurodesktop-2026-11-27:\w\$ ' <<<"${out}" \
+    # An older unmodified Ubuntu ~/.bashrc is rewritten via one-shot PROMPT_COMMAND,
+    # while a deliberate custom PS1 in ~/.bashrc is preserved.
+    && stock_home=$(mktemp -d) && cp /etc/skel/.profile "${stock_home}/.profile" \
+    && printf '%s\n' \
+        'PS1='\''${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '\''' \
+        'PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"' \
+        > "${stock_home}/.bashrc" \
+    && chown -R "${NB_UID}:${NB_GID}" "${stock_home}" \
+    && out=$(runuser -u "${NB_USER}" -- env HOME="${stock_home}" SCIDESKTOP_FLAVOUR=scidesktop SCIDESKTOP_VERSION=2026-11-27 TERM=xterm-256color \
+        bash -lic 'eval "${PROMPT_COMMAND}"; printf "PS1=%s\n" "$PS1"' 2>/dev/null) \
+    && rm -rf "${stock_home}" \
+    && grep -qF 'scidesktop-2026-11-27' <<<"${out}" \
+    && ! grep -qF '\u@\h' <<<"${out}" \
+    && custom_home=$(mktemp -d) && cp /etc/skel/.profile "${custom_home}/.profile" \
+    && printf '%s\n' 'PS1="custom> "' > "${custom_home}/.bashrc" \
+    && chown -R "${NB_UID}:${NB_GID}" "${custom_home}" \
+    && out=$(runuser -u "${NB_USER}" -- env HOME="${custom_home}" SCIDESKTOP_FLAVOUR=scidesktop SCIDESKTOP_VERSION=2026-11-27 TERM=dumb \
+        bash -lic 'eval "${PROMPT_COMMAND}"; printf "PS1=%s\n" "$PS1"' 2>/dev/null) \
+    && rm -rf "${custom_home}" \
+    && grep -qxF 'PS1=custom> ' <<<"${out}" \
     # The OS layer has no Python; the smoke test parses these with Jupyter's.
     && test -x /usr/local/bin/start-notebook.py && test -x /usr/local/bin/start-singleuser.py

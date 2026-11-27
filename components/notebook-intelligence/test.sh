@@ -4,6 +4,7 @@ export PATH="/opt/conda/bin:${PATH}"
 
 ! test -e /opt/notebook-intelligence/lib/claude_agent_sdk/_bundled
 command -v claude >/dev/null
+PYTHONPATH=/opt/notebook-intelligence/lib python -m pip check
 grep -q 'scidesktop-nbi-settings-refresh' /opt/notebook-intelligence/lib/notebook_intelligence/labextension/static/*.js
 grep -q 'scidesktop-nbi-ollama-context-fallback' /opt/notebook-intelligence/lib/notebook_intelligence/llm_providers/ollama_llm_provider.py
 jupyter labextension list 2>&1 | grep -q '@plmbr/notebook-intelligence .*enabled.*OK'

@@ -398,6 +398,27 @@ if [ -n "${flavour}" ] && [ "${prompt_out}" = "${want_ps1}" ]; then
 else
     fail "prompt shows flavour-version without username/hostname (want: '${want_ps1}', got: '${prompt_out}')"
 fi
+# Existing PVC with an older unmodified Ubuntu ~/.bashrc still gets the
+# flavour-version prompt (via one-shot PROMPT_COMMAND), while a custom PS1 stays.
+stock_prompt=$(docker exec -u "${NB_USER}" -e TERM=dumb "${NAME}" bash -c '
+    d=$(mktemp -d); trap "rm -rf \"${d}\"" EXIT
+    cp /etc/skel/.profile "${d}/.profile"
+    cat <<'\''EOF'\'' > "${d}/.bashrc"
+PS1='\''${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '\''
+EOF
+    HOME="${d}" bash -lic '\''eval "${PROMPT_COMMAND}"; printf "%s" "$PS1"'\'' 2>/dev/null
+' 2>/dev/null || true)
+custom_prompt=$(docker exec -u "${NB_USER}" -e TERM=dumb "${NAME}" bash -c '
+    d=$(mktemp -d); trap "rm -rf \"${d}\"" EXIT
+    cp /etc/skel/.profile "${d}/.profile"
+    printf "%s\n" '\''PS1="my-prompt> "'\'' > "${d}/.bashrc"
+    HOME="${d}" bash -lic '\''eval "${PROMPT_COMMAND}"; printf "%s" "$PS1"'\'' 2>/dev/null
+' 2>/dev/null || true)
+if [ -n "${flavour}" ] && [ "${stock_prompt}" = "${want_ps1}" ] && [ "${custom_prompt}" = "my-prompt> " ]; then
+    pass "prompt overrides old stock Ubuntu .bashrc while preserving custom PS1"
+else
+    fail "prompt handling for old stock/custom .bashrc (stock='${stock_prompt}', custom='${custom_prompt}')"
+fi
 # sciget arrives configured from its system layer, with nothing copied into
 # the home. Which catalog an image has is its catalog component's to check
 # (test/sciget-catalog-check.sh); the base has none.

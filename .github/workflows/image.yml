@@ -244,6 +244,16 @@ jobs:
               rm -f /tmp/env-freeze.txt
               echo "::endgroup::"
           done
+          echo "::group::pip-audit scidesktop:ci /opt/notebook-intelligence/lib"
+          if docker run --rm --entrypoint /opt/conda/bin/python scidesktop:ci -c \
+              'import importlib.metadata as im; seen = set(); [print(n + "==" + d.version) for d in im.distributions(path=["/opt/notebook-intelligence/lib"]) if (n := d.metadata.get("Name")) and (n.lower(), d.version) not in seen and not seen.add((n.lower(), d.version))]' \
+              > /tmp/env-freeze.txt; then
+              /tmp/pip-audit-venv/bin/pip-audit -r /tmp/env-freeze.txt --no-deps --disable-pip || failed=1
+              rm -f /tmp/env-freeze.txt
+          else
+              failed=1
+          fi
+          echo "::endgroup::"
           rm -rf /tmp/pip-audit-venv /tmp/trivy /tmp/trivy.tar.gz
           exit "${failed}"
 
