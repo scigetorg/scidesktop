@@ -14,8 +14,8 @@ ARG APT_CACHE_ID
 ARG VSCODE_NIIVUE_VERSION
 ARG VSCODE_NIIVUE_SHA256
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-cache-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/cache/apt,sharing=private \
+    --mount=type=cache,id=apt-lists-${APT_CACHE_ID}-plain-${TARGETARCH},target=/var/lib/apt/lists,sharing=private \
     apt-get update && apt-get install --no-install-recommends -y curl ca-certificates jq unzip
 RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
     --mount=type=bind,from=components,source=code-server/install-extension,target=/usr/local/bin/install-extension \

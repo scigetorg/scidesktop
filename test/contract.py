@@ -13,13 +13,18 @@
 Exit status is non-zero when any rule is broken; each violation is printed
 with the rule it breaks.
 """
+import concurrent.futures
+from collections import deque
 import json
+import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 from pathlib import Path
 
 import yaml
@@ -561,23 +566,36 @@ def static():
             if not isinstance(specs_val, str):
                 continue
             code = strip_shell_comments_and_heredocs(step["run"])
-            loop_m = re.search(
+            for loop_m in re.finditer(
                 r"^\s*for\s+spec\s+in\s+\$\{PIP_AUDIT_SPECS\}\s*;\s*do\s*\n(.*?)^\s*done\b",
                 code,
                 re.M | re.S,
-            )
-            if loop_m and re.search(
-                r"""^\s*/tmp/pip-audit-venv/bin/pip-audit\s+-r\s+(?:/tmp/env-freeze\.txt|"/tmp/env-freeze\.txt"|'/tmp/env-freeze\.txt')(?:\s|[;&|]|$)""",
-                loop_m.group(1),
-                re.M,
             ):
-                audit_step = (step, specs_val.split())
+                body = loop_m.group(1)
+                freeze_m = re.search(
+                    r"""docker\s+run\b.*?^\s*>\s*([^\s;&|]+)(?:\s|[;&|]|$)""",
+                    body,
+                    re.M | re.S,
+                )
+                audit_m = re.search(
+                    r"""^\s*/tmp/pip-audit-venv/bin/pip-audit\s+-r\s+([^\s;&|]+)(?:\s|[;&|]|$)""",
+                    body,
+                    re.M,
+                )
+                if freeze_m and audit_m and freeze_m.group(1).strip("\"'") == audit_m.group(1).strip("\"'"):
+                    audit_step = (step, specs_val.split())
+                    break
+            if audit_step is not None:
                 break
         if audit_step is None:
             fail("S6", f"{rel(CI_BUILD)}: jobs.build must have a step with env.PIP_AUDIT_SPECS looped into `/tmp/pip-audit-venv/bin/pip-audit`")
         else:
             step, specs = audit_step
             audited = set(specs)
+            for base_py in ("/opt/conda/bin/python", "/opt/selkies/bin/python"):
+                expected_spec = f"{BASE_IMAGE}:ci:{base_py}"
+                if expected_spec not in audited:
+                    fail("S6", f"{rel(CI_BUILD)}: env.PIP_AUDIT_SPECS in {step.get('name')!r} omits base interpreter {expected_spec}")
             for img in pub_imgs:
                 if img not in targets:
                     continue
@@ -737,31 +755,94 @@ def static():
                 fail("S5", f"docker-bake.hcl:{i+1}: {name} is for an architecture components/target-arch does not list")
 
 
+_ACTIVE_PROCS = set()
+_ACTIVE_PROCS_LOCK = threading.Lock()
+
+
+def _terminate_active_procs():
+    with _ACTIVE_PROCS_LOCK:
+        procs = list(_ACTIVE_PROCS)
+    for proc in procs:
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+    for proc in procs:
+        try:
+            proc.wait(timeout=3)
+        except (subprocess.TimeoutExpired, OSError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+
+
 def component_tar(target):
     """Stream a target's filesystem and return {path: (type, mode, uid, gid)}."""
-    # stderr goes to a file: a pipe left unread while the tar streams can
-    # fill and deadlock both processes.
-    errlog = tempfile.TemporaryFile()
-    proc = subprocess.Popen(
-        ["docker", "buildx", "bake", "--allow=fs.read=..", "--progress=quiet", target,
-         "--set", f"{target}.output=type=tar,dest=-"],
-        cwd=ROOT, stdout=subprocess.PIPE, stderr=errlog)
-    entries, manifests = {}, {}
-    with tarfile.open(fileobj=proc.stdout, mode="r|") as tar:
-        for m in tar:
-            path = "/" + m.name.lstrip("./").rstrip("/")
-            if path == "/":
+    # Retry once on BuildKit's transient graph-state race when concurrent bakes
+    # solve shared component vertices (os-ubuntu, micromamba).
+    for attempt in (1, 2):
+        # stderr goes to a file: a pipe left unread while the tar streams can
+        # fill and deadlock both processes.
+        with tempfile.TemporaryFile() as errlog:
+            proc = subprocess.Popen(
+                ["docker", "buildx", "bake", "--allow=fs.read=..", "--progress=quiet", target,
+                 "--set", f"{target}.output=type=tar,dest=-"],
+                cwd=ROOT, stdout=subprocess.PIPE, stderr=errlog)
+            with _ACTIVE_PROCS_LOCK:
+                _ACTIVE_PROCS.add(proc)
+            entries, manifests = {}, {}
+            tar_err = None
+            try:
+                with tarfile.open(fileobj=proc.stdout, mode="r|") as tar:
+                    for m in tar:
+                        path = "/" + m.name.lstrip("./").rstrip("/")
+                        if path == "/":
+                            continue
+                        kind = "dir" if m.isdir() else "link" if m.issym() else "file"
+                        entries[path] = (kind, m.mode & 0o7777, m.uid, m.gid)
+                        if path.startswith("/opt/scidesktop/manifest.d/") and m.isfile():
+                            extracted = tar.extractfile(m)
+                            if extracted is not None:
+                                manifests[path] = extracted.read()
+                # Drain any trailing tar trailer bytes so buildx does not get EPIPE.
+                if proc.stdout is not None:
+                    with open(os.devnull, "wb") as devnull:
+                        shutil.copyfileobj(proc.stdout, devnull)
+            except Exception as exc:
+                tar_err = exc
+            finally:
+                if proc.stdout is not None:
+                    proc.stdout.close()
+                # Give buildx a short window to flush stderr (e.g. graph-state
+                # diagnostics) before forcing termination on tar errors.
+                try:
+                    rc = proc.wait(timeout=5 if tar_err is not None else None)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    rc = proc.wait()
+                with _ACTIVE_PROCS_LOCK:
+                    _ACTIVE_PROCS.discard(proc)
+            errlog.seek(0)
+            err = errlog.read().decode(errors="replace")
+            if rc == 0 and tar_err is None:
+                return entries, manifests
+            if attempt == 1 and "inconsistent graph state" in err:
                 continue
-            kind = "dir" if m.isdir() else "link" if m.issym() else "file"
-            entries[path] = (kind, m.mode & 0o7777, m.uid, m.gid)
-            if path.startswith("/opt/scidesktop/manifest.d/") and m.isfile():
-                manifests[path] = tar.extractfile(m).read()
-    rc = proc.wait()
-    errlog.seek(0)
-    err = errlog.read().decode(errors="replace")
-    if rc != 0:
-        sys.exit(f"building {target} failed:\n{err}")
-    return entries, manifests
+            detail = f"{tar_err}\n{err}" if tar_err is not None else err
+            raise RuntimeError(f"building {target} failed:\n{detail}")
+
+
+def _layer_workers():
+    """Parallelism for `layers()`, overridable via CONTRACT_LAYERS_WORKERS."""
+    raw = os.environ.get("CONTRACT_LAYERS_WORKERS")
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    # Conservative default: 2 on 4-vCPU runners, 4 on 8-vCPU runners.
+    return min(4, max(2, (os.cpu_count() or 2) // 2))
 
 
 def layers():
@@ -770,50 +851,85 @@ def layers():
     # Two components meet when some image holds both. Components no image
     # combines may be alternatives for one file, as the sciget catalogs are.
     together = [image_components(targets, image) for image in image_names()]
-    os_entries, _ = component_tar(OS_COMPONENT)
-    print(f"  {OS_COMPONENT}: {len(os_entries)} entries")
-    seen = {}  # path -> components, for non-directories
-    dirs = {}  # path -> (meta, component)
-    for u in assembled:
-        entries, manifests = component_tar(u)
-        print(f"  {u}: {len(entries)} entries")
-        # L4: the component's manifest entry, valid JSON.
-        want = f"/opt/scidesktop/manifest.d/{u}.json"
-        if want not in manifests:
-            fail("L4", f"{u}: no manifest entry {want}")
-        else:
+    ordered_targets = [OS_COMPONENT, *assembled]
+    workers = _layer_workers()
+
+    # Bounded sliding window: caps both active bake subprocesses and completed
+    # path dictionaries waiting in memory while consuming results in strict
+    # deterministic order (L1/L3 messages depend on submission order).
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    window = deque()
+    pending = iter(ordered_targets)
+
+    def _fill():
+        while len(window) < workers:
             try:
-                json.loads(manifests[want])
-            except ValueError as e:
-                fail("L4", f"{u}: {want} is not valid JSON: {e}")
-        for path, (kind, mode, uid, gid) in entries.items():
-            if kind != "dir":
-                # L1: one owner per file in an image (except domain sciget-*
-                # catalog components intentionally narrowing sciget-all's
-                # /etc/sciget/catalogs.json). L2: no shadowing the OS layer.
-                for other in seen.setdefault(path, []):
-                    if path == "/etc/sciget/catalogs.json" and "sciget-all" in (other, u) \
-                            and other.startswith("sciget-") and u.startswith("sciget-"):
-                        continue
-                    if any({other, u} <= held for held in together):
-                        fail("L1", f"{path} is written by both {other} and {u}")
-                seen[path].append(u)
-                if path in os_entries:
-                    fail("L2", f"{u}: {path} shadows a file in the OS layer")
+                tgt = next(pending)
+            except StopIteration:
+                break
+            window.append((tgt, executor.submit(component_tar, tgt)))
+
+    try:
+        _fill()
+        os_target, os_future = window.popleft()
+        assert os_target == OS_COMPONENT
+        os_entries, _ = os_future.result()
+        _fill()
+        print(f"  {OS_COMPONENT}: {len(os_entries)} entries")
+        seen = {}  # path -> components, for non-directories
+        dirs = {}  # path -> (meta, component)
+        while window:
+            u, fut = window.popleft()
+            entries, manifests = fut.result()
+            _fill()
+            print(f"  {u}: {len(entries)} entries")
+            # L4: the component's manifest entry, valid JSON.
+            want = f"/opt/scidesktop/manifest.d/{u}.json"
+            if want not in manifests:
+                fail("L4", f"{u}: no manifest entry {want}")
             else:
-                # L3: a directory a component also creates must match the existing
-                # one, or the linked layer silently changes it.
-                meta = (mode, uid, gid)
-                if path in os_entries and os_entries[path][0] == "dir" and os_entries[path][1:] != meta:
-                    fail("L3", f"{u}: {path} is {oct(mode)} {uid}:{gid}, the OS layer has "
-                               f"{oct(os_entries[path][1])} {os_entries[path][2]}:{os_entries[path][3]}")
-                if path in dirs and dirs[path][0] != meta:
-                    fail("L3", f"{u}: {path} is {oct(mode)} {uid}:{gid}, {dirs[path][1]} has "
-                               f"{oct(dirs[path][0][0])} {dirs[path][0][1]}:{dirs[path][0][2]}")
-                dirs.setdefault(path, (meta, u))
-            # L5: nothing root-owned is writable by group or others.
-            if kind != "link" and uid == 0 and mode & 0o022:
-                fail("L5", f"{u}: {path} is root-owned and group/other writable ({oct(mode)})")
+                try:
+                    json.loads(manifests[want])
+                except ValueError as e:
+                    fail("L4", f"{u}: {want} is not valid JSON: {e}")
+            for path, (kind, mode, uid, gid) in entries.items():
+                if kind != "dir":
+                    # L1: one owner per file in an image (except domain sciget-*
+                    # catalog components intentionally narrowing sciget-all's
+                    # /etc/sciget/catalogs.json). L2: no shadowing the OS layer.
+                    for other in seen.setdefault(path, []):
+                        if path == "/etc/sciget/catalogs.json" and "sciget-all" in (other, u) \
+                                and other.startswith("sciget-") and u.startswith("sciget-"):
+                            continue
+                        if any({other, u} <= held for held in together):
+                            fail("L1", f"{path} is written by both {other} and {u}")
+                    seen[path].append(u)
+                    if path in os_entries:
+                        fail("L2", f"{u}: {path} shadows a file in the OS layer")
+                else:
+                    # L3: a directory a component also creates must match the existing
+                    # one, or the linked layer silently changes it.
+                    meta = (mode, uid, gid)
+                    if path in os_entries and os_entries[path][0] == "dir" and os_entries[path][1:] != meta:
+                        fail("L3", f"{u}: {path} is {oct(mode)} {uid}:{gid}, the OS layer has "
+                                   f"{oct(os_entries[path][1])} {os_entries[path][2]}:{os_entries[path][3]}")
+                    if path in dirs and dirs[path][0] != meta:
+                        fail("L3", f"{u}: {path} is {oct(mode)} {uid}:{gid}, {dirs[path][1]} has "
+                                   f"{oct(dirs[path][0][0])} {dirs[path][0][1]}:{dirs[path][0][2]}")
+                    dirs.setdefault(path, (meta, u))
+                # L5: nothing root-owned is writable by group or others.
+                if kind != "link" and uid == 0 and mode & 0o022:
+                    fail("L5", f"{u}: {path} is root-owned and group/other writable ({oct(mode)})")
+    except RuntimeError as exc:
+        _terminate_active_procs()
+        executor.shutdown(wait=True, cancel_futures=True)
+        sys.exit(str(exc))
+    except BaseException:
+        _terminate_active_procs()
+        executor.shutdown(wait=True, cancel_futures=True)
+        raise
+    else:
+        executor.shutdown(wait=True)
 
 
 def image(name, ref):
