@@ -120,7 +120,7 @@ module adapter and `neurodesk-lc-materialize` are not ported.
 
 ```sh
 lc compute resources                   # the shapes lc can ask the queue for
-lc compute launch --cpus 2 --memory 8  # an allocation; prints its ID
+lc compute launch --cpus 1+ --memory 1+  # the standard allocation; prints its ID
 lc materialize <id> baseline/answer    # builds an output on it
 lc compute down <id>
 ```
@@ -131,24 +131,33 @@ larger than the node. The queue is sized per session, so no fixed catalog
 fits every session: neurodesktop's 2 CPUs and 8 GiB fail on a 4 GB container
 ([neurodesk/neurodesktop#1393](https://github.com/neurodesk/neurodesktop/issues/1393)).
 `/usr/local/bin/lc` therefore writes a catalog from `sinfo` before it runs the
-real `lc`, with two offers on the queue's default partition:
+real `lc`, with two offers on the queue's default partition (jobs name no
+partition, so Slurm sends them to its default, whatever the name):
 
 | Offer | CPUs | Memory |
 | --- | --- | --- |
 | `standard` | 2, or the node's if fewer | 8 GiB, or the node's if less |
 | `node` | the node's | the node's; left out when it equals `standard` |
 
-So `lc compute launch --cpus 2 --memory 8` works on any node at least that
-size. The workers run `/opt/lightcone/bin/python`; an allocation runs one task
+A request must equal an offer's CPUs and memory, or name a minimum with a
+trailing `+`: `--cpus 1+ --memory 1+` takes the first offer, `standard`, on
+any node. `--cpus 2 --memory 8` works on a node at least that size. A bare
+`--memory` is in GiB and `lc compute resources` rounds it; to name a small
+node's memory exactly, give the MiB that `sinfo -h -o %m` prints as
+`--memory <MiB>MB`. The workers run `/opt/lightcone/bin/python`; an allocation runs one task
 per CPU less one (at least one) and lasts 2 hours by default; local compute is
 off. The file is
 `${XDG_RUNTIME_DIR:-/tmp}/scidesktop-lightcone-<uid>/compute.yaml`, rewritten
-at each `lc` command, in a directory only the user can write (`lc` warns and
-writes nothing if the directory is anyone else's or writable by others).
+at each `lc` command, in a directory only the user can write. `XDG_RUNTIME_DIR`
+is passed over for the temporary directory when another user could rename
+entries on its path (a directory writable by others and not sticky); `lc`
+warns and writes nothing if the catalog's own directory is anyone else's or
+writable by others, or if the file cannot be written.
 
 **Your own catalog wins.** `lc` writes nothing and runs unchanged when
 `LC_COMPUTE_CONFIG` is set, when `~/.lightcone/compute.yaml` exists, when
-`sinfo` does not answer, or when `SLURM_CONF` names another cluster's
+`sinfo` does not answer or reports no default partition (`SINFO_*` selections
+and `SLURM_CLUSTERS` are ignored, as `lc`'s job submission ignores them), or when `SLURM_CONF` names another cluster's
 configuration: its nodes do not have this image's Python, so its catalog is
 the site's to write. To keep a shape of your own, copy the generated file to
 `~/.lightcone/compute.yaml` and edit it.

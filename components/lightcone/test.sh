@@ -26,10 +26,12 @@ assert m.version("astra-tools") == "0.2.18" and m.version("astra-spec") == "0.0.
 import dask, distributed, lightcone'
 
 # queue <partition> <cpus> <MB>: the session's queue as sinfo reports it,
-# with another partition beside it that is not the default.
+# with another partition beside it that is not the default. Asked to select
+# another partition or cluster, it reports one lc does not submit to.
 queue() {
     cat > "${stubs}/sinfo" <<STUB
 #!/bin/sh
+if [ -n "\${SINFO_PARTITION:-}\${SLURM_CLUSTERS:-}" ]; then echo "other* 1 100"; exit; fi
 printf '%s\n' "debug 64 512000" "$1* $2 $3"
 STUB
     chmod +x "${stubs}/sinfo"
@@ -54,28 +56,35 @@ for o in offers:
 queue scidesktop 16 3328
 export PATH="${stubs}:${PATH}"
 got="$(offers)"
-want="standard 2 3.25 scidesktop /opt/lightcone/bin/python
-node 16 3.25 scidesktop /opt/lightcone/bin/python"
+want="standard 2 3.25 None /opt/lightcone/bin/python
+node 16 3.25 None /opt/lightcone/bin/python"
 [ "${got}" = "${want}" ] || fail "small node offers:
 ${got}"
 catalog="${runtime}/scidesktop-lightcone-$(id -u)"
 [ "$(stat -c '%u %a' "${catalog}")" = "$(id -u) 700" ] || fail "catalog directory: $(stat -c '%u %a' "${catalog}")"
 grep -q 'memory: 3328MB' "${catalog}/compute.yaml" || fail "memory not in whole MB"
 grep -q '^allow_local: false' "${catalog}/compute.yaml" || fail "local compute allowed"
+# The small node's exact memory is not a round GiB: a minimum request plans it.
+plan="$(lc compute launch --cpus 1+ --memory 1+ --dry-run --json)" || fail "minimum dry run: ${plan}"
+[[ "${plan}" == *standard* ]] || fail "minimum plan: ${plan}"
+# sinfo selections lc's sbatch does not see do not size the catalog.
+[ "$(SINFO_PARTITION=other SLURM_CLUSTERS=other offers | cut -d' ' -f1-2 | head -1)" = "standard 2" ] \
+    || fail "sinfo selections sized the catalog"
 
 # A big node: the standard shape is Neurodesktop's, which
 # `lc compute launch --cpus 2 --memory 8` plans; the whole node is offered too.
-queue mine 32 128000
+# The default partition may have any name Slurm accepts: jobs go to it unnamed.
+queue _mine 32 128000
 got="$(offers)"
-want="standard 2 8.0 mine /opt/lightcone/bin/python
-node 32 125.0 mine /opt/lightcone/bin/python"
+want="standard 2 8.0 None /opt/lightcone/bin/python
+node 32 125.0 None /opt/lightcone/bin/python"
 [ "${got}" = "${want}" ] || fail "big node offers:
 ${got}"
 plan="$(lc compute launch --cpus 2 --memory 8 --dry-run --json)" || fail "dry run: ${plan}"
 printf '%s' "${plan}" | /opt/lightcone/bin/python -c '
 import json, sys
 text = json.dumps(json.load(sys.stdin))
-assert "standard" in text and "--partition=mine" in text, text' || fail "plan: ${plan}"
+assert "standard" in text and "--partition" not in text, text' || fail "plan: ${plan}"
 
 # A node exactly the standard shape is offered once.
 queue scidesktop 2 8192
@@ -106,6 +115,27 @@ chmod 0777 "${catalog}"
 [ "$(offers 2>/dev/null | cut -d' ' -f1)" = local ] || fail "unsafe directory used"
 warning="$(lc --version 2>&1 >/dev/null)"
 [[ "${warning}" == *"not a private directory"* ]] || fail "unsafe directory not reported: ${warning}"
+rm -rf "${catalog}"
+
+# A runtime directory others could rename things in is not used; the sticky
+# temporary directory is.
+shared="$(mktemp -d)"
+chmod 0777 "${shared}"
+tmp_catalog="$(/opt/lightcone/bin/python -c 'import tempfile; print(tempfile.gettempdir())')/scidesktop-lightcone-$(id -u)"
+rm -rf "${tmp_catalog}"
+XDG_RUNTIME_DIR="${shared}" lc --version > /dev/null
+[ ! -e "${shared}/scidesktop-lightcone-$(id -u)" ] || fail "catalog written under a shared directory"
+[ -f "${tmp_catalog}/compute.yaml" ] || fail "no catalog in the temporary directory"
+rm -rf "${shared}" "${tmp_catalog}"
+
+# A catalog lc cannot write, or sinfo output that is not UTF-8, still runs lc.
+mkdir -p "${catalog}/compute.yaml"
+chmod 0700 "${catalog}"
+[ "$(lc --version 2>/dev/null)" = "lc, version 0.5.0" ] || fail "unwritable catalog stopped lc"
+[ -z "$(find "${catalog}" -name '.compute-*')" ] || fail "temporary catalog left behind"
+rm -rf "${catalog}"
+printf '#!/bin/sh\nprintf "scidesktop* 2 \\377\\n"\n' > "${stubs}/sinfo"
+[ "$(lc --version 2>/dev/null)" = "lc, version 0.5.0" ] || fail "non-UTF-8 sinfo stopped lc"
 
 # Nothing root-owned is writable by group or others, and the user can read it all.
 if find /opt/lightcone /usr/local/bin/lc ! -type l \( -perm /022 -o ! -readable \) -print | grep .; then
