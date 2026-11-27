@@ -34,5 +34,7 @@ COPY --link --from=viash-hub / /
 COPY --link --from=genomics-env / /
 COPY --link --from=genomics-agents / /
 
+ENV SCIDESKTOP_FLAVOUR=genomicsdesktop
+
 LABEL org.opencontainers.image.title="genomicsdesktop" \
       org.opencontainers.image.description="scidesktop for genomics and single-cell bioinformatics: Viash Hub & OpenPipelines catalog, rootless Apptainer Nextflow profiles, EESSI genomics modules, agent instructions, and locked Python 3.13 genomics/single-cell kernel"

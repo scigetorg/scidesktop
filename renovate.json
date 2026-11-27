@@ -28,7 +28,8 @@
       "/^components/preclinical-env/requirements\\.in$/",
       "/^components/molecular-imaging-env/requirements\\.in$/",
       "/^components/genomics-env/requirements\\.in$/",
-      "/^components/neuroimaging-env/requirements\\.in$/"
+      "/^components/neuroimaging-env/requirements\\.in$/",
+      "/^components/notebook-intelligence/requirements\\.in$/"
     ]
   },
   "customDatasources": {
@@ -228,6 +229,16 @@
       "groupName": "component lightcone",
       "addLabels": [
         "component:lightcone"
+      ]
+    },
+    {
+      "description": "Component notebook-intelligence: its updates arrive together and run its own test.",
+      "matchFileNames": [
+        "components/notebook-intelligence/**"
+      ],
+      "groupName": "component notebook-intelligence",
+      "addLabels": [
+        "component:notebook-intelligence"
       ]
     },
     {

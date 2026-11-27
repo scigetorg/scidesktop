@@ -50,7 +50,6 @@ components from `components/`.
 | --- | --- |
 | `sciget-neuroimaging` | narrows sciget to the neuroimaging catalog |
 | `neurodesk-cvmfs` | the Neurodesk CVMFS repository: its mirrors and public key |
-| `vscode-coding-agents` | Claude Code and Codex VS Code extensions |
 | `neurodesk-agents` | the agents' instructions for Neurodesk tools, and the Neurodesk model provider for OpenCode |
 | `neuroimaging-env` | the `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue`, `datalad`, `xnat`, `nf-core`) |
 | `neurodesk-compat` | FreeSurfer/nf-neuro defaults, bundled `nf-neuro` modules, local module discovery and getting-started notebook |

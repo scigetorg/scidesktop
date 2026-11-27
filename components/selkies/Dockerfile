@@ -38,7 +38,7 @@ RUN --mount=type=bind,from=components,source=target-arch,target=/usr/local/bin/t
 # without group or other write permission whatever the checkout's umask.
 FROM ${UBUNTU_IMAGE} AS rootfs
 COPY rootfs/ /rootfs/
-RUN chmod -R go-w /rootfs
+RUN chmod -R a+rX,go-w /rootfs
 
 # The desktop: Selkies, its launch scripts, and the /desktop entry for
 # jupyter-server-proxy (rootfs/etc/scidesktop/jupyter_server_config.d).

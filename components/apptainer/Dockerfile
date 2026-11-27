@@ -81,7 +81,7 @@ RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
 # without group or other write permission whatever the checkout's umask.
 FROM ${UBUNTU_IMAGE} AS rootfs
 COPY rootfs/ /rootfs/
-RUN chmod -R go-w /rootfs
+RUN chmod -R a+rX,go-w /rootfs
 
 # Apptainer, its command links and its startup hook (10-apptainer).
 FROM scratch AS component

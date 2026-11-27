@@ -27,5 +27,7 @@ COPY --link --from=vscode-niivue / /
 COPY --link --from=jupyterlab-niivue / /
 COPY --link --from=preclinical-env / /
 
+ENV SCIDESKTOP_FLAVOUR=preclinicaldesktop
+
 LABEL org.opencontainers.image.title="preclinicaldesktop" \
       org.opencontainers.image.description="scidesktop for preclinical imaging: preclinical sciget catalog, NiiVue viewers, and locked Python 3.13 small-animal MRI, CT and PET/SPECT kernel"

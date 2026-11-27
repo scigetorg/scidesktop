@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 # without group or other write permission whatever the checkout's umask.
 FROM ${UBUNTU_IMAGE} AS rootfs
 COPY rootfs/ /rootfs/
-RUN chmod -R go-w /rootfs
+RUN chmod -R a+rX,go-w /rootfs
 
 # sciget, its system settings (/etc/sciget/config.json, read on every run
 # under each user's own) and the hook that downloads the catalogs at start

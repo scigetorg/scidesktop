@@ -47,7 +47,7 @@ RUN --mount=type=bind,from=components,source=fetch,target=/usr/local/bin/fetch \
 # without group or other write permission whatever the checkout's umask.
 FROM ${UBUNTU_IMAGE} AS rootfs
 COPY rootfs/ /rootfs/
-RUN chmod -R go-w /rootfs && install -d -m 0755 /rootfs/var/cache/lmod
+RUN chmod -R a+rX,go-w /rootfs && install -d -m 0755 /rootfs/var/cache/lmod
 
 # Lmod and its shell setup: login shells via /etc/profile.d, other interactive
 # shells via /etc/bash.bashrc.d.

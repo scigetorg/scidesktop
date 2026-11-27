@@ -82,7 +82,6 @@ component's test starts both against the agents in `coding-agents`.
 
 ## What is left out
 
-- **Notebook Intelligence**, neurodesktop's other chat panel.
 - **Seeding `AGENTS.md` into a chat's folder**, which neurodesktop does with a
   contents hook. The agents here read their instructions from the home
   ([coding-agents.md](coding-agents.md)).
@@ -105,3 +104,9 @@ Jupyter AI and its packages are BSD-3-Clause (Project Jupyter). The
 workarounds file is MIT, from neurodesktop. The two adapters are Apache-2.0;
 their dependencies' licences are in `/opt/acp-adapters/lib/node_modules`.
 Node.js is MIT with the notices in `/opt/acp-adapters/node/LICENSE`.
+Notebook Intelligence (`components/notebook-intelligence`) is GPL-3.0,
+installed unmodified from its upstream PyPI release (without neurodesktop's
+settings-refresh or Ollama empty-family patches, so upstream's tagged release
+is the exact corresponding source), with its licence text in
+`/opt/notebook-intelligence/licenses/LICENSE` and corresponding-source
+directions in `/opt/notebook-intelligence/licenses/SOURCE`.

@@ -9,10 +9,11 @@ that builds on it and adds what its community needs.
 ```
 images/
   scidesktop/      the base; includes all sciget domains (sciget-all),
-                   Slurm + jupyterlab-slurm, VS Code (code-server, vscode-core),
-                   DataLad, workflow engines (Nextflow, nf-test, Viash, Snakemake),
-                   VirtualGL, scigethelpers-cli, coding agents, ACP adapters,
-                   T3 Code and T3 Connect
+                   Slurm + jupyterlab-slurm, VS Code (code-server, vscode-core,
+                   vscode-coding-agents), DataLad, workflow engines (Nextflow,
+                   nf-test, Viash, Snakemake), VirtualGL, scigethelpers-cli,
+                   coding agents, ACP adapters, Notebook Intelligence, T3 Code
+                   and T3 Connect
   microdesktop/    FROM scidesktop, plus sciget-microscopy,
                    jupyterlab-neuroglancer and microscopy-env: microscopy
   datadesktop/     FROM scidesktop, plus sciget-datascience,
@@ -30,7 +31,7 @@ images/
   genomicsdesktop/ FROM scidesktop, plus sciget-genomics, viash-hub,
                    genomics-env and genomics-agents: genomics and single-cell
   neurodesktop/    FROM scidesktop, plus sciget-neuroimaging, neurodesk-cvmfs,
-                   vscode-niivue, vscode-coding-agents, jupyterlab-niivue,
+                   vscode-niivue, jupyterlab-niivue,
                    jupyterlab-freebrowse, neurodesk-agents, neuroimaging-env
                    and neurodesk-compat: neuroimaging
 ```
@@ -41,9 +42,9 @@ images/
 | `eessi-cvmfs` (EESSI `software.eessi.io` CVMFS config, Lmod hook, `eessi-launch`, `eessi-catalog` syncing `<domain>/eessi.json`, explicit **EESSI** desktop launchers) | yes | yes | yes | yes | yes | yes | yes | yes |
 | `virtualgl`, `datalad`, `workflow-engines`, `lightcone`, `scigethelpers-cli`, `jupyterlab-scigethelpers` | yes | yes | yes | yes | yes | yes | yes | yes |
 | `rclone`, `gh`, `aria2`, `tcsh` (data transfer, GitHub CLI and C shell) | yes | yes | yes | yes | yes | yes | yes | yes |
-| `code-server`, `vscode-core` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `code-server`, `vscode-core`, `vscode-coding-agents` ([neurodesktop.md](neurodesktop.md#vs-code)) | yes | yes | yes | yes | yes | yes | yes | yes |
 | `sciget-all` ([tool catalogs](#tool-catalogs)) | yes | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed | narrowed |
-| `coding-agents`, `t3-code`, `antigravity-acp` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)) | yes | yes | yes | yes | yes | yes | yes | yes |
+| `coding-agents`, `t3-code`, `antigravity-acp` ([coding-agents.md](coding-agents.md)), `t3-connect` ([t3-connect.md](t3-connect.md)), `notebook-intelligence` | yes | yes | yes | yes | yes | yes | yes | yes |
 | `acp-adapters` ([jupyter-ai.md](jupyter-ai.md#the-adapters-for-codex-and-claude-code)) | yes | yes | yes | yes | yes | yes | yes | yes |
 | `sciget-neuroimaging` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | no | no | yes |
 | `sciget-microscopy`, `microscopy-env` ([tool catalogs](#tool-catalogs)) | no | yes | no | no | no | no | no | no |
@@ -56,7 +57,7 @@ images/
 | `sciget-genomics`, `viash-hub`, `genomics-env`, `genomics-agents` ([tool catalogs](#tool-catalogs)) | no | no | no | no | no | no | yes | no |
 | `jupyterlab-niivue`, `vscode-niivue` ([viewers.md](viewers.md)) | no | no | no | no | yes | yes | no | yes |
 | `ai-ready` ([ai-ready.md](ai-ready.md)) | no | no | yes | no | no | no | no | no |
-| `jupyterlab-freebrowse`, `vscode-coding-agents`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | yes |
+| `jupyterlab-freebrowse`, `neuroimaging-env`, `neurodesk-compat` ([viewers.md](viewers.md), [neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | yes |
 | `neurodesk-cvmfs`, `neurodesk-agents` ([neurodesktop.md](neurodesktop.md)) | no | no | no | no | no | no | no | yes |
 
 ## How a domain image gets the base

@@ -4,17 +4,17 @@
 [neurodesk/neurodesktop](https://github.com/neurodesk/neurodesktop) gives
 them, built from scidesktop components. `scidesktop` already ships all
 generic capabilities shared across every desktop (`microdesktop`, `datadesktop`,
-`neurodesktop`): Slurm + `jupyterlab-slurm`, VS Code (`code-server`,
-`vscode-core`), DataLad (+ `datalad-osf`), workflow engines
-(Nextflow, nf-test, Snakemake + Slurm executor plugin), VirtualGL,
-`scigethelpers`, expanded Jupyter extensions (`bash_kernel`,
+`neurodesktop`, ...): Slurm + `jupyterlab-slurm`,
+VS Code (`code-server`, `vscode-core`, `vscode-coding-agents`), DataLad (+
+`datalad-osf`), workflow engines (Nextflow, nf-test, Snakemake + Slurm executor
+plugin), VirtualGL, `scigethelpers`, expanded Jupyter extensions (`bash_kernel`,
 `jupyter-resource-usage`, `jupyterlab_rise`, `jupyter-scheduler`,
 `nbgitpuller`, `papermill`, `pytest`, `anywidget`, `ipycanvas`, `uv`), remote
 mount/transfer tools (`rclone`, `sshfs`, `davfs2`, `s3fs`, `rsync`, `aria2`,
-`gh`), the FreeBrowse viewer, coding agents, ACP adapters, T3 Code and
+`gh`), coding agents, ACP adapters, Notebook Intelligence, T3 Code and
 T3 Connect.
 
-`neurodesktop` adds eight neuroimaging-specific components (see
+`neurodesktop` adds seven neuroimaging-specific components (see
 [images.md](images.md#optional-components)) on top:
 
 | Component | What it adds | Where |
@@ -22,7 +22,6 @@ T3 Connect.
 | `sciget-neuroimaging` | narrows sciget to the `neuroimaging` catalog ([images.md](images.md#tool-catalogs)) | `/etc/sciget/catalogs.json` |
 | `neurodesk-cvmfs` | the Neurodesk CVMFS repository for the base's CVMFS client: its mirrors, its public key, and the repository as the one to mount in internal mode | `/etc/cvmfs` |
 | `vscode-niivue` | `korbinianeckstein.niivue` VS Code extension for NIfTI and medical images | `/usr/local/share/code-server/extensions` |
-| `vscode-coding-agents` | Claude Code and Codex VS Code extensions | `/usr/local/share/code-server/extensions` |
 | `jupyterlab-niivue` | NiiVue JupyterLab viewer (default for `.nii`/`.nii.gz`; [viewers.md](viewers.md)) | `/opt/jupyterlab-niivue` |
 | `neurodesk-agents` | Neurodesk's defaults for the base's coding agents: instructions for working with Neurodesk tools, and the Neurodesk model provider for OpenCode | `/opt/neurodesk-agents` |
 | `neuroimaging-env` | the `neuroimaging` Jupyter kernel (`nibabel`, `nipype`, `niwrap`, `pydra`, `nipoppy`, `ipyniivue` with shared JupyterLab bundle — requires JupyterLab, not standalone VS Code notebooks/static HTML, `datalad`, `datalad-osf`, `osfclient`, `xnat`, `watermark`, `nf-core`) and neuroimaging CLIs (`nf-core`, `nipoppy`, `bosh`, `nipypecli`) | `/opt/neuroimaging-env`, `/usr/local/share/jupyter/kernels/neuroimaging`, `/usr/local/bin` |
@@ -276,7 +275,6 @@ Each of these is deliberately left out or deferred:
 
 | neurodesktop | Why |
 | --- | --- |
-| Notebook Intelligence | A second chat panel with patches of its own; Jupyter AI covers chat |
 | SSH into the session (`openssh-server`, `jupyter-sshd-proxy`) | Needs a separate SSH daemon and port/auth surface |
 | `neurodesk jobs`, `update`, `test`, `t3`, `agent preflight`, `astra`, `lightcone materialize` | Tied to remote-job/Tailscale/ASTRA workflows outside scidesktop. Upstream `lc materialize` replaces `lightcone materialize` ([slurm.md](slurm.md#lightcone)) |
 | TinyTeX, Firefox, Nextcloud GUI client | Deliverable as user installs or sciget containers |

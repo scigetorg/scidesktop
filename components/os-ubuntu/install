@@ -73,6 +73,20 @@ if id -un "${NB_UID}" >/dev/null 2>&1; then
 fi
 echo "auth requisite pam_deny.so" >> /etc/pam.d/su
 sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashrc
+# Do not overwrite PS1 set by /etc/bash.bashrc.d/startup.sh when SCIDESKTOP_FLAVOUR is set.
+sed -i -E \
+    -e 's|^if \[ "\$color_prompt" = yes \]; then$|if [ -n "${SCIDESKTOP_FLAVOUR:-}" ]; then\n    :\nelif [ "$color_prompt" = yes ]; then|' \
+    -e 's|^case "\$TERM" in$|if [ -z "${SCIDESKTOP_FLAVOUR:-}" ]; then\ncase "$TERM" in|' \
+    /etc/skel/.bashrc
+# Close the guard around the xterm title block (only the second `case "$TERM"` block in /etc/skel/.bashrc).
+awk '
+    /^if \[ -z "\$\{SCIDESKTOP_FLAVOUR:-\}" \]; then$/ { in_guard = 1 }
+    { print }
+    in_guard && /^esac$/ { print "fi"; in_guard = 0 }
+' /etc/skel/.bashrc > /etc/skel/.bashrc.tmp
+mv /etc/skel/.bashrc.tmp /etc/skel/.bashrc
+grep -q 'SCIDESKTOP_FLAVOUR' /etc/skel/.bashrc
+bash -n /etc/skel/.bashrc
 useradd --no-log-init --create-home --shell /bin/bash --uid "${NB_UID}" \
     --gid "${NB_GID}" --no-user-group "${NB_USER}"
 # start.sh registers unknown UIDs in /etc/passwd under Kubernetes foreign-UID

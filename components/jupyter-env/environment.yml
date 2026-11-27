@@ -26,3 +26,7 @@ dependencies:
   # Jupyter AI: the chat panel in JupyterLab, for the coding agents an image
   # has (docs/jupyter-ai.md). No model, key or endpoint comes with it.
   - jupyter-ai==3.2.0
+  # Keep shared base versions within ranges required by notebook-intelligence
+  # (litellm requires importlib-metadata<9; botocore requires python-dateutil<3).
+  - importlib-metadata>=8,<9
+  - python-dateutil>=2.8.2,<3

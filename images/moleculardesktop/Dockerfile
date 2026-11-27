@@ -27,5 +27,7 @@ COPY --link --from=vscode-niivue / /
 COPY --link --from=jupyterlab-niivue / /
 COPY --link --from=molecular-imaging-env / /
 
+ENV SCIDESKTOP_FLAVOUR=moleculardesktop
+
 LABEL org.opencontainers.image.title="moleculardesktop" \
       org.opencontainers.image.description="scidesktop for molecular imaging: molecular-imaging sciget catalog, NiiVue viewers, and locked Python 3.13 PET, SPECT and quantitative imaging kernel"

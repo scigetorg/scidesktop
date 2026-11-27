@@ -25,5 +25,7 @@ COPY --link --from=sciget-microscopy / /
 COPY --link --from=jupyterlab-neuroglancer / /
 COPY --link --from=microscopy-env / /
 
+ENV SCIDESKTOP_FLAVOUR=microdesktop
+
 LABEL org.opencontainers.image.title="microdesktop" \
       org.opencontainers.image.description="scidesktop for microscopy: microscopy sciget catalog, Neuroglancer viewer, and locked Python 3.13 bioimaging kernel"
