@@ -83,23 +83,11 @@ class Command:
     words: tuple[str, ...]
     group: str
     summary: str
-    # Executable under BIN_DIR that implements the command; None for a
-    # command the dispatcher runs itself.
-    executable: str | None = None
+    target: str | Callable[[Sequence[str]], int]
 
     @property
     def name(self) -> str:
         return " ".join(self.words)
-
-
-COMMANDS = (
-    Command(("cite",), "Analysis", "Write CITATIONS.md for the container tools you loaded", "scigethelpers-cite"),
-    Command(("kernel",), "Analysis", "Use a tool container's Python as a notebook kernel", "scigethelpers-kernel"),
-    Command(("uv",), "Analysis", "Manage project-local uv notebook kernels", "scigethelpers-uv"),
-    Command(("check",), "Environment", "Check CVMFS, GPU, Slurm and T3"),
-    Command(("info",), "Environment", "Show the image's components, resources, GPU and CVMFS"),
-    Command(("agent", "preflight"), "Agents", "Show agent guidance, Lmod, Slurm capacity, GPU and CVMFS"),
-)
 
 
 def usage() -> str:
@@ -1148,6 +1136,17 @@ def command_agent_preflight(args: Sequence[str]) -> int:
 
 # --- dispatch ----------------------------------------------------------------
 
+COMMANDS = (
+    Command(("cite",), "Analysis", "Write CITATIONS.md for the container tools you loaded", "scigethelpers-cite"),
+    Command(("kernel",), "Analysis", "Use a tool container's Python as a notebook kernel", "scigethelpers-kernel"),
+    Command(("uv",), "Analysis", "Manage project-local uv notebook kernels", "scigethelpers-uv"),
+    Command(("check",), "Environment", "Check CVMFS, GPU, Slurm and T3", command_check),
+    Command(("info",), "Environment", "Show the image's components, resources, GPU and CVMFS", command_info),
+    Command(("agent", "preflight"), "Agents", "Show agent guidance, Lmod, Slurm capacity, GPU and CVMFS",
+            command_agent_preflight),
+)
+
+
 def main(argv: Sequence[str] | None = None,
          execv: Callable[[str, list[str]], object] = os.execv) -> int:
     signal.signal(signal.SIGTERM, _handle_termination)
@@ -1173,14 +1172,9 @@ def main(argv: Sequence[str] | None = None,
             return 2
         return unknown(args[0])
     rest = args[len(command.words):]
-    if command.name == "check":
-        return command_check(rest)
-    if command.name == "info":
-        return command_info(rest)
-    if command.name == "agent preflight":
-        return command_agent_preflight(rest)
-    assert command.executable is not None
-    target = BIN_DIR / command.executable
+    if not isinstance(command.target, str):
+        return command.target(rest)
+    target = BIN_DIR / command.target
     if not os.access(target, os.X_OK):
         print(f"scigethelpers {command.name}: {target} is not installed in this image.", file=sys.stderr)
         return 1
