@@ -308,6 +308,10 @@ VS Code tab holds a code-server process of a few hundred MB.
 | A VS Code extension | `VSCODE_*_VERSION` in `docker-bake.hcl` | Renovate proposes the version from Open VSX. Update its `VSCODE_*_SHA256` variables from the `sha256` file Open VSX publishes beside each download; three extensions have one per architecture |
 | The `scigethelpers` command | `components/scigethelpers-cli/rootfs/opt/scigethelpers-cli` | Edit the file; each names the neurodesktop file it was generalized from |
 
+To add a subcommand, register its words, help text, group and target in
+`scigethelpers_cli.py`’s `COMMANDS` table. The target is either a built-in
+handler or the name of a helper installed under `/usr/local/bin`.
+
 Check the image with:
 
 ```sh

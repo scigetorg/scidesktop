@@ -169,7 +169,7 @@ if [ -n "${pw_home}" ]; then grep -q "Choose an analysis subfolder" "${HOME}/err
 if scigethelpers uv remove "${uvproj}" 2>"${HOME}/error"; then exit 1; fi
 grep -q "No uv kernel registration" "${HOME}/error"
 
-# Unit checks for subtle probe/deadline/cleanup invariants.
+# Unit checks for command dispatch and probe behavior.
 /opt/conda/bin/python3 - <<'PY'
 import importlib.util, os, signal, subprocess, sys, time
 from pathlib import Path
@@ -179,6 +179,13 @@ spec = importlib.util.spec_from_file_location("scigethelpers_cli", "/opt/scigeth
 cli = importlib.util.module_from_spec(spec)
 sys.modules["scigethelpers_cli"] = cli
 spec.loader.exec_module(cli)
+
+# Registering a built-in is sufficient to route its arguments and return status.
+inspect = mock.Mock(return_value=23)
+entry = cli.Command(("inspect", "session"), "Environment", "Inspect this session", inspect)
+with mock.patch.object(cli, "COMMANDS", (*cli.COMMANDS, entry)):
+    assert cli.main(["inspect", "session", "--label", "two words"]) == 23
+inspect.assert_called_once_with(["--label", "two words"])
 
 # 1. An ordinary non-CVMFS mount (/proc/sys) must not pass as CVMFS.
 orig_root = cli.CVMFS_ROOT
